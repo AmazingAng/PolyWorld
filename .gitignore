@@ -36,6 +36,27 @@ yarn-error.log*
 # vercel
 .vercel
 
+# sqlite database
+/data/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDE / AI tooling
+.claude/
+.agents/
+.kiro/
+skills-lock.json
+
+# screenshots & debug scripts
+*.png
+screenshots/
+screenshot*.mjs
+ux-screenshots*.mjs
+debug-*.mjs
+test-qa*.mjs
+test-results/
+
+# reference files
+.worldmonitor-ref/

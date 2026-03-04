@@ -1,26 +1,775 @@
 @import "tailwindcss";
 
+/* === WorldMonitor-aligned Design Tokens === */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Backgrounds */
+  --bg: #0a0a0a;
+  --bg-secondary: #111;
+  --surface: #141414;
+  --surface-hover: #1e1e1e;
+
+  /* Borders */
+  --border: #2a2a2a;
+  --border-subtle: #1a1a1a;
+
+  /* Text — high contrast */
+  --text: #f0f0f0;
+  --text-secondary: #d4d4d4;
+  --text-dim: #a0a0a0;
+  --text-muted: #8a8a8a;
+  --text-faint: #777;
+  --text-ghost: #666;
+
+  /* Overlays */
+  --overlay-subtle: rgba(255, 255, 255, 0.03);
+  --overlay-light: rgba(255, 255, 255, 0.05);
+  --overlay-medium: rgba(255, 255, 255, 0.1);
+
+  /* Panels */
+  --panel-bg: #111;
+  --panel-border: #2a2a2a;
+
+  /* Status */
+  --status-live: #22c55e;
+  --status-cached: #ffaa00;
+  --red: #ff4444;
+  --green: #22c55e;
+  --yellow: #ffaa00;
+
+  /* Scrollbar */
+  --scrollbar-thumb: rgba(255, 255, 255, 0.08);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.15);
+
+  /* Font */
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Monaco', 'Cascadia Code', 'Fira Code', monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* === App Layout === */
+#app-root {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* === Main Content: Map + Panels === */
+.main-content {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg);
+}
+
+/* Map section */
+.map-section {
+  height: 60vh;
+  min-height: 450px;
+  max-height: 90vh;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.map-section .map-container {
+  flex: 1;
+  min-height: 0;
+}
+
+/* === Resize Handles === */
+.resize-handle {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resize-handle-vertical {
+  width: 6px;
+  cursor: col-resize;
+  margin: 0 -3px;
+}
+
+.resize-handle-horizontal {
+  height: 6px;
+  cursor: row-resize;
+  margin: -3px 0;
+}
+
+.resize-handle-bar {
+  background: var(--border);
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+.resize-handle-vertical .resize-handle-bar {
+  width: 2px;
+  height: 32px;
+}
+
+.resize-handle-horizontal .resize-handle-bar {
+  height: 2px;
+  width: 32px;
+}
+
+.resize-handle:hover .resize-handle-bar,
+.resize-handle:active .resize-handle-bar {
+  background: var(--green);
+}
+
+/* Block map/iframe pointer events during resize drag */
+body.resize-active iframe,
+body.resize-active canvas,
+body.resize-active .maplibregl-map,
+body.resize-active .map-container {
+  pointer-events: none !important;
+}
+
+/* === Map Bottom Panel (below map, inside map-section) === */
+.map-bottom-panel {
+  flex-shrink: 0;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg);
+  border-top: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.map-bottom-panel .overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.map-bottom-panel .overlay-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  min-height: 0;
+}
+
+.map-bottom-panel .overlay-content::-webkit-scrollbar { width: 3px; }
+.map-bottom-panel .overlay-content::-webkit-scrollbar-track { background: transparent; }
+.map-bottom-panel .overlay-content::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+
+/* Panels grid */
+.panels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-auto-flow: row dense;
+  grid-auto-rows: minmax(220px, 400px);
+  gap: 1px;
+  padding: 1px;
+  align-content: start;
+  align-items: stretch;
+  min-height: 0;
+  position: relative;
+  background: var(--border-subtle);
+}
+
+/* Wide-screen: side-by-side with resize handle between */
+@media (min-width: 1200px) {
+  .main-content {
+    display: grid;
+    /* grid-template-columns driven by inline style: mapWidthPct% 6px 1fr */
+    grid-template-rows: 1fr;
+    gap: 0;
+    overflow: hidden;
+  }
+  .map-section {
+    grid-column: 1;
+    grid-row: 1;
+    height: 100% !important;
+    min-height: 0;
+    max-height: none;
+  }
+  /* Vertical resize handle */
+  .main-content > .resize-handle-vertical {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .panels-grid {
+    grid-column: 3;
+    grid-row: 1;
+    overflow-y: auto;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: minmax(180px, 350px);
+  }
+  /* Markets panel spans full width at top */
+  .panels-grid .panel-wide {
+    grid-column: 1 / -1;
+    min-height: 250px;
+  }
+  /* Country panel spans full width */
+  .panels-grid [data-panel="country"] {
+    grid-column: 1 / -1;
+  }
+  /* Live panel spans full width */
+  .panels-grid .panel-live {
+    grid-column: 1 / -1;
+    min-height: 220px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Mobile */
+@media (max-width: 768px) {
+  .panels-grid {
+    display: flex !important;
+    flex-direction: column;
+    gap: 1px;
+    padding: 0;
+  }
+  .map-section {
+    height: calc(100dvh - 48px) !important;
+    min-height: 60vh !important;
+  }
+}
+
+/* === Panel Component === */
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+  min-height: 200px;
+  min-width: 0;
+  contain: content;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  cursor: grab;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.panel:active { cursor: grabbing; }
+
+.panel.dragging {
+  opacity: 0.5;
+  transform: scale(1.02);
+  box-shadow: 0 8px 24px rgba(34, 197, 94, 0.2);
+  will-change: transform, opacity;
+}
+
+.panel-wide {
+  grid-column: span 2;
+  min-height: 200px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.panel-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.panel-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--border);
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-data-badge {
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+.panel-data-badge.live {
+  color: var(--status-live);
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  min-width: 0;
+}
+
+/* Panel expand button */
+.panel-expand-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--text-ghost);
+  transition: color 0.15s, background 0.15s;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+}
+.panel-expand-btn:hover {
+  color: var(--text-secondary);
+  background: var(--overlay-light);
+}
+
+/* Panel expanded (fullscreen overlay) */
+.panel-expanded {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 100 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  border: none !important;
+  grid-column: unset !important;
+}
+
+.panel-content::-webkit-scrollbar { width: 3px; }
+.panel-content::-webkit-scrollbar-track { background: transparent; }
+.panel-content::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+.panel-content::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+
+/* === Panel Header for Map Section === */
+.map-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* === Scrollbar (global thin) === */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 3px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 2px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Monospace utility */
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* === MapLibre GL overrides === */
+.maplibregl-popup-content {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border-radius: 2px !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6) !important;
+  padding: 10px 12px !important;
+  font-family: var(--font-mono) !important;
+  font-size: 13px !important;
+}
+
+.maplibregl-popup-tip {
+  border-top-color: var(--surface) !important;
+  border-bottom-color: var(--surface) !important;
+}
+
+.maplibregl-popup-close-button {
+  color: var(--text-muted) !important;
+  font-size: 14px !important;
+  padding: 2px 6px !important;
+}
+
+.maplibregl-popup-close-button:hover {
+  color: var(--text) !important;
+  background: transparent !important;
+}
+
+.maplibregl-ctrl-group {
+  background: var(--bg) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.maplibregl-ctrl-group button {
+  width: 28px !important;
+  height: 28px !important;
+  border-color: var(--border) !important;
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--border) !important;
+}
+
+.maplibregl-ctrl-group button span {
+  filter: invert(0.5);
+}
+
+.maplibregl-ctrl-group button:hover span {
+  filter: invert(0.85);
+}
+
+.maplibregl-ctrl-attrib {
+  display: none !important;
+}
+
+/* === Settings Button (header gear icon) === */
+.settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, transform 0.3s;
+}
+
+.settings-btn:hover {
+  color: var(--text);
+  border-color: var(--text-faint);
+  transform: rotate(45deg);
+}
+
+.settings-btn:focus-visible {
+  outline: 2px solid var(--text-dim);
+  outline-offset: 2px;
+}
+
+/* === Settings Modal (WorldMonitor-aligned) === */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  animation: settings-fade-in 0.15s ease forwards;
+}
+
+@keyframes settings-fade-in {
+  to { opacity: 1; }
+}
+
+.settings-modal {
+  width: 600px;
+  max-width: 95vw;
+  max-height: 80vh;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  overscroll-behavior: contain;
+}
+
+/* Header bar */
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.settings-title {
+  font-size: 14px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text);
+}
+
+.settings-close {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.2s, background 0.2s;
+}
+
+.settings-close:hover {
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Horizontal tabs — matches unified-settings-tabs */
+.settings-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.settings-tab {
+  flex: 1;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.settings-tab:hover {
+  color: var(--text);
+}
+
+.settings-tab.active {
+  border-bottom-color: var(--text);
+  color: var(--text);
+}
+
+/* Scrollable content area */
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+}
+
+.settings-content::-webkit-scrollbar { width: 3px; }
+.settings-content::-webkit-scrollbar-track { background: transparent; }
+.settings-content::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+
+/* Section blocks — matches WorldMonitor .section-label + .popup-section */
+.settings-section {
+  margin-top: 16px;
+}
+
+.settings-section .section-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* Grid toggles — matches panel-toggle-grid */
+.settings-grid-2col {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.panel-toggle-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.panel-toggle-item:hover {
+  border-color: var(--text-dim);
+}
+
+.panel-toggle-item.active {
+  border-color: var(--green);
+}
+
+.panel-toggle-checkbox {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.panel-toggle-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* Pill bar for time range — matches unified-settings-region-pill */
+.settings-pill-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.settings-pill {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  font-family: inherit;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.settings-pill:hover {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+.settings-pill.active {
+  background: rgba(68, 255, 136, 0.08);
+  border-color: rgba(68, 255, 136, 0.4);
+  color: var(--green);
+}
+
+/* Info rows for Sources / System Status */
+.settings-info-grid {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 11px;
+}
+
+.settings-info-row:last-child {
+  border-bottom: none;
+}
+
+.settings-info-label {
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.settings-info-value {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+  .settings-grid-2col {
+    grid-template-columns: 1fr;
+  }
+  .settings-tab {
+    font-size: 9px;
+    padding: 8px 6px;
+  }
+}
+
+/* === Focus visible — accessible keyboard navigation === */
+.settings-tab:focus-visible,
+.settings-pill:focus-visible,
+.settings-close:focus-visible,
+.panel-toggle-item:focus-visible,
+.panel-expand-btn:focus-visible {
+  outline: 2px solid var(--text-dim);
+  outline-offset: 2px;
+}
+
+/* === Reduced motion === */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* === Animations === */
+@keyframes pulse-ring {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.8); }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-toast-in {
+  animation: toast-in 0.3s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.15s ease;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
