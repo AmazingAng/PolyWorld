@@ -10,6 +10,7 @@ export interface PanelVisibility {
   markets: boolean;
   detail: boolean;
   country: boolean;
+  news: boolean;
   live: boolean;
 }
 
@@ -50,6 +51,7 @@ const PANEL_LABELS: Record<string, string> = {
   markets: "Markets",
   detail: "Market Detail",
   country: "Country",
+  news: "News Feed",
   live: "Live Streams",
 };
 

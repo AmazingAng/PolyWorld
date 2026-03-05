@@ -195,6 +195,11 @@ body.resize-active .map-container {
   background: var(--border-subtle);
 }
 
+/* News panel always spans full width */
+.panels-grid .panel-news {
+  grid-column: 1 / -1;
+}
+
 /* Wide-screen: side-by-side with resize handle between */
 @media (min-width: 1200px) {
   .main-content {
@@ -231,6 +236,11 @@ body.resize-active .map-container {
   /* Country panel spans full width */
   .panels-grid [data-panel="country"] {
     grid-column: 1 / -1;
+  }
+  /* News panel spans full width */
+  .panels-grid .panel-news {
+    grid-column: 1 / -1;
+    min-height: 220px;
   }
   /* Live panel spans full width */
   .panels-grid .panel-live {
@@ -271,9 +281,75 @@ body.resize-active .map-container {
 
 .panel:active { cursor: grabbing; }
 
+/* Drag handle (grip dots) */
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 20px;
+  color: var(--text-ghost);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.panel:hover .drag-handle,
+.drag-handle:hover {
+  opacity: 1;
+}
+.drag-handle:hover {
+  color: var(--text-muted);
+}
+.drag-handle:active {
+  cursor: grabbing;
+  color: var(--green);
+}
+
+/* Panel being dragged */
+.panel.panel-dragging {
+  opacity: 0.4;
+  transform: scale(0.98);
+  box-shadow: 0 0 0 1px var(--green), 0 8px 24px rgba(34, 197, 94, 0.15);
+  will-change: transform, opacity;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Drop indicator line */
+.panel.panel-drop-above,
+.panel.panel-drop-below {
+  position: relative;
+}
+.panel.panel-drop-above::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  background: var(--green);
+  border-radius: 1px;
+  z-index: 20;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
+}
+.panel.panel-drop-below::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  background: var(--green);
+  border-radius: 1px;
+  z-index: 20;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
+}
+
+/* Legacy class — keep for compat */
 .panel.dragging {
-  opacity: 0.5;
-  transform: scale(1.02);
+  opacity: 0.4;
+  transform: scale(0.98);
   box-shadow: 0 8px 24px rgba(34, 197, 94, 0.2);
   will-change: transform, opacity;
 }

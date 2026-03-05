@@ -309,10 +309,15 @@ export default function Sparkline({
   if (showAxes) {
     const fmt = (ms: number) => {
       const d = new Date(ms);
+      const hh = d.getHours().toString().padStart(2, "0");
+      const mm = d.getMinutes().toString().padStart(2, "0");
+      const dd = d.getDate().toString().padStart(2, "0");
+      const mo = (d.getMonth() + 1).toString().padStart(2, "0");
       if (hours > 48) {
-        return `${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getDate().toString().padStart(2, "0")}`;
+        return `${mo}/${dd}`;
       }
-      return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+      // For <=48h, include date if tMin and tMax are on different days, or always show M/D + HH:MM to avoid identical labels
+      return `${mo}/${dd} ${hh}:${mm}`;
     };
     xLabels.push({ text: fmt(tMin), x: leftPad });
     xLabels.push({ text: fmt(tMax), x: width - rightPad });

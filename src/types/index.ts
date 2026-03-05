@@ -46,6 +46,15 @@ export type Category =
   | "Culture"
   | "Other";
 
+export type ImpactLevel = "critical" | "high" | "medium" | "low" | "info";
+
+export interface AnomalyInfo {
+  zScore: number;
+  isAnomaly: boolean;
+  direction: "up" | "down" | "neutral";
+  volumeSpike: boolean;
+}
+
 export interface ProcessedMarket {
   id: string;
   marketId: string;
@@ -72,9 +81,31 @@ export interface ProcessedMarket {
   closed: boolean;
   commentCount: number;
   tags: string[];
+  // Intelligence fields
+  impactScore: number;
+  impactLevel: ImpactLevel;
+  anomaly?: AnomalyInfo;
 }
 
 export interface GeoResult {
   coords: [number, number];
   location: string;
+}
+
+export interface NewsItem {
+  id: string;
+  title: string;
+  url: string;
+  source: string;
+  sourceUrl: string;
+  summary: string | null;
+  publishedAt: string;
+  imageUrl: string | null;
+  categories: string[];
+}
+
+export interface NewsSource {
+  name: string;
+  feedUrl: string;
+  region: string;
 }

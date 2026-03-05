@@ -1,6 +1,8 @@
 import { getDb } from "./db";
 import { fetchEventsFromAPI, processEvents } from "./polymarket";
 import type { ProcessedMarket } from "@/types";
+import { computeImpactScores } from "./impact";
+import { detectAnomalies } from "./anomaly";
 
 const SYNC_INTERVAL = 30_000;
 
@@ -192,6 +194,8 @@ export function readMarketsFromDb(): {
       closed: row.is_closed === 1,
       commentCount: (row.comment_count as number) || 0,
       tags,
+      impactScore: 0,
+      impactLevel: "info",
     };
 
     if (item.coords) {
@@ -199,6 +203,31 @@ export function readMarketsFromDb(): {
     } else {
       unmapped.push(item);
     }
+  }
+
+  // Compute impact scores
+  const allMarkets = [...mapped, ...unmapped];
+  const impactScores = computeImpactScores(allMarkets);
+  for (const m of allMarkets) {
+    const score = impactScores.get(m.id);
+    if (score) {
+      m.impactScore = score.impactScore;
+      m.impactLevel = score.impactLevel;
+    }
+  }
+
+  // Detect anomalies — only for top 50 markets by volume to avoid slow queries
+  try {
+    const top = [...allMarkets]
+      .sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))
+      .slice(0, 50);
+    const anomalies = detectAnomalies(db, top.map((m) => m.id));
+    for (const m of allMarkets) {
+      const a = anomalies.get(m.id);
+      if (a) m.anomaly = a;
+    }
+  } catch {
+    // anomaly detection is non-critical
   }
 
   return { mapped, unmapped };

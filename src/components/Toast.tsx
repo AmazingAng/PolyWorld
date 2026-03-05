@@ -122,22 +122,26 @@ export default function ToastContainer({ signals, newMarkets }: ToastProps) {
         }
 
         const chg = formatChange(toast.market?.recentChange ?? null);
+        const anomaly = toast.market?.anomaly;
+        const isAnomalous = anomaly?.isAnomaly;
         return (
           <div
             key={toast.id}
             onClick={() => dismiss(toast.id)}
             className={`bg-[#141414] border border-[#2a2a2a] px-3 py-2 text-[12px] font-mono animate-toast-in pointer-events-auto max-w-[300px] cursor-pointer hover:bg-[#1a1a1a] transition-colors ${
-              chg.cls === "up"
+              isAnomalous
+                ? "border-l-2 border-l-[#f59e0b]"
+                : chg.cls === "up"
                 ? "border-l-2 border-l-[#22c55e]"
                 : "border-l-2 border-l-[#ff4444]"
             }`}
           >
             <div
               className={`text-[13px] uppercase tracking-[0.15em] mb-1 ${
-                chg.cls === "up" ? "text-[#22c55e]" : "text-[#ff4444]"
+                isAnomalous ? "text-[#f59e0b]" : chg.cls === "up" ? "text-[#22c55e]" : "text-[#ff4444]"
               }`}
             >
-              signal
+              {isAnomalous ? "unusual" : "signal"}
             </div>
             <div className="text-[#ccc] line-clamp-1">
               {toast.market?.title}
@@ -150,6 +154,11 @@ export default function ToastContainer({ signals, newMarkets }: ToastProps) {
               >
                 {chg.text}
               </span>
+              {isAnomalous && anomaly && (
+                <span className="text-[#f59e0b] ml-1">
+                  (z={anomaly.zScore}{anomaly.volumeSpike ? ", vol spike" : ""})
+                </span>
+              )}
               <span className="text-[#8a8a8a] ml-1">last refresh</span>
             </div>
           </div>

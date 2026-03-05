@@ -125,15 +125,19 @@ export async function GET(request: NextRequest) {
       const validSeries = Array.from(seriesMap.values()).filter(s => s.data.length >= 2);
 
       // Check if stored data covers the requested range well enough
-      // Compare oldest data point against the requested window start
       if (validSeries.length > 0) {
         const windowStart = Date.now() - clampedHours * 3600_000;
         const oldestPoint = Math.min(
           ...validSeries.map(s => new Date(s.data[0].recorded_at).getTime())
         );
-        // If oldest data covers at least 50% of the requested window, use it
-        const coverage = (Date.now() - oldestPoint) / (clampedHours * 3600_000);
-        if (coverage >= 0.5 || oldestPoint <= windowStart + 3600_000) {
+        const newestPoint = Math.max(
+          ...validSeries.map(s => new Date(s.data[s.data.length - 1].recorded_at).getTime())
+        );
+        const coverageStart = (Date.now() - oldestPoint) / (clampedHours * 3600_000);
+        // Stale = newest data point is more than 2 hours old
+        const staleness = Date.now() - newestPoint;
+        const isStale = staleness > 2 * 3600_000;
+        if (!isStale && (coverageStart >= 0.5 || oldestPoint <= windowStart + 3600_000)) {
           return NextResponse.json({ series: validSeries });
         }
       }

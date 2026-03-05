@@ -10,6 +10,7 @@ import MarketsPanel from "@/components/MarketsPanel";
 import MarketDetailPanel from "@/components/MarketDetailPanel";
 import CountryPanel from "@/components/CountryPanel";
 import LivePanel from "@/components/LivePanel";
+import NewsPanel from "@/components/NewsPanel";
 import SettingsModal from "@/components/SettingsModal";
 import type { PanelVisibility } from "@/components/SettingsModal";
 import ToastContainer from "@/components/Toast";
@@ -45,12 +46,14 @@ function MapBottomDetail({
   relatedMarkets,
   onBack,
   onSelectMarket,
+  onTagClick,
   height,
 }: {
   selectedMarket: ProcessedMarket | null;
   relatedMarkets: ProcessedMarket[];
   onBack: () => void;
   onSelectMarket: (m: ProcessedMarket) => void;
+  onTagClick: (tag: string) => void;
   height: number;
 }) {
   return (
@@ -70,6 +73,7 @@ function MapBottomDetail({
             relatedMarkets={relatedMarkets}
             onBack={onBack}
             onSelectMarket={onSelectMarket}
+            onTagClick={onTagClick}
           />
         ) : (
           <div className="text-[12px] text-[var(--text-muted)] font-mono">
@@ -119,20 +123,24 @@ export default function Home() {
     markets: true,
     detail: true,
     country: true,
+    news: true,
     live: true,
   });
-  const [panelOrder, setPanelOrder] = useState<string[]>(["markets", "country", "live"]);
+  const [panelOrder, setPanelOrder] = useState<string[]>(["markets", "country", "news", "live"]);
   const panelsRef = useRef<HTMLDivElement>(null);
 
   const handlePanelReorder = useCallback((newOrder: string[]) => {
     setPanelOrder(newOrder);
   }, []);
 
-  usePanelDrag(panelsRef, handlePanelReorder);
+  usePanelDrag(panelsRef, panelOrder, handlePanelReorder);
 
   // Resize state: left/right split (percentage of viewport) and top/bottom split (px)
   const [mapWidthPct, setMapWidthPct] = useState(58);
-  const [bottomPanelHeight, setBottomPanelHeight] = useState(280);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(420);
+  const [marketSearch, setMarketSearch] = useState<string | undefined>(undefined);
+  const [region, setRegion] = useState<string>("global");
+  const [colorMode, setColorMode] = useState<"category" | "impact">("category");
   const mainRef = useRef<HTMLDivElement>(null);
   const mapSectionRef = useRef<HTMLDivElement>(null);
 
@@ -212,6 +220,23 @@ export default function Home() {
     fetchData();
   }, [fetchData]);
 
+  // Restore cached selections after data loads
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || (mapped.length === 0 && unmapped.length === 0)) return;
+    restoredRef.current = true;
+    try {
+      const cachedMarketId = sessionStorage.getItem("pw:selectedMarket");
+      if (cachedMarketId) {
+        const all = [...mapped, ...unmapped];
+        const found = all.find(m => m.id === cachedMarketId);
+        if (found) setSelectedMarket(found);
+      }
+      const cachedCountry = sessionStorage.getItem("pw:selectedCountry");
+      if (cachedCountry) setSelectedCountry(cachedCountry);
+    } catch {}
+  }, [mapped, unmapped]);
+
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (autoRefresh) {
@@ -258,10 +283,12 @@ export default function Home() {
 
   const handleMarketClick = useCallback((market: ProcessedMarket) => {
     setSelectedMarket(market);
+    try { sessionStorage.setItem("pw:selectedMarket", market.id); } catch {}
   }, []);
 
   const handleCountryClick = useCallback((countryName: string) => {
     setSelectedCountry(countryName);
+    try { sessionStorage.setItem("pw:selectedCountry", countryName); } catch {}
   }, []);
 
   const handleToggleAutoRefresh = useCallback(() => {
@@ -296,6 +323,7 @@ export default function Home() {
   const handleSelectMarketFromPanel = useCallback(
     (market: ProcessedMarket) => {
       setSelectedMarket(market);
+      try { sessionStorage.setItem("pw:selectedMarket", market.id); } catch {}
       if (market.coords) handleFlyTo(market.coords, market.id);
     },
     [handleFlyTo]
@@ -333,6 +361,12 @@ export default function Home() {
               isFullscreen={isFullscreen}
               onMarketClick={handleMarketClick}
               onCountryClick={handleCountryClick}
+              selectedCountry={selectedCountry}
+              selectedMarketId={selectedMarket?.id ?? null}
+              colorMode={colorMode}
+              onColorModeChange={setColorMode}
+              region={region}
+              onRegionChange={setRegion}
             />
           </div>
           {/* Horizontal resize handle between map and bottom panel */}
@@ -341,8 +375,9 @@ export default function Home() {
           <MapBottomDetail
             selectedMarket={selectedMarket}
             relatedMarkets={relatedMarkets}
-            onBack={() => setSelectedMarket(null)}
+            onBack={() => { setSelectedMarket(null); try { sessionStorage.removeItem("pw:selectedMarket"); } catch {} }}
             onSelectMarket={handleSelectMarketFromPanel}
+            onTagClick={(tag) => setMarketSearch(tag)}
             height={bottomPanelHeight}
           />
         </div>
@@ -365,6 +400,7 @@ export default function Home() {
                       onFlyTo={handleFlyTo}
                       onSelectMarket={handleSelectMarketFromPanel}
                       loading={loading}
+                      externalSearch={marketSearch}
                     />
                   );
                 case "country":
@@ -387,6 +423,17 @@ export default function Home() {
                           click a country on the map to view related markets
                         </div>
                       )}
+                    </Panel>
+                  );
+                case "news":
+                  return (
+                    <Panel
+                      key="news"
+                      panelId="news"
+                      title="News"
+                      className="panel-news"
+                    >
+                      <NewsPanel selectedMarket={selectedMarket} />
                     </Panel>
                   );
                 case "live":

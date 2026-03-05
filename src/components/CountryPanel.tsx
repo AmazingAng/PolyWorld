@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback, useEffect } from "react";
 import { ProcessedMarket } from "@/types";
 import { getCountryFlag, marketMatchesCountry } from "@/lib/countries";
 import { formatVolume } from "@/lib/format";
@@ -19,6 +20,13 @@ export default function CountryPanel({
   onSelectMarket,
 }: CountryPanelProps) {
   const flag = getCountryFlag(countryName);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  // Reset summary when country changes
+  useEffect(() => {
+    setAiSummary(null);
+  }, [countryName]);
 
   const allMarkets = [...mapped, ...unmapped];
   const countryMarkets = allMarkets
@@ -29,13 +37,62 @@ export default function CountryPanel({
   const activeCount = countryMarkets.filter((m) => m.active && !m.closed).length;
   const closedCount = countryMarkets.filter((m) => m.closed).length;
 
+  const fetchCountrySummary = useCallback(async () => {
+    if (aiLoading || countryMarkets.length === 0) return;
+    setAiLoading(true);
+    try {
+      const res = await fetch("/api/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "country",
+          cacheKey: `country:${countryName}`,
+          context: {
+            country: countryName,
+            markets: countryMarkets.slice(0, 8).map((m) => ({
+              title: m.title,
+              prob: m.prob,
+              change: m.change,
+              volume24h: m.volume24h,
+            })),
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.summary) setAiSummary(data.summary);
+    } catch {
+      setAiSummary("Failed to generate summary");
+    }
+    setAiLoading(false);
+  }, [countryName, countryMarkets, aiLoading]);
+
   return (
     <div className="font-mono">
       {/* Country header */}
       <div className="flex items-center gap-2 mb-3">
         <span className="text-[18px]">{flag}</span>
         <h2 className="text-[13px] text-[var(--text)]">{countryName}</h2>
+        <button
+          onClick={fetchCountrySummary}
+          disabled={aiLoading || countryMarkets.length === 0}
+          className="shrink-0 text-[var(--text-faint)] hover:text-[#f59e0b] transition-colors disabled:opacity-50 ml-auto"
+          title="AI Summary"
+        >
+          {aiLoading ? (
+            <span className="inline-block w-3 h-3 border border-[#f59e0b] border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <span className="text-[14px]">{"\u2728"}</span>
+          )}
+        </button>
       </div>
+
+      {/* AI Summary */}
+      {aiSummary && (
+        <div className="border border-[#f59e0b]/20 bg-[#f59e0b]/5 rounded-sm px-3 py-2 mb-3">
+          <span className="text-[10px] uppercase tracking-wider text-[#f59e0b]">{"\u2728"} ai summary</span>
+          <p className="text-[12px] text-[var(--text-dim)] leading-[1.6] mt-1">{aiSummary}</p>
+        </div>
+      )}
 
       {/* Aggregate stats */}
       {countryMarkets.length > 0 && (

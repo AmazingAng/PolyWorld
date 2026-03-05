@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { ProcessedMarket, PolymarketMarket } from "@/types";
 import { CATEGORY_COLORS } from "@/lib/categories";
 import { formatVolume, formatPct, formatChange } from "@/lib/format";
@@ -11,6 +11,7 @@ interface MarketDetailPanelProps {
   relatedMarkets: ProcessedMarket[];
   onBack: () => void;
   onSelectMarket: (market: ProcessedMarket) => void;
+  onTagClick?: (tag: string) => void;
 }
 
 function formatEndDate(d: string | null): string {
@@ -160,11 +161,54 @@ export default function MarketDetailPanel({
   relatedMarkets,
   onBack,
   onSelectMarket,
+  onTagClick,
 }: MarketDetailPanelProps) {
   const color = CATEGORY_COLORS[market.category] || CATEGORY_COLORS.Other;
   const chg = formatChange(market.change);
   const [rulesExpanded, setRulesExpanded] = useState(false);
   const [chartHours, setChartHours] = useState(24);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiExpanded, setAiExpanded] = useState(true);
+
+  // Reset AI summary when market changes
+  useEffect(() => {
+    setAiSummary(null);
+    setAiExpanded(true);
+  }, [market.id]);
+
+  const fetchAiSummary = useCallback(async () => {
+    if (aiLoading) return;
+    setAiLoading(true);
+    try {
+      const res = await fetch("/api/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "market",
+          cacheKey: `market:${market.id}`,
+          context: {
+            title: market.title,
+            prob: market.prob,
+            change: market.change,
+            volume: market.volume,
+            volume24h: market.volume24h,
+            description: market.description,
+            relatedTitles: relatedMarkets.slice(0, 3).map((m) => m.title),
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.summary) {
+        setAiSummary(data.summary);
+      } else if (data.error) {
+        setAiSummary(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      setAiSummary("Failed to generate summary");
+    }
+    setAiLoading(false);
+  }, [market, relatedMarkets, aiLoading]);
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(600);
@@ -299,7 +343,7 @@ export default function MarketDetailPanel({
 
   // --- Multi-binary outcomes: compact Polymarket-style list ---
   const multiBinaryContent = multiBinary && (
-    <div className={stackedLayout ? "space-y-1.5" : "space-y-0.5"}>
+    <div className={stackedLayout ? "space-y-2.5" : "space-y-2"}>
       {parsedOutcomes.map(({ m, idx, yesPrice, entity, abbr, mChg, isWinner }) => {
         const pct = yesPrice * 100;
         const barColor = isWinner ? "#22c55e" : color;
@@ -308,7 +352,7 @@ export default function MarketDetailPanel({
         return (
           <div
             key={m.id || idx}
-            className={`px-2 rounded-sm hover:bg-[var(--surface)] transition-colors ${stackedLayout ? "py-2 border-b border-[var(--border-subtle)] last:border-0" : "py-1.5"}`}
+            className={`px-2 rounded-sm hover:bg-[var(--surface)] transition-colors ${stackedLayout ? "py-2.5 border-b border-[var(--border-subtle)] last:border-0" : "py-2 border-b border-[var(--border-subtle)] last:border-0"}`}
             title={entity}
           >
             {stackedLayout ? (
@@ -500,6 +544,18 @@ export default function MarketDetailPanel({
 
   return (
     <div className="font-mono" ref={containerRef}>
+      {/* Close button — top-right row */}
+      <div className="flex justify-end mb-2">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 border border-[var(--border)] rounded-sm text-[12px] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] hover:bg-[var(--surface-hover)] transition-colors"
+          title="Close detail"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+          <span>CLOSE</span>
+        </button>
+      </div>
+
       {/* ============ PRIMARY PANEL ============ */}
       <div className={`flex gap-5 ${isWide && hasOutcomes ? "flex-row items-stretch" : "flex-col"}`}>
 
@@ -526,12 +582,41 @@ export default function MarketDetailPanel({
                 ) : null}
                 {market.endDate && <span className="text-[var(--text-faint)]">{"\u00B7"} {formatEndDate(market.endDate)}</span>}
               </div>
-              <h2 className="text-[13px] text-[var(--text)] leading-[1.5]">{market.title}</h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-[13px] text-[var(--text)] leading-[1.5]">{market.title}</h2>
+                <button
+                  onClick={fetchAiSummary}
+                  disabled={aiLoading}
+                  className="shrink-0 text-[var(--text-faint)] hover:text-[#f59e0b] transition-colors disabled:opacity-50"
+                  title="AI Summary"
+                >
+                  {aiLoading ? (
+                    <span className="inline-block w-3 h-3 border border-[#f59e0b] border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span className="text-[14px]">{"\u2728"}</span>
+                  )}
+                </button>
+              </div>
             </div>
-            <button onClick={onBack} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors shrink-0 p-1" title="Close">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 4l8 8M12 4l-8 8" /></svg>
-            </button>
           </div>
+
+          {/* AI Summary */}
+          {aiSummary && (
+            <div className="border border-[#f59e0b]/20 bg-[#f59e0b]/5 rounded-sm px-3 py-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] uppercase tracking-wider text-[#f59e0b]">{"\u2728"} ai summary</span>
+                <button
+                  onClick={() => setAiExpanded(!aiExpanded)}
+                  className="text-[10px] text-[var(--text-faint)] hover:text-[var(--text-muted)]"
+                >
+                  {aiExpanded ? "collapse" : "expand"}
+                </button>
+              </div>
+              {aiExpanded && (
+                <p className="text-[12px] text-[var(--text-dim)] leading-[1.6]">{aiSummary}</p>
+              )}
+            </div>
+          )}
 
           {/* Prob + Stats */}
           <div>
@@ -630,7 +715,13 @@ export default function MarketDetailPanel({
                   <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-2">tags</div>
                   <div className="flex flex-wrap gap-1.5">
                     {market.tags.map((tag) => (
-                      <span key={tag} className="text-[11px] px-2 py-0.5 border border-[var(--border)] text-[var(--text-dim)] rounded-sm">{tag}</span>
+                      <button
+                        key={tag}
+                        onClick={() => onTagClick?.(tag)}
+                        className="text-[11px] px-2 py-0.5 border border-[var(--border)] text-[var(--text-dim)] rounded-sm hover:border-[#22c55e]/50 hover:text-[#22c55e] transition-colors cursor-pointer"
+                      >
+                        {tag}
+                      </button>
                     ))}
                   </div>
                 </div>

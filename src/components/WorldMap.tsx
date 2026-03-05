@@ -1,18 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, lazy, Suspense } from "react";
+import { createPortal } from "react-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { ProcessedMarket, Category } from "@/types";
 import { CATEGORY_COLORS } from "@/lib/categories";
+import { IMPACT_COLORS } from "@/lib/impact";
+import type { ImpactLevel } from "@/types";
 import { formatVolume, formatPct, formatChange } from "@/lib/format";
+import { REGIONAL_VIEWS } from "@/lib/regions";
 import type { TimeRange } from "./TimeRangeFilter";
 import MapToolbar from "./MapToolbar";
+
+const MarketPreview = lazy(() => import("./MarketPreview"));
 
 // CARTO GL vector tile style — gives us zoom-dependent labels:
 // zoomed out = continent names only, zoomed in = country names + borders
 const DARK_STYLE =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+
+export type ColorMode = "category" | "impact";
 
 interface WorldMapProps {
   markets: ProcessedMarket[];
@@ -25,21 +33,30 @@ interface WorldMapProps {
   isFullscreen: boolean;
   onMarketClick?: (market: ProcessedMarket) => void;
   onCountryClick?: (countryName: string) => void;
+  selectedCountry?: string | null;
+  selectedMarketId?: string | null;
+  colorMode?: ColorMode;
+  onColorModeChange?: (mode: ColorMode) => void;
+  region?: string | null;
+  onRegionChange?: (region: string) => void;
 }
 
-// Offset co-located markers using golden-angle spiral for organic non-overlapping layout
+// Offset co-located markers using golden-angle spiral for organic non-overlapping layout.
+// Uses FIXED geographic offsets — zoom-in naturally separates bubbles via map projection.
+// No zoom dependency: avoids the "separate then collapse" problem of recalculating on zoom.
 function offsetColocated(markets: ProcessedMarket[]): ProcessedMarket[] {
+  // Group nearby markets using a grid with 0.5° cells
+  const cellSize = 0.5;
   const groups = new Map<string, ProcessedMarket[]>();
   for (const m of markets) {
     if (!m.coords) continue;
-    const key = `${Math.round(m.coords[0])},${Math.round(m.coords[1])}`;
+    const key = `${Math.floor(m.coords[0] / cellSize)},${Math.floor(m.coords[1] / cellSize)}`;
     const arr = groups.get(key) || [];
     arr.push(m);
     groups.set(key, arr);
   }
 
   const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-  const spacing = 0.35;
 
   const result: ProcessedMarket[] = [];
   for (const m of markets) {
@@ -47,15 +64,20 @@ function offsetColocated(markets: ProcessedMarket[]): ProcessedMarket[] {
       result.push(m);
       continue;
     }
-    const key = `${Math.round(m.coords[0])},${Math.round(m.coords[1])}`;
+    const key = `${Math.floor(m.coords[0] / cellSize)},${Math.floor(m.coords[1] / cellSize)}`;
     const group = groups.get(key)!;
     if (group.length <= 1) {
       result.push(m);
       continue;
     }
     const idx = group.indexOf(m);
-    const angle = idx * goldenAngle;
-    const r = spacing * Math.sqrt(idx);
+    // Compact spacing: smaller bubbles (max 10px radius = 20px diameter) need less spread.
+    // At zoom ~2, 1° ≈ 70px. 20px diameter → need ~0.3° between centers.
+    const spacing = group.length > 15 ? 0.35 : group.length > 5 ? 0.25 : 0.18;
+    // Start from idx+1 so first item is NOT at center (avoids pile-up at origin)
+    const n = idx + 1;
+    const angle = n * goldenAngle;
+    const r = spacing * Math.sqrt(n);
     const offsetLat = r * Math.cos(angle);
     const offsetLng = r * Math.sin(angle);
     result.push({
@@ -77,6 +99,12 @@ export default function WorldMap({
   isFullscreen,
   onMarketClick,
   onCountryClick,
+  selectedCountry,
+  selectedMarketId,
+  colorMode = "category",
+  onColorModeChange,
+  region,
+  onRegionChange,
 }: WorldMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -85,6 +113,21 @@ export default function WorldMap({
   const marketsLookup = useRef<Map<string, ProcessedMarket>>(new Map());
   const countryLayersAdded = useRef(false);
   const pulseRef = useRef<number>(0);
+
+  // Hover preview popup state
+  const [hoverMarket, setHoverMarket] = useState<ProcessedMarket | null>(null);
+  const [hoverPos, setHoverPos] = useState<{ top: number; left: number } | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const PREVIEW_W = 480;
+  const PREVIEW_MAX_H = 520;
+
+  const clearHoverPopup = useCallback(() => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = null;
+    setHoverMarket(null);
+    setHoverPos(null);
+  }, []);
 
   // Initialize map with CARTO vector tiles
   useEffect(() => {
@@ -125,13 +168,26 @@ export default function WorldMap({
       mapRef.current = map;
       setMapReady(true);
 
-      // Animated signal pulse
+      // Animated signal pulse + selected ring + anomaly glow
       let phase = 0;
+      const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
       const animatePulse = () => {
         phase = (phase + 0.04) % (2 * Math.PI);
-        const opacity = 0.15 + 0.1 * Math.sin(phase);
+        const sin = Math.sin(phase);
         if (map.getLayer("signal-glow")) {
-          map.setPaintProperty("signal-glow", "circle-opacity", opacity);
+          map.setPaintProperty("signal-glow", "circle-opacity", clamp01(0.15 + 0.1 * sin));
+        }
+        // Outer pulse ring
+        if (map.getLayer("signal-pulse-ring")) {
+          map.setPaintProperty("signal-pulse-ring", "circle-stroke-opacity", clamp01(0.08 + 0.06 * Math.sin(phase * 0.7)));
+        }
+        // Selected market ring pulse
+        if (map.getLayer("selected-ring")) {
+          map.setPaintProperty("selected-ring", "circle-stroke-opacity", clamp01(0.5 + 0.3 * sin));
+        }
+        // Anomaly amber glow pulse
+        if (map.getLayer("anomaly-glow")) {
+          map.setPaintProperty("anomaly-glow", "circle-opacity", clamp01(0.08 + 0.06 * Math.sin(phase * 1.2)));
         }
         pulseRef.current = requestAnimationFrame(animatePulse);
       };
@@ -174,7 +230,7 @@ export default function WorldMap({
         "circle-color": "#4a8c6a",
         "circle-radius": [
           "step", ["get", "point_count"],
-          18, 5, 24, 15, 30, 50, 38,
+          12, 5, 16, 15, 20, 50, 24,
         ],
         "circle-opacity": [
           "interpolate", ["linear"], ["zoom"],
@@ -195,7 +251,7 @@ export default function WorldMap({
         "circle-color": "#1e3a2f",
         "circle-radius": [
           "step", ["get", "point_count"],
-          16, 10, 22, 50, 28,
+          10, 10, 14, 50, 18,
         ],
         "circle-opacity": 1,
         "circle-stroke-width": 0.5,
@@ -240,14 +296,14 @@ export default function WorldMap({
         "circle-color": ["get", "color"],
         "circle-radius": [
           "interpolate", ["linear"], ["zoom"],
-          1.5, ["+", ["*", ["get", "radius"], 1.6], 3],
-          6, ["+", ["*", ["get", "radius"], 1.8], 4],
+          1.5, ["+", ["*", ["get", "radius"], 1.5], 2],
+          6, ["+", ["*", ["get", "radius"], 1.6], 3],
         ],
         "circle-opacity": [
           "interpolate", ["linear"], ["zoom"],
-          1.5, ["*", ["get", "glowIntensity"], 0.6],
+          1.5, ["*", ["get", "glowIntensity"], 0.5],
           4, ["get", "glowIntensity"],
-          8, ["*", ["get", "glowIntensity"], 1.2],
+          8, ["*", ["get", "glowIntensity"], 1.1],
         ],
         "circle-blur": 0.8,
       },
@@ -263,9 +319,9 @@ export default function WorldMap({
         "circle-color": ["get", "color"],
         "circle-radius": [
           "interpolate", ["linear"], ["zoom"],
-          1.5, ["*", ["get", "radius"], 0.7],
+          1.5, ["*", ["get", "radius"], 0.8],
           4, ["get", "radius"],
-          8, ["*", ["get", "radius"], 1.3],
+          8, ["*", ["get", "radius"], 1.2],
         ],
         "circle-opacity": 1,
         "circle-stroke-width": 0,
@@ -286,6 +342,50 @@ export default function WorldMap({
       },
     });
 
+    // Signal pulse ring (outer) — double-ring radar ping effect
+    add({
+      id: "signal-pulse-ring",
+      type: "circle",
+      source: "markets",
+      filter: ["all", ["!", ["has", "point_count"]], ["get", "hasSignal"]],
+      paint: {
+        "circle-color": "transparent",
+        "circle-radius": ["+", ["get", "signalRadius"], 4],
+        "circle-stroke-width": 0.6,
+        "circle-stroke-color": ["get", "signalColor"],
+        "circle-stroke-opacity": 0.1,
+      },
+    });
+
+    // Anomaly glow — amber pulse for anomalous markets
+    add({
+      id: "anomaly-glow",
+      type: "circle",
+      source: "markets",
+      filter: ["all", ["!", ["has", "point_count"]], ["get", "isAnomaly"]],
+      paint: {
+        "circle-color": "#f59e0b",
+        "circle-radius": ["+", ["get", "radius"], 6],
+        "circle-opacity": 0.12,
+        "circle-blur": 1,
+      },
+    });
+
+    // Selected market ring — persistent green pulse
+    add({
+      id: "selected-ring",
+      type: "circle",
+      source: "markets",
+      filter: ["all", ["!", ["has", "point_count"]], ["get", "isSelected"]],
+      paint: {
+        "circle-color": "transparent",
+        "circle-radius": ["+", ["get", "radius"], 4],
+        "circle-stroke-width": 1.2,
+        "circle-stroke-color": "#22c55e",
+        "circle-stroke-opacity": 0.7,
+      },
+    });
+
     // Hover highlight ring — activated via feature-state
     add({
       id: "marker-hover",
@@ -294,7 +394,7 @@ export default function WorldMap({
       filter: ["!", ["has", "point_count"]],
       paint: {
         "circle-color": "transparent",
-        "circle-radius": ["+", ["get", "radius"], 3],
+        "circle-radius": ["+", ["get", "radius"], 2],
         "circle-stroke-width": [
           "case",
           ["boolean", ["feature-state", "hover"], false],
@@ -329,6 +429,8 @@ export default function WorldMap({
       if (!props || geom.type !== "Point") return;
       const market = marketsLookup.current.get(props.marketId);
       if (!market) return;
+      // Clear hover preview
+      clearHoverPopup();
       if (popupRef.current) popupRef.current.remove();
       popupRef.current = new maplibregl.Popup({ offset: 15, maxWidth: "320px" })
         .setLngLat(geom.coordinates as [number, number])
@@ -338,7 +440,7 @@ export default function WorldMap({
       if (onMarketClick) onMarketClick(market);
     });
 
-    // Hover: feature-state highlight + cursor
+    // Hover: feature-state highlight + cursor + preview popup
     let hoveredId: string | number | null = null;
     map.on("mouseenter", "unclustered-point", (e) => {
       map.getCanvas().style.cursor = "pointer";
@@ -348,6 +450,32 @@ export default function WorldMap({
           hoveredId = id;
           map.setFeatureState({ source: "markets", id: hoveredId }, { hover: true });
         }
+        const props = e.features[0].properties;
+        if (props?.marketId) {
+          const market = marketsLookup.current.get(props.marketId);
+          if (market) {
+            // Clear any pending timer
+            if (hoverTimer.current) clearTimeout(hoverTimer.current);
+            hoverTimer.current = setTimeout(() => {
+              const point = e.point;
+              const canvas = map.getCanvas().getBoundingClientRect();
+              const screenX = canvas.left + point.x;
+              const screenY = canvas.left + point.y;
+              const vw = window.innerWidth;
+              const vh = window.innerHeight;
+              // Position: prefer right of cursor; if no space, go left
+              let left = screenX + 16;
+              if (left + PREVIEW_W > vw - 4) {
+                left = screenX - PREVIEW_W - 16;
+              }
+              left = Math.max(4, Math.min(left, vw - PREVIEW_W - 4));
+              let top = screenY - 40;
+              top = Math.max(4, Math.min(top, vh - PREVIEW_MAX_H - 4));
+              setHoverMarket(market);
+              setHoverPos({ top, left });
+            }, 600);
+          }
+        }
       }
     });
     map.on("mouseleave", "unclustered-point", () => {
@@ -356,6 +484,10 @@ export default function WorldMap({
         map.setFeatureState({ source: "markets", id: hoveredId }, { hover: false });
         hoveredId = null;
       }
+      if (hoverTimer.current) clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+      setHoverMarket(null);
+      setHoverPos(null);
     });
     map.on("mouseenter", "clusters", () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", "clusters", () => { map.getCanvas().style.cursor = ""; });
@@ -422,6 +554,37 @@ export default function WorldMap({
                 "line-color": "#555",
                 "line-width": 0.8,
                 "line-opacity": 0.5,
+              },
+              filter: ["==", ["get", "name"], ""],
+            },
+            "clusters"
+          );
+
+          // Selected country: persistent green fill
+          map.addLayer(
+            {
+              id: "country-selected",
+              type: "fill",
+              source: "country-boundaries",
+              paint: {
+                "fill-color": "rgba(34,197,94,0.08)",
+                "fill-opacity": 1,
+              },
+              filter: ["==", ["get", "name"], ""],
+            },
+            "clusters"
+          );
+
+          // Selected country: green border
+          map.addLayer(
+            {
+              id: "country-selected-border",
+              type: "line",
+              source: "country-boundaries",
+              paint: {
+                "line-color": "#22c55e",
+                "line-width": 1.5,
+                "line-opacity": 0.8,
               },
               filter: ["==", ["get", "name"], ""],
             },
@@ -534,18 +697,20 @@ export default function WorldMap({
       marketsLookup.current.set(m.id, m);
     }
 
-    // Compute log+sqrt area-proportional sizing (3–22px)
+    // Compute log+sqrt area-proportional sizing (2–10px)
     const volumes = spaced.filter((m) => m.coords).map((m) => m.volume24h || m.volume || 0);
     volumes.sort((a, b) => a - b);
 
-    const minR = 3, maxR = 22;
+    const minR = 2, maxR = 10;
     const logMin = Math.log1p(volumes[0] || 0);
     const logMax = Math.log1p(volumes[volumes.length - 1] || 1);
 
     const features = spaced
       .filter((m) => m.coords)
       .map((m, i) => {
-        const color = CATEGORY_COLORS[m.category] || CATEGORY_COLORS.Other;
+        const color = colorMode === "impact"
+          ? IMPACT_COLORS[m.impactLevel as ImpactLevel] || IMPACT_COLORS.info
+          : CATEGORY_COLORS[m.category] || CATEGORY_COLORS.Other;
         const vol = m.volume24h || m.volume || 0;
 
         // Log + sqrt scale: perceptually linear area sizing
@@ -554,15 +719,18 @@ export default function WorldMap({
         const radius = minR + Math.sqrt(t) * (maxR - minR);
 
         // Volume-scaled glow intensity
-        const glowIntensity = 0.15 + t * 0.4; // 0.15–0.55
+        const glowIntensity = 0.12 + t * 0.3; // 0.12–0.42
 
         const change = m.change ?? 0;
         const hasSignal = m.change !== null && Math.abs(m.change) > 0.05;
         const signalColor =
           m.change !== null && m.change > 0 ? "#22c55e" : "#ff4444";
         const signalRadius = hasSignal
-          ? radius + 4 + Math.min(8, Math.abs(change) * 80)
+          ? radius + 3 + Math.min(5, Math.abs(change) * 50)
           : 0;
+
+        const isAnomaly = m.anomaly?.isAnomaly ?? false;
+        const isSelected = m.id === selectedMarketId;
 
         return {
           type: "Feature" as const,
@@ -580,12 +748,41 @@ export default function WorldMap({
             hasSignal,
             signalColor,
             signalRadius,
+            isAnomaly,
+            isSelected,
           },
         };
       });
 
     source.setData({ type: "FeatureCollection", features });
-  }, [markets, activeCategories, mapReady]);
+  }, [markets, activeCategories, mapReady, colorMode, selectedMarketId]);
+
+  // Update selected country highlight
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    const filter = selectedCountry
+      ? ["==", ["get", "name"], selectedCountry]
+      : ["==", ["get", "name"], ""];
+    if (map.getLayer("country-selected")) {
+      map.setFilter("country-selected", filter as maplibregl.FilterSpecification);
+    }
+    if (map.getLayer("country-selected-border")) {
+      map.setFilter("country-selected-border", filter as maplibregl.FilterSpecification);
+    }
+  }, [selectedCountry, mapReady]);
+
+  // Region flyTo
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !region) return;
+    const view = REGIONAL_VIEWS.find((r) => r.id === region);
+    if (!view) return;
+    mapRef.current.flyTo({
+      center: view.center,
+      zoom: view.zoom,
+      duration: 1200,
+    });
+  }, [region, mapReady]);
 
   // Fly to target
   useEffect(() => {
@@ -607,7 +804,30 @@ export default function WorldMap({
         isFullscreen={isFullscreen}
         activeCategories={activeCategories}
         onToggleCategory={onToggleCategory}
+        region={region ?? "global"}
+        onRegionChange={onRegionChange}
+        colorMode={colorMode}
+        onColorModeChange={onColorModeChange}
       />
+      {/* Hover preview popup — portal to body */}
+      {hoverMarket && hoverPos && createPortal(
+        <div
+          className="fixed z-[9999] bg-[var(--bg)] border border-[var(--border)] rounded-md overflow-y-auto pointer-events-none"
+          style={{
+            top: hoverPos.top,
+            left: hoverPos.left,
+            width: PREVIEW_W,
+            maxHeight: PREVIEW_MAX_H,
+            padding: "12px 14px",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)",
+          }}
+        >
+          <Suspense fallback={<div className="text-[12px] text-[var(--text-faint)] font-mono py-4">loading...</div>}>
+            <MarketPreview market={hoverMarket} />
+          </Suspense>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

@@ -44,6 +44,13 @@ export default function Panel({
     >
       <div className="panel-header">
         <div className="flex items-center gap-2">
+          <span className="drag-handle" title="Drag to reorder">
+            <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor">
+              <circle cx="1" cy="1" r="1" /><circle cx="5" cy="1" r="1" />
+              <circle cx="1" cy="5" r="1" /><circle cx="5" cy="5" r="1" />
+              <circle cx="1" cy="9" r="1" /><circle cx="5" cy="9" r="1" />
+            </svg>
+          </span>
           <span className="panel-title">{title}</span>
           {count !== undefined && (
             <span className="panel-count">{count}</span>

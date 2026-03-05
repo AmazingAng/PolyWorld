@@ -168,6 +168,8 @@ export function processEvents(events: PolymarketEvent[]): {
       commentCount: event.commentCount || 0,
       tags: tagLabels,
       createdAt: event.startDate || event.createdAt || null,
+      impactScore: 0,
+      impactLevel: "info",
     };
 
     if (geo) {

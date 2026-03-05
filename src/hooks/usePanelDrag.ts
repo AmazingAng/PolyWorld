@@ -1,21 +1,35 @@
 import { useEffect, useRef } from "react";
 
-const DRAG_THRESHOLD = 8;
+const DRAG_THRESHOLD = 6;
 
+/**
+ * Drag-to-reorder panels within a container.
+ * Uses DOM class manipulation during drag (no React re-renders) for smooth performance.
+ * Supports mouse + touch. Computes new order on drop.
+ */
 export function usePanelDrag(
   containerRef: React.RefObject<HTMLElement | null>,
+  panelOrder: string[],
   onReorder: (order: string[]) => void
 ) {
-  const draggingEl = useRef<HTMLElement | null>(null);
+  const orderRef = useRef(panelOrder);
+  orderRef.current = panelOrder;
+  const reorderRef = useRef(onReorder);
+  reorderRef.current = onReorder;
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    let startX = 0;
     let startY = 0;
-    let isDragging = false;
+    let active = false;
     let sourcePanel: HTMLElement | null = null;
+    let lastIndicatorPanel: HTMLElement | null = null;
+    let lastIndicatorSide: string | null = null;
+
+    function getPanelElements(): HTMLElement[] {
+      return Array.from(container!.querySelectorAll("[data-panel]"));
+    }
 
     function findPanel(el: HTMLElement | null): HTMLElement | null {
       while (el && el !== container) {
@@ -25,89 +39,145 @@ export function usePanelDrag(
       return null;
     }
 
-    function onMouseDown(e: MouseEvent) {
-      // Only left click
-      if (e.button !== 0) return;
+    function clearIndicators() {
+      if (lastIndicatorPanel) {
+        lastIndicatorPanel.classList.remove("panel-drop-above", "panel-drop-below");
+        lastIndicatorPanel = null;
+        lastIndicatorSide = null;
+      }
+    }
 
-      const target = e.target as HTMLElement;
+    function computeDropTarget(clientY: number): { panel: HTMLElement; above: boolean } | null {
+      const panels = getPanelElements().filter((p) => p !== sourcePanel);
+      if (panels.length === 0) return null;
 
-      // Ignore clicks on buttons, inputs, or panel-content
+      for (let i = 0; i < panels.length; i++) {
+        const rect = panels[i].getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (clientY < midY) {
+          return { panel: panels[i], above: true };
+        }
+      }
+      // Below all — drop after last
+      return { panel: panels[panels.length - 1], above: false };
+    }
+
+    function beginDrag(clientY: number, target: HTMLElement) {
+      // Ignore clicks on interactive elements or panel content
       if (target.closest("button, input, select, textarea, .panel-content")) return;
-
-      // Must originate from a panel-header
-      if (!target.closest(".panel-header")) return;
+      // Must start from panel header or drag handle
+      if (!target.closest(".panel-header, .drag-handle")) return;
 
       sourcePanel = findPanel(target);
       if (!sourcePanel) return;
 
-      startX = e.clientX;
-      startY = e.clientY;
-      isDragging = false;
+      startY = clientY;
+      active = false;
 
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
+      document.addEventListener("touchmove", onTouchMove, { passive: false });
+      document.addEventListener("touchend", onTouchEnd);
     }
 
-    function onMouseMove(e: MouseEvent) {
+    function moveDrag(clientY: number) {
       if (!sourcePanel) return;
 
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-
-      // 8px threshold before starting drag
-      if (!isDragging && Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
-
-      if (!isDragging) {
-        isDragging = true;
-        sourcePanel.classList.add("dragging");
-        draggingEl.current = sourcePanel;
+      if (!active) {
+        if (Math.abs(clientY - startY) < DRAG_THRESHOLD) return;
+        active = true;
+        sourcePanel.classList.add("panel-dragging");
+        document.body.style.userSelect = "none";
+        document.body.style.cursor = "grabbing";
       }
 
-      // Find target panel under cursor
-      const elUnder = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
-      if (!elUnder) return;
-
-      const targetPanel = findPanel(elUnder);
-      if (!targetPanel || targetPanel === sourcePanel) return;
-
-      // Swap DOM positions
-      const sourceRect = sourcePanel.getBoundingClientRect();
-      const targetRect = targetPanel.getBoundingClientRect();
-
-      if (sourceRect.top < targetRect.top || sourceRect.left < targetRect.left) {
-        targetPanel.after(sourcePanel);
-      } else {
-        targetPanel.before(sourcePanel);
+      // Compute drop target
+      clearIndicators();
+      const target = computeDropTarget(clientY);
+      if (target) {
+        const cls = target.above ? "panel-drop-above" : "panel-drop-below";
+        target.panel.classList.add(cls);
+        lastIndicatorPanel = target.panel;
+        lastIndicatorSide = cls;
       }
     }
 
-    function onMouseUp() {
+    function endDrag() {
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
 
-      if (isDragging && sourcePanel) {
-        sourcePanel.classList.remove("dragging");
-        draggingEl.current = null;
+      if (active && sourcePanel && lastIndicatorPanel) {
+        const sourceId = sourcePanel.getAttribute("data-panel")!;
+        const targetId = lastIndicatorPanel.getAttribute("data-panel")!;
+        const insertBefore = lastIndicatorSide === "panel-drop-above";
 
-        // Read new DOM order
-        const panels = container!.querySelectorAll("[data-panel]");
-        const newOrder: string[] = [];
-        panels.forEach((el) => {
-          const id = el.getAttribute("data-panel");
-          if (id) newOrder.push(id);
-        });
-        onReorder(newOrder);
+        // Build new visible order
+        const visibleIds = getPanelElements().map((el) => el.getAttribute("data-panel")!);
+        const filtered = visibleIds.filter((id) => id !== sourceId);
+        let toIdx = filtered.indexOf(targetId);
+        if (!insertBefore) toIdx++;
+        filtered.splice(toIdx, 0, sourceId);
+
+        // Reconstruct full order (preserve hidden panel positions)
+        const fullOrder = [...orderRef.current];
+        const visibleSet = new Set(filtered);
+        const visibleSlots: number[] = [];
+        for (let i = 0; i < fullOrder.length; i++) {
+          if (visibleSet.has(fullOrder[i])) visibleSlots.push(i);
+        }
+        const newOrder = [...fullOrder];
+        for (let i = 0; i < visibleSlots.length; i++) {
+          newOrder[visibleSlots[i]] = filtered[i];
+        }
+
+        reorderRef.current(newOrder);
       }
 
+      // Cleanup classes
+      if (sourcePanel) sourcePanel.classList.remove("panel-dragging");
+      clearIndicators();
       sourcePanel = null;
-      isDragging = false;
+      active = false;
+    }
+
+    // Mouse events
+    function onMouseDown(e: MouseEvent) {
+      if (e.button !== 0) return;
+      beginDrag(e.clientY, e.target as HTMLElement);
+    }
+    function onMouseMove(e: MouseEvent) {
+      moveDrag(e.clientY);
+    }
+    function onMouseUp() {
+      endDrag();
+    }
+
+    // Touch events
+    function onTouchStart(e: TouchEvent) {
+      beginDrag(e.touches[0].clientY, e.target as HTMLElement);
+    }
+    function onTouchMove(e: TouchEvent) {
+      e.preventDefault(); // prevent scroll during drag
+      moveDrag(e.touches[0].clientY);
+    }
+    function onTouchEnd() {
+      endDrag();
     }
 
     container.addEventListener("mousedown", onMouseDown);
+    container.addEventListener("touchstart", onTouchStart, { passive: true });
+
     return () => {
       container.removeEventListener("mousedown", onMouseDown);
+      container.removeEventListener("touchstart", onTouchStart);
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
     };
-  }, [containerRef, onReorder]);
+  }, [containerRef]);
 }

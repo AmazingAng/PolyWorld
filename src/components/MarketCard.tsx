@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useMemo, useEffect, lazy, Suspense } fro
 import { createPortal } from "react-dom";
 import { ProcessedMarket, PolymarketMarket } from "@/types";
 import { CATEGORY_COLORS } from "@/lib/categories";
+import { IMPACT_COLORS } from "@/lib/impact";
 import { formatVolume, formatPct, formatChange } from "@/lib/format";
 
 const MarketPreview = lazy(() => import("./MarketPreview"));
@@ -153,6 +154,13 @@ export default function MarketCard({
       style={{ borderLeft: `2px solid ${color}` }}
     >
       <div className="flex items-center gap-1.5 text-[12px] text-[var(--text-muted)] mb-1">
+        {market.impactLevel && market.impactLevel !== "info" && (
+          <span
+            className="w-1.5 h-1.5 rounded-full shrink-0"
+            style={{ background: IMPACT_COLORS[market.impactLevel] }}
+            title={`Impact: ${market.impactScore}`}
+          />
+        )}
         {(market.location || market.category).toLowerCase()}
         {endLabel && (
           <span className="text-[var(--text-faint)]">{"\u00B7"} {endLabel}</span>

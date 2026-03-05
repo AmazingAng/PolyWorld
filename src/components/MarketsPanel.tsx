@@ -11,8 +11,10 @@ interface MarketsPanelProps {
   onFlyTo: (coords: [number, number], marketId: string) => void;
   onSelectMarket: (m: ProcessedMarket) => void;
   loading?: boolean;
+  externalSearch?: string;
 }
 
+type SortTab = "default" | "impact";
 const NEW_THRESHOLD_MS = 6 * 60 * 60 * 1000;
 
 export default function MarketsPanel({
@@ -22,8 +24,15 @@ export default function MarketsPanel({
   onFlyTo,
   onSelectMarket,
   loading,
+  externalSearch,
 }: MarketsPanelProps) {
   const [search, setSearch] = useState("");
+  const [sortTab, setSortTab] = useState<SortTab>("default");
+
+  // Sync external search (e.g. tag click from detail panel)
+  useEffect(() => {
+    if (externalSearch !== undefined) setSearch(externalSearch);
+  }, [externalSearch]);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -98,6 +107,14 @@ export default function MarketsPanel({
     [searchFiltered, unmapped, activeCategories]
   );
 
+  const impactSorted = useMemo(
+    () =>
+      [...(searchFiltered || filtered)]
+        .sort((a, b) => (b.impactScore || 0) - (a.impactScore || 0))
+        .slice(0, 20),
+    [searchFiltered, filtered]
+  );
+
   const cardAction = (m: ProcessedMarket) => {
     if (m.coords) onFlyTo(m.coords, m.id);
     onSelectMarket(m);
@@ -109,6 +126,13 @@ export default function MarketsPanel({
     <div data-panel="markets" className={`panel panel-wide${expanded ? " panel-expanded" : ""}`}>
       <div className="panel-header">
         <div className="flex items-center gap-2">
+          <span className="drag-handle" title="Drag to reorder">
+            <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor">
+              <circle cx="1" cy="1" r="1" /><circle cx="5" cy="1" r="1" />
+              <circle cx="1" cy="5" r="1" /><circle cx="5" cy="5" r="1" />
+              <circle cx="1" cy="9" r="1" /><circle cx="5" cy="9" r="1" />
+            </svg>
+          </span>
           <span className="panel-title">Markets</span>
           <span className="panel-count">{totalCount}</span>
         </div>
@@ -159,6 +183,22 @@ export default function MarketsPanel({
           )}
         </button>
       </div>
+      {/* Sort tabs */}
+      <div className="flex items-center gap-0.5 px-3 py-1 border-b border-[var(--border-subtle)]">
+        {(["default", "impact"] as SortTab[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setSortTab(tab)}
+            className={`px-2 py-0.5 text-[11px] font-mono transition-colors ${
+              sortTab === tab
+                ? "text-[var(--text)] bg-[var(--surface-hover)]"
+                : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"
+            }`}
+          >
+            {tab === "default" ? "Default" : "Impact"}
+          </button>
+        ))}
+      </div>
       <div className="panel-content">
         {/* Skeleton loading */}
         {loading && mapped.length === 0 && (
@@ -169,53 +209,78 @@ export default function MarketsPanel({
           </div>
         )}
 
-        {/* Search results */}
-        {searchFiltered ? (
+        {/* Impact tab */}
+        {sortTab === "impact" ? (
           <>
-            <SectionLabel title={`Results (${searchFiltered.length})`} />
-            {searchFiltered.length === 0 ? (
-              <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no markets match</div>
+            <SectionLabel title="By Impact Score" />
+            {impactSorted.length === 0 ? (
+              <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
             ) : (
-              searchFiltered.slice(0, 30).map((m) => (
+              impactSorted.map((m) => (
                 <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
               ))
             )}
           </>
         ) : (
           <>
-            {newMarkets.length > 0 && (
+            {/* Search results */}
+            {searchFiltered ? (
               <>
-                <SectionLabel title="New Markets" />
-                {newMarkets.map((m) => (
-                  <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
-                ))}
+                <SectionLabel title={`Results (${searchFiltered.length})`} />
+                {searchFiltered.length === 0 ? (
+                  <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no markets match</div>
+                ) : (
+                  searchFiltered.slice(0, 30).map((m) => (
+                    <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
+                  ))
+                )}
               </>
-            )}
-
-            <SectionLabel title="24h Movers" />
-            {movers.length === 0 ? (
-              <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
             ) : (
-              movers.map((m) => (
-                <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
-              ))
-            )}
-
-            <SectionLabel title="Trending by Volume" />
-            {trending.length === 0 ? (
-              <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
-            ) : (
-              trending.map((m) => (
-                <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
-              ))
-            )}
-
-            {global.length > 0 && (
               <>
-                <SectionLabel title="Global Markets" />
-                {global.map((m) => (
-                  <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
-                ))}
+                {newMarkets.length > 0 && (
+                  <>
+                    <SectionLabel title="New Markets" />
+                    {newMarkets.map((m) => (
+                      <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
+                    ))}
+                  </>
+                )}
+
+                <SectionLabel title="24h Movers" />
+                {movers.length === 0 ? (
+                  <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
+                ) : (
+                  movers.map((m) => (
+                    <div key={m.id} className="relative">
+                      {m.anomaly?.isAnomaly && (
+                        <span
+                          className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full z-10"
+                          style={{ background: "#f59e0b" }}
+                          title={`Anomaly z=${m.anomaly.zScore}`}
+                        />
+                      )}
+                      <MarketCard market={m} showChange onClick={() => cardAction(m)} />
+                    </div>
+                  ))
+                )}
+
+                <SectionLabel title="Trending by Volume" />
+                {trending.length === 0 ? (
+                  <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
+                ) : (
+                  trending.map((m) => (
+                    <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
+                  ))
+                )}
+
+                {global.length > 0 && (
+                  <>
+                    <SectionLabel title="Global Markets" />
+                    {global.map((m) => (
+                      <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
+                    ))}
+                  </>
+                )}
               </>
             )}
           </>

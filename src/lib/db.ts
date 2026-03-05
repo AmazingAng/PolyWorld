@@ -79,6 +79,37 @@ function initSchema(db: Database.Database) {
       status TEXT,
       error_msg TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS ai_summaries (
+      cache_key TEXT PRIMARY KEY,
+      summary TEXT,
+      created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS news_items (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      url TEXT NOT NULL UNIQUE,
+      source TEXT NOT NULL,
+      source_url TEXT,
+      summary TEXT,
+      published_at TEXT,
+      fetched_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      image_url TEXT,
+      categories_json TEXT DEFAULT '[]'
+    );
+    CREATE INDEX IF NOT EXISTS idx_news_published ON news_items(published_at DESC);
+
+    CREATE TABLE IF NOT EXISTS news_market_matches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      news_id TEXT NOT NULL,
+      market_id TEXT NOT NULL,
+      relevance_score REAL DEFAULT 0,
+      match_method TEXT DEFAULT 'keyword',
+      created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      UNIQUE(news_id, market_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_news_matches_market ON news_market_matches(market_id);
   `);
 }
 
