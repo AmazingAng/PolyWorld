@@ -17,6 +17,12 @@ import ToastContainer from "@/components/Toast";
 import type { TimeRange } from "@/components/TimeRangeFilter";
 import { usePanelDrag } from "@/hooks/usePanelDrag";
 import ResizeHandle from "@/components/ResizeHandle";
+import { usePreferences } from "@/hooks/usePreferences";
+import { useWatchlist } from "@/hooks/useWatchlist";
+import { useAlerts, AlertConfig } from "@/hooks/useAlerts";
+import { useBrowserNotifications } from "@/hooks/useBrowserNotifications";
+import WatchlistPanel from "@/components/WatchlistPanel";
+import { usePanelColSpans } from "@/hooks/usePanelColSpans";
 
 const WorldMap = dynamic(() => import("@/components/WorldMap"), {
   ssr: false,
@@ -31,6 +37,10 @@ const WorldMap = dynamic(() => import("@/components/WorldMap"), {
 });
 
 const REFRESH_INTERVAL = 45000;
+
+const DEFAULT_COL_SPANS: Record<string, number> = {
+  markets: 2, country: 2, news: 2, live: 2, watchlist: 2, detail: 1,
+};
 
 const TIME_THRESHOLDS: Record<TimeRange, number> = {
   "1h": 50000,
@@ -48,6 +58,9 @@ function MapBottomDetail({
   onSelectMarket,
   onTagClick,
   height,
+  isWatched,
+  onToggleWatch,
+  onCreateAlert,
 }: {
   selectedMarket: ProcessedMarket | null;
   relatedMarkets: ProcessedMarket[];
@@ -55,6 +68,9 @@ function MapBottomDetail({
   onSelectMarket: (m: ProcessedMarket) => void;
   onTagClick: (tag: string) => void;
   height: number;
+  isWatched?: boolean;
+  onToggleWatch?: () => void;
+  onCreateAlert?: () => void;
 }) {
   return (
     <div className="map-bottom-panel" style={{ height }}>
@@ -65,6 +81,48 @@ function MapBottomDetail({
             <span className="panel-data-badge live">selected</span>
           )}
         </div>
+        {/* Action buttons in header */}
+        {selectedMarket && (
+          <div className="flex items-center gap-1">
+            {onToggleWatch && (
+              <button
+                onClick={onToggleWatch}
+                className={`flex items-center gap-1 px-1.5 py-0.5 border rounded-sm text-[10px] transition-colors ${
+                  isWatched
+                    ? "border-[#f59e0b]/40 text-[#f59e0b] hover:bg-[#f59e0b]/10"
+                    : "border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)]"
+                }`}
+                title={isWatched ? "Remove from watchlist" : "Add to watchlist"}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill={isWatched ? "#f59e0b" : "none"} stroke={isWatched ? "#f59e0b" : "currentColor"} strokeWidth="1.5">
+                  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                </svg>
+                <span>{isWatched ? "WATCHING" : "WATCH"}</span>
+              </button>
+            )}
+            {onCreateAlert && (
+              <button
+                onClick={onCreateAlert}
+                className="flex items-center gap-1 px-1.5 py-0.5 border border-[var(--border)] rounded-sm text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors"
+                title="Create alert"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                <span>ALERT</span>
+              </button>
+            )}
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1 px-1.5 py-0.5 border border-[var(--border)] rounded-sm text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors"
+              title="Close detail"
+            >
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+              <span>CLOSE</span>
+            </button>
+          </div>
+        )}
       </div>
       <div className="overlay-content">
         {selectedMarket ? (
@@ -86,20 +144,12 @@ function MapBottomDetail({
 }
 
 export default function Home() {
+  const { prefs, updatePref } = usePreferences();
+
   const [mapped, setMapped] = useState<ProcessedMarket[]>([]);
   const [unmapped, setUnmapped] = useState<ProcessedMarket[]>([]);
   const [activeCategories, setActiveCategories] = useState<Set<Category>>(
-    () =>
-      new Set([
-        "Politics",
-        "Geopolitics",
-        "Crypto",
-        "Sports",
-        "Finance",
-        "Tech",
-        "Culture",
-        "Other",
-      ])
+    () => new Set(prefs.activeCategories as Category[])
   );
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
@@ -113,21 +163,40 @@ export default function Home() {
   } | null>(null);
   const [signals, setSignals] = useState<ProcessedMarket[]>([]);
   const [newMarkets, setNewMarkets] = useState<ProcessedMarket[]>([]);
-  const [timeRange, setTimeRange] = useState<TimeRange>("ALL");
+  const [timeRange, setTimeRange] = useState<TimeRange>(prefs.timeRange as TimeRange);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [autoRefresh, setAutoRefresh] = useState(prefs.autoRefresh);
   const [selectedMarket, setSelectedMarket] = useState<ProcessedMarket | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [panelVisibility, setPanelVisibility] = useState<PanelVisibility>({
-    markets: true,
-    detail: true,
-    country: true,
-    news: true,
-    live: true,
+  const [panelVisibility, setPanelVisibility] = useState<PanelVisibility>(() => {
+    const defaults: PanelVisibility = { markets: true, detail: true, country: true, news: true, live: true, watchlist: true };
+    return { ...defaults, ...prefs.panelVisibility };
   });
-  const [panelOrder, setPanelOrder] = useState<string[]>(["markets", "country", "news", "live"]);
+  const [panelOrder, setPanelOrder] = useState<string[]>(() => {
+    const po = prefs.panelOrder;
+    if (!po.includes("watchlist")) return ["watchlist", ...po];
+    return po;
+  });
   const panelsRef = useRef<HTMLDivElement>(null);
+
+  // Watchlist
+  const { watchedIds, isWatched, toggleWatch, removeWatch, count: watchedCount, addedAt } = useWatchlist();
+  const { getColSpan, setColSpan, resetColSpan } = usePanelColSpans();
+  const colSpanFor = (id: string) => getColSpan(id, DEFAULT_COL_SPANS[id] ?? 1);
+
+  // Alerts
+  const { alerts, history: alertHistory, unreadCount, addAlert, removeAlert, toggleAlert, evaluateAlerts, markRead, markAllRead, clearHistory } = useAlerts();
+  const { sendNotification, requestPermission, permission: notifPermission } = useBrowserNotifications();
+  const [alertManagerOpen, setAlertManagerOpen] = useState(false);
+  const [alertPrefill, setAlertPrefill] = useState<{ marketId?: string; marketTitle?: string } | undefined>(undefined);
+
+  // Sync preferences back to localStorage
+  useEffect(() => { updatePref("activeCategories", Array.from(activeCategories)); }, [activeCategories, updatePref]);
+  useEffect(() => { updatePref("timeRange", timeRange); }, [timeRange, updatePref]);
+  useEffect(() => { updatePref("autoRefresh", autoRefresh); }, [autoRefresh, updatePref]);
+  useEffect(() => { updatePref("panelVisibility", panelVisibility); }, [panelVisibility, updatePref]);
+  useEffect(() => { updatePref("panelOrder", panelOrder); }, [panelOrder, updatePref]);
 
   const handlePanelReorder = useCallback((newOrder: string[]) => {
     setPanelOrder(newOrder);
@@ -136,11 +205,16 @@ export default function Home() {
   usePanelDrag(panelsRef, panelOrder, handlePanelReorder);
 
   // Resize state: left/right split (percentage of viewport) and top/bottom split (px)
-  const [mapWidthPct, setMapWidthPct] = useState(58);
+  const [mapWidthPct, setMapWidthPct] = useState(prefs.mapWidthPct);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(420);
   const [marketSearch, setMarketSearch] = useState<string | undefined>(undefined);
-  const [region, setRegion] = useState<string>("global");
-  const [colorMode, setColorMode] = useState<"category" | "impact">("category");
+  const [region, setRegion] = useState<string>(prefs.region);
+  const [colorMode, setColorMode] = useState<"category" | "impact">(prefs.colorMode);
+
+  // Sync remaining preferences
+  useEffect(() => { updatePref("mapWidthPct", mapWidthPct); }, [mapWidthPct, updatePref]);
+  useEffect(() => { updatePref("colorMode", colorMode); }, [colorMode, updatePref]);
+  useEffect(() => { updatePref("region", region); }, [region, updatePref]);
   const mainRef = useRef<HTMLDivElement>(null);
   const mapSectionRef = useRef<HTMLDivElement>(null);
 
@@ -247,6 +321,32 @@ export default function Home() {
     };
   }, [fetchData, autoRefresh]);
 
+  // Alert evaluation on data refresh
+  const alertEvalRef = useRef(false);
+  useEffect(() => {
+    if (mapped.length === 0 && unmapped.length === 0) return;
+    if (!alertEvalRef.current) {
+      // Skip first load — need two data points to detect crossings
+      alertEvalRef.current = true;
+      // Initialize prevProbs
+      evaluateAlerts([...mapped, ...unmapped], new Set());
+      return;
+    }
+    const newIds = new Set<string>();
+    for (const m of [...mapped, ...unmapped]) {
+      if (!seenMarketIds.current.has(m.id)) {
+        // Note: seenMarketIds is already updated in fetchData, but newMarkets state has the fresh ones
+      }
+    }
+    // Use newMarkets state for new market detection
+    const freshIds = new Set(newMarkets.map((m) => m.id));
+    const triggered = evaluateAlerts([...mapped, ...unmapped], freshIds);
+    for (const t of triggered) {
+      sendNotification("PolyWorld Alert", { body: t.message });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapped, unmapped]);
+
   const handleToggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
@@ -340,6 +440,25 @@ export default function Home() {
         globalCount={unmapped.length}
         lastSyncTime={lastSyncTime}
         onOpenSettings={() => setSettingsOpen(true)}
+        watchedCount={watchedCount}
+        alertUnreadCount={unreadCount}
+        alertManagerOpen={alertManagerOpen}
+        onOpenAlertManager={() => setAlertManagerOpen((v) => !v)}
+        onCloseAlertManager={() => { setAlertManagerOpen(false); setAlertPrefill(undefined); }}
+        alertProps={{
+          alerts,
+          history: alertHistory,
+          onAddAlert: addAlert,
+          onRemoveAlert: removeAlert,
+          onToggleAlert: toggleAlert,
+          onMarkRead: markRead,
+          onMarkAllRead: markAllRead,
+          onClearHistory: clearHistory,
+          allMarkets: [...mapped, ...unmapped],
+          prefill: alertPrefill,
+          notifPermission,
+          onRequestPermission: requestPermission,
+        }}
       />
 
       <div className="main-content" ref={mainRef} style={{ gridTemplateColumns: `${mapWidthPct}% 6px 1fr` } as React.CSSProperties}>
@@ -367,6 +486,8 @@ export default function Home() {
               onColorModeChange={setColorMode}
               region={region}
               onRegionChange={setRegion}
+              isWatched={isWatched}
+              onToggleWatch={toggleWatch}
             />
           </div>
           {/* Horizontal resize handle between map and bottom panel */}
@@ -379,6 +500,12 @@ export default function Home() {
             onSelectMarket={handleSelectMarketFromPanel}
             onTagClick={(tag) => setMarketSearch(tag)}
             height={bottomPanelHeight}
+            isWatched={selectedMarket ? isWatched(selectedMarket.id) : undefined}
+            onToggleWatch={selectedMarket ? () => toggleWatch(selectedMarket.id) : undefined}
+            onCreateAlert={selectedMarket ? () => {
+              setAlertPrefill({ marketId: selectedMarket.id, marketTitle: selectedMarket.title });
+              setAlertManagerOpen(true);
+            } : undefined}
           />
         </div>
 
@@ -401,6 +528,11 @@ export default function Home() {
                       onSelectMarket={handleSelectMarketFromPanel}
                       loading={loading}
                       externalSearch={marketSearch}
+                      isWatched={isWatched}
+                      onToggleWatch={toggleWatch}
+                      colSpan={colSpanFor("markets")}
+                      onColSpanChange={(s) => setColSpan("markets", s)}
+                      onColSpanReset={() => resetColSpan("markets")}
                     />
                   );
                 case "country":
@@ -410,6 +542,9 @@ export default function Home() {
                       panelId="country"
                       title="Country"
                       count={selectedCountry || "—"}
+                      colSpan={colSpanFor("country")}
+                      onColSpanChange={(s) => setColSpan("country", s)}
+                      onColSpanReset={() => resetColSpan("country")}
                     >
                       {selectedCountry ? (
                         <CountryPanel
@@ -417,6 +552,8 @@ export default function Home() {
                           mapped={mapped}
                           unmapped={unmapped}
                           onSelectMarket={handleSelectMarketFromPanel}
+                          isWatched={isWatched}
+                          onToggleWatch={toggleWatch}
                         />
                       ) : (
                         <div className="text-[12px] text-[#777] font-mono">
@@ -432,6 +569,17 @@ export default function Home() {
                       panelId="news"
                       title="News"
                       className="panel-news"
+                      colSpan={colSpanFor("news")}
+                      onColSpanChange={(s) => setColSpan("news", s)}
+                      onColSpanReset={() => resetColSpan("news")}
+                      headerRight={
+                        <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: selectedMarket ? "var(--green)" : "var(--text-muted)" }}>
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: selectedMarket ? "var(--green)" : "var(--text-ghost)" }} />
+                          {selectedMarket
+                            ? `${selectedMarket.title.slice(0, 50)}${selectedMarket.title.length > 50 ? "\u2026" : ""}`
+                            : "global feed"}
+                        </span>
+                      }
                     >
                       <NewsPanel selectedMarket={selectedMarket} />
                     </Panel>
@@ -444,8 +592,43 @@ export default function Home() {
                       title="Live Streams"
                       className="panel-live"
                       badge={<span className="panel-data-badge live">live</span>}
+                      colSpan={colSpanFor("live")}
+                      onColSpanChange={(s) => setColSpan("live", s)}
+                      onColSpanReset={() => resetColSpan("live")}
                     >
                       <LivePanel />
+                    </Panel>
+                  );
+                case "watchlist":
+                  return (
+                    <Panel
+                      key="watchlist"
+                      panelId="watchlist"
+                      title="Watchlist"
+                      colSpan={colSpanFor("watchlist")}
+                      onColSpanChange={(s) => setColSpan("watchlist", s)}
+                      onColSpanReset={() => resetColSpan("watchlist")}
+                      headerRight={
+                        watchedCount > 0 ? (
+                          <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="1.5" className="inline -mt-px mr-0.5">
+                              <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                            </svg>
+                            {watchedCount} watched
+                          </span>
+                        ) : undefined
+                      }
+                    >
+                      <WatchlistPanel
+                        watchedIds={watchedIds}
+                        mapped={mapped}
+                        unmapped={unmapped}
+                        addedAt={addedAt}
+                        onSelectMarket={handleSelectMarketFromPanel}
+                        onRemoveWatch={removeWatch}
+                        isWatched={isWatched}
+                        onToggleWatch={toggleWatch}
+                      />
                     </Panel>
                   );
                 default:
@@ -475,7 +658,8 @@ export default function Home() {
         />
       )}
 
-      <ToastContainer signals={signals} newMarkets={newMarkets} />
+
+      <ToastContainer signals={signals} newMarkets={newMarkets} mapWidthPct={mapWidthPct} onSelectMarket={handleSelectMarketFromPanel} />
     </div>
   );
 }

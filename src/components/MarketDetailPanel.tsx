@@ -544,18 +544,6 @@ export default function MarketDetailPanel({
 
   return (
     <div className="font-mono" ref={containerRef}>
-      {/* Close button — top-right row */}
-      <div className="flex justify-end mb-2">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 border border-[var(--border)] rounded-sm text-[12px] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] hover:bg-[var(--surface-hover)] transition-colors"
-          title="Close detail"
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4l8 8M12 4l-8 8" /></svg>
-          <span>CLOSE</span>
-        </button>
-      </div>
-
       {/* ============ PRIMARY PANEL ============ */}
       <div className={`flex gap-5 ${isWide && hasOutcomes ? "flex-row items-stretch" : "flex-col"}`}>
 

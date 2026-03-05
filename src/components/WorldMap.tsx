@@ -39,6 +39,8 @@ interface WorldMapProps {
   onColorModeChange?: (mode: ColorMode) => void;
   region?: string | null;
   onRegionChange?: (region: string) => void;
+  isWatched?: (id: string) => boolean;
+  onToggleWatch?: (id: string) => void;
 }
 
 // Offset co-located markers using golden-angle spiral for organic non-overlapping layout.
@@ -105,6 +107,8 @@ export default function WorldMap({
   onColorModeChange,
   region,
   onRegionChange,
+  isWatched,
+  onToggleWatch,
 }: WorldMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -672,15 +676,23 @@ export default function WorldMap({
         </div>`;
     }
 
+    const watched = isWatched?.(market.id);
+    const starFill = watched ? "#f59e0b" : "none";
+    const starStroke = watched ? "#f59e0b" : "#666";
+    const starLabel = watched ? "★" : "☆";
+
     return `
       <div style="font-family:'JetBrains Mono','SF Mono',monospace;min-width:200px;max-width:280px;font-size:13px;">
-        <div style="font-size:13px;color:#f0f0f0;margin-bottom:3px;line-height:1.4;">${escapeHtml(market.title)}</div>
+        <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:3px;">
+          <div style="font-size:13px;color:#f0f0f0;line-height:1.4;flex:1;">${escapeHtml(market.title)}</div>
+          <button data-watch-market="${market.id}" style="background:none;border:none;cursor:pointer;padding:2px;font-size:14px;color:${starStroke};flex-shrink:0;" title="${watched ? "Remove from watchlist" : "Add to watchlist"}">${starLabel}</button>
+        </div>
         <div style="font-size:11px;color:#8a8a8a;margin-bottom:2px;text-transform:lowercase;">${escapeHtml(market.location || market.category)}</div>
         ${marketsHtml}
         <div style="font-size:11px;color:#777;margin-top:3px;">vol ${formatVolume(market.volume)} · 24h ${formatVolume(market.volume24h)}</div>
         <a href="https://polymarket.com/event/${encodeURIComponent(market.slug)}" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;font-size:11px;color:#a0a0a0;text-decoration:none;">polymarket →</a>
       </div>`;
-  }, []);
+  }, [isWatched]);
 
   // Update GeoJSON source when data/filters change
   useEffect(() => {
@@ -793,6 +805,26 @@ export default function WorldMap({
       duration: 1500,
     });
   }, [flyToTarget]);
+
+  // Global click listener for popup star buttons
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const btn = target.closest("[data-watch-market]") as HTMLElement | null;
+      if (btn && onToggleWatch) {
+        const marketId = btn.getAttribute("data-watch-market");
+        if (marketId) {
+          onToggleWatch(marketId);
+          // Update button visual immediately
+          const watched = isWatched?.(marketId);
+          btn.textContent = watched ? "☆" : "★";
+          btn.style.color = watched ? "#666" : "#f59e0b";
+        }
+      }
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [onToggleWatch, isWatched]);
 
   return (
     <div className="relative w-full h-full overflow-hidden">

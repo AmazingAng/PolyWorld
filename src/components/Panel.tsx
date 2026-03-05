@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { useColResize } from "@/hooks/useColResize";
 
 interface PanelProps {
   title: string;
@@ -11,6 +12,9 @@ interface PanelProps {
   children: React.ReactNode;
   headerRight?: React.ReactNode;
   panelId?: string;
+  colSpan?: number;
+  onColSpanChange?: (span: number) => void;
+  onColSpanReset?: () => void;
 }
 
 export default function Panel({
@@ -22,9 +26,13 @@ export default function Panel({
   children,
   headerRight,
   panelId,
+  colSpan,
+  onColSpanChange,
+  onColSpanReset,
 }: PanelProps) {
   const [expanded, setExpanded] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const { onMouseDown } = useColResize(colSpan ?? 1, onColSpanChange);
 
   // Escape key to close
   useEffect(() => {
@@ -36,11 +44,15 @@ export default function Panel({
     return () => document.removeEventListener("keydown", handler);
   }, [expanded]);
 
+  const spanStyle: React.CSSProperties | undefined =
+    colSpan === 2 ? { gridColumn: "1 / -1" } : colSpan === 1 ? { gridColumn: "span 1" } : undefined;
+
   return (
     <div
       ref={panelRef}
       data-panel={panelId}
       className={`panel${wide ? " panel-wide" : ""}${expanded ? " panel-expanded" : ""}${className ? ` ${className}` : ""}`}
+      style={spanStyle}
     >
       <div className="panel-header">
         <div className="flex items-center gap-2">
@@ -83,6 +95,18 @@ export default function Panel({
         </div>
       </div>
       <div className="panel-content">{children}</div>
+
+      {/* Right-edge resize handle */}
+      {onColSpanChange && !expanded && (
+        <div
+          className="panel-col-resize-handle"
+          onMouseDown={onMouseDown}
+          onDoubleClick={onColSpanReset}
+          title="Drag to resize · Double-click to reset"
+        >
+          <div className="panel-col-resize-bar" />
+        </div>
+      )}
     </div>
   );
 }

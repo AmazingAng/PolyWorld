@@ -7,6 +7,8 @@ import { formatChange } from "@/lib/format";
 interface ToastProps {
   signals: ProcessedMarket[];
   newMarkets: ProcessedMarket[];
+  mapWidthPct?: number;
+  onSelectMarket?: (market: ProcessedMarket) => void;
 }
 
 interface ToastItem {
@@ -17,7 +19,7 @@ interface ToastItem {
   batchCount?: number;
 }
 
-export default function ToastContainer({ signals, newMarkets }: ToastProps) {
+export default function ToastContainer({ signals, newMarkets, mapWidthPct = 55, onSelectMarket }: ToastProps) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   useEffect(() => {
@@ -74,14 +76,18 @@ export default function ToastContainer({ signals, newMarkets }: ToastProps) {
     return () => clearTimeout(timer);
   }, [toasts]);
 
-  const dismiss = (id: string) => {
+  const dismiss = (id: string, market?: ProcessedMarket) => {
+    if (market && onSelectMarket) onSelectMarket(market);
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-[50px] right-[380px] z-[2000] flex flex-col gap-1 pointer-events-none max-md:right-auto max-md:left-1/2 max-md:-translate-x-1/2">
+    <div
+      className="fixed top-[50px] z-[2000] flex flex-col gap-1 pointer-events-none max-md:right-auto max-md:left-1/2 max-md:-translate-x-1/2"
+      style={{ right: `calc(${100 - mapWidthPct}% + 16px)` }}
+    >
       {toasts.map((toast) => {
         if (toast.type === "batch") {
           return (
@@ -89,6 +95,7 @@ export default function ToastContainer({ signals, newMarkets }: ToastProps) {
               key={toast.id}
               onClick={() => dismiss(toast.id)}
               className="bg-[#141414] border border-[#2a2a2a] border-l-2 border-l-[#22c55e] px-3 py-2 text-[12px] font-mono animate-toast-in pointer-events-auto max-w-[300px] cursor-pointer hover:bg-[#1a1a1a] transition-colors"
+              title="Dismiss"
             >
               <div className="text-[13px] uppercase tracking-[0.15em] mb-1 text-[#22c55e]">
                 new markets
@@ -104,8 +111,9 @@ export default function ToastContainer({ signals, newMarkets }: ToastProps) {
           return (
             <div
               key={toast.id}
-              onClick={() => dismiss(toast.id)}
+              onClick={() => dismiss(toast.id, toast.market)}
               className="bg-[#141414] border border-[#2a2a2a] border-l-2 border-l-[#22c55e] px-3 py-2 text-[12px] font-mono animate-toast-in pointer-events-auto max-w-[300px] cursor-pointer hover:bg-[#1a1a1a] transition-colors"
+              title="Click to view market"
             >
               <div className="text-[13px] uppercase tracking-[0.15em] mb-1 text-[#22c55e]">
                 new market
@@ -127,7 +135,8 @@ export default function ToastContainer({ signals, newMarkets }: ToastProps) {
         return (
           <div
             key={toast.id}
-            onClick={() => dismiss(toast.id)}
+            onClick={() => dismiss(toast.id, toast.market)}
+            title="Click to view market"
             className={`bg-[#141414] border border-[#2a2a2a] px-3 py-2 text-[12px] font-mono animate-toast-in pointer-events-auto max-w-[300px] cursor-pointer hover:bg-[#1a1a1a] transition-colors ${
               isAnomalous
                 ? "border-l-2 border-l-[#f59e0b]"

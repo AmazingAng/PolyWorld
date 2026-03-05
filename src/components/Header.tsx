@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import AlertManager from "./AlertManager";
+import type { AlertConfig, AlertHistoryEntry } from "@/hooks/useAlerts";
+import type { ProcessedMarket } from "@/types";
 
 interface HeaderProps {
   lastRefresh: string | null;
@@ -11,6 +14,26 @@ interface HeaderProps {
   globalCount: number;
   lastSyncTime?: string | null;
   onOpenSettings: () => void;
+  watchedCount?: number;
+  alertUnreadCount?: number;
+  // Alert manager props
+  alertManagerOpen?: boolean;
+  onOpenAlertManager?: () => void;
+  onCloseAlertManager?: () => void;
+  alertProps?: {
+    alerts: AlertConfig[];
+    history: AlertHistoryEntry[];
+    onAddAlert: (config: Omit<AlertConfig, "id" | "createdAt" | "enabled">) => void;
+    onRemoveAlert: (id: string) => void;
+    onToggleAlert: (id: string) => void;
+    onMarkRead: (id: string) => void;
+    onMarkAllRead: () => void;
+    onClearHistory: () => void;
+    allMarkets: ProcessedMarket[];
+    prefill?: { marketId?: string; marketTitle?: string };
+    notifPermission: NotificationPermission;
+    onRequestPermission: () => void;
+  };
 }
 
 function getRelativeTime(iso: string): { text: string; stale: boolean } {
@@ -54,11 +77,18 @@ export default function Header({
   globalCount,
   lastSyncTime,
   onOpenSettings,
+  watchedCount = 0,
+  alertUnreadCount = 0,
+  alertManagerOpen,
+  onOpenAlertManager,
+  onCloseAlertManager,
+  alertProps,
 }: HeaderProps) {
   const syncInfo = lastSyncTime ? getRelativeTime(lastSyncTime) : null;
+  const bellRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <header className="h-[36px] bg-[var(--bg)] border-b border-[var(--border-subtle)] flex items-center pl-4 pr-3 z-50 shrink-0 font-mono">
+    <header className="h-[36px] bg-[var(--bg)] border-b border-[var(--border-subtle)] flex items-center pl-4 pr-3 z-50 shrink-0 font-mono relative">
       {/* Left: Logo + subtitle + stats */}
       <div className="flex items-center gap-2">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--status-live)] shrink-0" aria-hidden="true">
@@ -93,8 +123,40 @@ export default function Header({
 
       <div className="flex-1" />
 
-      {/* Right: Status pill + sync info + refresh */}
+      {/* Right: Watchlist + Alerts + Status pill + sync info + refresh */}
       <div className="flex items-center gap-1.5 text-[11px]">
+        {/* Watchlist count */}
+        {watchedCount > 0 && (
+          <span className="flex items-center gap-1 text-[#f59e0b] text-[11px]">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="1.5">
+              <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+            </svg>
+            {watchedCount}
+          </span>
+        )}
+
+        {/* Alert bell + dropdown */}
+        {onOpenAlertManager && (
+          <div className="relative">
+            <button
+              ref={bellRef}
+              onClick={onOpenAlertManager}
+              className={`relative text-[var(--text-muted)] hover:text-[var(--text)] transition-colors px-1 ${alertManagerOpen ? "text-[var(--text)]" : ""}`}
+              title="Alerts"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              {alertUnreadCount > 0 && (
+                <span className="absolute -top-1 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center text-[9px] font-bold text-white bg-[#ff4444] rounded-full px-0.5 leading-none">
+                  {alertUnreadCount > 99 ? "99+" : alertUnreadCount}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+
         {/* Status pill */}
         <span
           className={`flex items-center gap-1 px-1.5 py-px border text-[11px] uppercase tracking-wide ${
@@ -153,6 +215,15 @@ export default function Header({
           </svg>
         </button>
       </div>
+
+      {/* Alert Manager dropdown */}
+      {alertManagerOpen && alertProps && onCloseAlertManager && (
+        <AlertManager
+          open={alertManagerOpen}
+          onClose={onCloseAlertManager}
+          {...alertProps}
+        />
+      )}
     </header>
   );
 }

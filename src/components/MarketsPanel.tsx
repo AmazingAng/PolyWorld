@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { ProcessedMarket, Category } from "@/types";
 import MarketCard from "./MarketCard";
+import { useColResize } from "@/hooks/useColResize";
 
 interface MarketsPanelProps {
   mapped: ProcessedMarket[];
@@ -12,6 +13,11 @@ interface MarketsPanelProps {
   onSelectMarket: (m: ProcessedMarket) => void;
   loading?: boolean;
   externalSearch?: string;
+  isWatched?: (id: string) => boolean;
+  onToggleWatch?: (id: string) => void;
+  colSpan?: number;
+  onColSpanChange?: (span: number) => void;
+  onColSpanReset?: () => void;
 }
 
 type SortTab = "default" | "impact";
@@ -25,6 +31,11 @@ export default function MarketsPanel({
   onSelectMarket,
   loading,
   externalSearch,
+  isWatched,
+  onToggleWatch,
+  colSpan,
+  onColSpanChange,
+  onColSpanReset,
 }: MarketsPanelProps) {
   const [search, setSearch] = useState("");
   const [sortTab, setSortTab] = useState<SortTab>("default");
@@ -120,10 +131,19 @@ export default function MarketsPanel({
     onSelectMarket(m);
   };
 
+  const watchProps = (m: ProcessedMarket) =>
+    isWatched && onToggleWatch
+      ? { isWatched: isWatched(m.id), onToggleWatch: () => onToggleWatch(m.id) }
+      : {};
+
   const totalCount = searchFiltered ? searchFiltered.length : filtered.length;
+  const { onMouseDown: handleResizeStart } = useColResize(colSpan ?? 2, onColSpanChange);
+
+  const spanStyle: React.CSSProperties | undefined =
+    colSpan === 2 ? { gridColumn: "1 / -1" } : colSpan === 1 ? { gridColumn: "span 1" } : undefined;
 
   return (
-    <div data-panel="markets" className={`panel panel-wide${expanded ? " panel-expanded" : ""}`}>
+    <div data-panel="markets" className={`panel${colSpan === 2 ? " panel-wide" : ""}${expanded ? " panel-expanded" : ""}`} style={spanStyle}>
       <div className="panel-header">
         <div className="flex items-center gap-2">
           <span className="drag-handle" title="Drag to reorder">
@@ -135,6 +155,22 @@ export default function MarketsPanel({
           </span>
           <span className="panel-title">Markets</span>
           <span className="panel-count">{totalCount}</span>
+          {/* Sort tabs — inline in header */}
+          <div className="flex items-center gap-0.5 ml-1">
+            {(["default", "impact"] as SortTab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setSortTab(tab)}
+                className={`px-1.5 py-0.5 text-[10px] font-mono transition-colors ${
+                  sortTab === tab
+                    ? "text-[var(--text)] bg-[var(--surface-hover)]"
+                    : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"
+                }`}
+              >
+                {tab === "default" ? "Default" : "Impact"}
+              </button>
+            ))}
+          </div>
         </div>
         {/* Search input in header */}
         <div className="relative flex-1 max-w-[200px]">
@@ -183,22 +219,6 @@ export default function MarketsPanel({
           )}
         </button>
       </div>
-      {/* Sort tabs */}
-      <div className="flex items-center gap-0.5 px-2 py-0.5 border-b border-[var(--border-subtle)]">
-        {(["default", "impact"] as SortTab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setSortTab(tab)}
-            className={`px-1.5 py-0.5 text-[10px] font-mono transition-colors ${
-              sortTab === tab
-                ? "text-[var(--text)] bg-[var(--surface-hover)]"
-                : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"
-            }`}
-          >
-            {tab === "default" ? "Default" : "Impact"}
-          </button>
-        ))}
-      </div>
       <div className="panel-content">
         {/* Skeleton loading */}
         {loading && mapped.length === 0 && (
@@ -217,7 +237,7 @@ export default function MarketsPanel({
               <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
             ) : (
               impactSorted.map((m) => (
-                <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
+                <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} />
               ))
             )}
           </>
@@ -231,7 +251,7 @@ export default function MarketsPanel({
                   <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no markets match</div>
                 ) : (
                   searchFiltered.slice(0, 30).map((m) => (
-                    <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
+                    <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} />
                   ))
                 )}
               </>
@@ -241,7 +261,7 @@ export default function MarketsPanel({
                   <>
                     <SectionLabel title="New Markets" />
                     {newMarkets.map((m) => (
-                      <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
+                      <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} />
                     ))}
                   </>
                 )}
@@ -259,7 +279,7 @@ export default function MarketsPanel({
                           title={`Anomaly z=${m.anomaly.zScore}`}
                         />
                       )}
-                      <MarketCard market={m} showChange onClick={() => cardAction(m)} />
+                      <MarketCard market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} />
                     </div>
                   ))
                 )}
@@ -269,7 +289,7 @@ export default function MarketsPanel({
                   <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
                 ) : (
                   trending.map((m) => (
-                    <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
+                    <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} />
                   ))
                 )}
 
@@ -277,7 +297,7 @@ export default function MarketsPanel({
                   <>
                     <SectionLabel title="Global Markets" />
                     {global.map((m) => (
-                      <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} />
+                      <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} />
                     ))}
                   </>
                 )}
@@ -286,6 +306,18 @@ export default function MarketsPanel({
           </>
         )}
       </div>
+
+      {/* Right-edge resize handle */}
+      {onColSpanChange && !expanded && (
+        <div
+          className="panel-col-resize-handle"
+          onMouseDown={handleResizeStart}
+          onDoubleClick={onColSpanReset}
+          title="Drag to resize · Double-click to reset"
+        >
+          <div className="panel-col-resize-bar" />
+        </div>
+      )}
     </div>
   );
 }

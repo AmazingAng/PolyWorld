@@ -11,6 +11,8 @@ interface CountryPanelProps {
   mapped: ProcessedMarket[];
   unmapped: ProcessedMarket[];
   onSelectMarket: (market: ProcessedMarket) => void;
+  isWatched?: (id: string) => boolean;
+  onToggleWatch?: (id: string) => void;
 }
 
 export default function CountryPanel({
@@ -18,6 +20,8 @@ export default function CountryPanel({
   mapped,
   unmapped,
   onSelectMarket,
+  isWatched,
+  onToggleWatch,
 }: CountryPanelProps) {
   const flag = getCountryFlag(countryName);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
@@ -130,6 +134,8 @@ export default function CountryPanel({
               market={m}
               showChange
               onClick={() => onSelectMarket(m)}
+              isWatched={isWatched?.(m.id)}
+              onToggleWatch={onToggleWatch ? () => onToggleWatch(m.id) : undefined}
             />
           ))}
         </div>

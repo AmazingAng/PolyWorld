@@ -12,6 +12,7 @@ export interface PanelVisibility {
   country: boolean;
   news: boolean;
   live: boolean;
+  watchlist: boolean;
 }
 
 interface SettingsModalProps {
@@ -48,6 +49,7 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 const PANEL_LABELS: Record<string, string> = {
+  watchlist: "Watchlist",
   markets: "Markets",
   detail: "Market Detail",
   country: "Country",

@@ -74,23 +74,6 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
 
   return (
     <div>
-      {/* Context indicator */}
-      <div className="flex items-center gap-1.5 mb-2">
-        <span
-          className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
-          style={{
-            background: selectedMarket ? "var(--green)" : "var(--text-ghost)",
-          }}
-        />
-        <span className="text-[10px] font-mono truncate" style={{
-          color: selectedMarket ? "var(--green)" : "var(--text-muted)",
-        }}>
-          {selectedMarket
-            ? `Related to: ${selectedMarket.title.slice(0, 60)}${selectedMarket.title.length > 60 ? "…" : ""}`
-            : "Global news feed"}
-        </span>
-      </div>
-
       {/* Source filter pills */}
       <div className="flex gap-1 flex-wrap mb-2">
         <button
