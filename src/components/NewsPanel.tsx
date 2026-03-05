@@ -75,7 +75,7 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
   return (
     <div>
       {/* Context indicator */}
-      <div className="flex items-center gap-1.5 mb-2 px-0.5">
+      <div className="flex items-center gap-1.5 mb-2">
         <span
           className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
           style={{
@@ -95,7 +95,7 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
       <div className="flex gap-1 flex-wrap mb-2">
         <button
           onClick={() => setSourceFilter(null)}
-          className="text-[9px] font-mono px-1.5 py-0.5 border transition-colors"
+          className="text-[10px] font-mono px-1.5 py-0.5 border transition-colors"
           style={{
             borderColor: !sourceFilter ? "rgba(68,255,136,0.4)" : "var(--border)",
             color: !sourceFilter ? "var(--green)" : "var(--text-muted)",
@@ -108,7 +108,7 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
           <button
             key={s.name}
             onClick={() => setSourceFilter(sourceFilter === s.name ? null : s.name)}
-            className="text-[9px] font-mono px-1.5 py-0.5 border transition-colors"
+            className="text-[10px] font-mono px-1.5 py-0.5 border transition-colors"
             style={{
               borderColor: sourceFilter === s.name ? "rgba(68,255,136,0.4)" : "var(--border)",
               color: sourceFilter === s.name ? "var(--green)" : "var(--text-muted)",
@@ -122,11 +122,11 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
 
       {/* Loading skeleton */}
       {loading && items.length === 0 && (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="border border-[var(--border-subtle)] px-2.5 py-2 animate-pulse">
-              <div className="h-2 bg-[var(--border)] rounded w-1/4 mb-1.5" />
-              <div className="h-3 bg-[var(--border)] rounded w-3/4 mb-1" />
+            <div key={i} className="border border-[var(--border-subtle)] p-3 animate-pulse">
+              <div className="h-2 bg-[var(--border)] rounded w-1/4 mb-2" />
+              <div className="h-3 bg-[var(--border)] rounded w-3/4 mb-1.5" />
               <div className="h-2 bg-[var(--border)] rounded w-1/2" />
             </div>
           ))}
@@ -150,7 +150,7 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
             href={item.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="block border border-[var(--border-subtle)] px-2.5 py-2 mb-1 transition-colors"
+            className="block border border-[var(--border-subtle)] px-2.5 py-1.5 transition-colors"
             style={{ textDecoration: "none" }}
             onMouseEnter={(e) => {
               (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)";
@@ -161,10 +161,10 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
           >
             {/* Source + time */}
             <div className="flex items-center gap-1.5 mb-0.5">
-              <span className="text-[9px] font-mono font-bold uppercase" style={{ color: "var(--text-dim)" }}>
+              <span className="text-[10px] font-mono font-bold uppercase" style={{ color: "var(--text-dim)" }}>
                 {item.source}
               </span>
-              <span className="text-[9px] font-mono" style={{ color: "var(--text-ghost)" }}>
+              <span className="text-[10px] font-mono" style={{ color: "var(--text-ghost)" }}>
                 {timeAgo(item.publishedAt)}
               </span>
             </div>

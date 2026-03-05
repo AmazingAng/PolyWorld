@@ -150,7 +150,7 @@ export default function MarketsPanel({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="search..."
-            className="w-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[12px] text-[var(--text-secondary)] font-mono py-1 pl-7 pr-2 placeholder:text-[var(--text-ghost)] focus:outline-none focus:border-[var(--scrollbar-thumb)] transition-colors"
+            className="w-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[12px] text-[var(--text-secondary)] font-mono py-1 pl-8 pr-2 placeholder:text-[var(--text-ghost)] focus:outline-none focus:border-[var(--scrollbar-thumb)] transition-colors"
           />
           {search && (
             <button
@@ -184,12 +184,12 @@ export default function MarketsPanel({
         </button>
       </div>
       {/* Sort tabs */}
-      <div className="flex items-center gap-0.5 px-3 py-1 border-b border-[var(--border-subtle)]">
+      <div className="flex items-center gap-0.5 px-2 py-0.5 border-b border-[var(--border-subtle)]">
         {(["default", "impact"] as SortTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setSortTab(tab)}
-            className={`px-2 py-0.5 text-[11px] font-mono transition-colors ${
+            className={`px-1.5 py-0.5 text-[10px] font-mono transition-colors ${
               sortTab === tab
                 ? "text-[var(--text)] bg-[var(--surface-hover)]"
                 : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"
@@ -292,7 +292,7 @@ export default function MarketsPanel({
 
 function SectionLabel({ title }: { title: string }) {
   return (
-    <h3 className="text-[13px] font-mono uppercase tracking-[1px] text-[var(--text-faint)] mb-1.5 mt-3 first:mt-0">
+    <h3 className="text-[10px] font-mono uppercase tracking-[1px] text-[var(--text-faint)] mb-1 mt-3 first:mt-0">
       {title}
     </h3>
   );
@@ -300,10 +300,10 @@ function SectionLabel({ title }: { title: string }) {
 
 function SkeletonCard() {
   return (
-    <div className="border border-[var(--border-subtle)] px-2.5 py-2 mb-1 animate-pulse">
+    <div className="border border-[var(--border-subtle)] px-2.5 py-1.5 mb-1 animate-pulse">
       <div className="h-2 w-20 bg-[var(--border-subtle)] rounded-sm mb-2" />
-      <div className="h-3 w-full bg-[var(--border-subtle)] rounded-sm mb-1" />
-      <div className="h-3 w-3/4 bg-[var(--border-subtle)] rounded-sm mb-2" />
+      <div className="h-2.5 w-full bg-[var(--border-subtle)] rounded-sm mb-1" />
+      <div className="h-2.5 w-3/4 bg-[var(--border-subtle)] rounded-sm mb-2" />
       <div className="flex justify-between">
         <div className="h-2.5 w-12 bg-[var(--border-subtle)] rounded-sm" />
         <div className="h-2.5 w-16 bg-[var(--border-subtle)] rounded-sm" />

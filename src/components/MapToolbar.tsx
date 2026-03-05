@@ -83,8 +83,8 @@ export default function MapToolbar({
             }`}
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+              <polygon points="22,12 17,3.4 7,3.4 2,12 7,20.6 17,20.6" />
+              <path d="M2 12h20M12 3.4L16 12l-4 8.6M12 3.4L8 12l4 8.6" />
             </svg>
             {REGIONAL_VIEWS.find((r) => r.id === region)?.label || "Global"}
           </button>

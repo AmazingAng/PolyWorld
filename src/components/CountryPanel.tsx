@@ -69,9 +69,9 @@ export default function CountryPanel({
   return (
     <div className="font-mono">
       {/* Country header */}
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-[18px]">{flag}</span>
-        <h2 className="text-[13px] text-[var(--text)]">{countryName}</h2>
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="text-[14px]">{flag}</span>
+        <h2 className="text-[12px] text-[var(--text)]">{countryName}</h2>
         <button
           onClick={fetchCountrySummary}
           disabled={aiLoading || countryMarkets.length === 0}
@@ -88,32 +88,32 @@ export default function CountryPanel({
 
       {/* AI Summary */}
       {aiSummary && (
-        <div className="border border-[#f59e0b]/20 bg-[#f59e0b]/5 rounded-sm px-3 py-2 mb-3">
-          <span className="text-[10px] uppercase tracking-wider text-[#f59e0b]">{"\u2728"} ai summary</span>
-          <p className="text-[12px] text-[var(--text-dim)] leading-[1.6] mt-1">{aiSummary}</p>
+        <div className="border border-[#f59e0b]/20 bg-[#f59e0b]/5 rounded-sm px-2.5 py-1.5 mb-2">
+          <span className="text-[9px] uppercase tracking-wider text-[#f59e0b]">{"\u2728"} ai summary</span>
+          <p className="text-[11px] text-[var(--text-dim)] leading-[1.5] mt-0.5">{aiSummary}</p>
         </div>
       )}
 
       {/* Aggregate stats */}
       {countryMarkets.length > 0 && (
-        <div className="grid grid-cols-3 gap-2 mb-3 text-[12px]">
-          <div>
-            <div className="text-[13px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">total vol</div>
+        <div className="grid grid-cols-3 gap-1.5 mb-2 text-[11px]">
+          <div className="border border-[var(--border-subtle)] rounded-sm px-2 py-1.5">
+            <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">total vol</div>
             <div className="text-[var(--text-secondary)]">{formatVolume(totalVol)}</div>
           </div>
-          <div>
-            <div className="text-[13px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">active</div>
+          <div className="border border-[var(--border-subtle)] rounded-sm px-2 py-1.5">
+            <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">active</div>
             <div className="text-[var(--text-secondary)]">{activeCount}</div>
           </div>
-          <div>
-            <div className="text-[13px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">closed</div>
+          <div className="border border-[var(--border-subtle)] rounded-sm px-2 py-1.5">
+            <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">closed</div>
             <div className="text-[var(--text-secondary)]">{closedCount}</div>
           </div>
         </div>
       )}
 
       {/* Market count */}
-      <div className="text-[13px] uppercase tracking-[0.15em] text-[var(--text-faint)] mb-2">
+      <div className="text-[10px] uppercase tracking-[0.15em] text-[var(--text-faint)] mb-1.5">
         {countryMarkets.length} market{countryMarkets.length !== 1 ? "s" : ""}
       </div>
 

@@ -42,7 +42,7 @@ function UTCClock() {
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
   }, []);
-  return <span className="text-[12px] text-[var(--text-faint)] tabular-nums hidden sm:inline">{time}</span>;
+  return <span className="text-[11px] text-[var(--text-faint)] tabular-nums hidden sm:inline">{time}</span>;
 }
 
 export default function Header({
@@ -58,25 +58,24 @@ export default function Header({
   const syncInfo = lastSyncTime ? getRelativeTime(lastSyncTime) : null;
 
   return (
-    <header className="h-[44px] bg-[var(--bg)] border-b border-[var(--border-subtle)] flex items-center px-3 z-50 shrink-0 font-mono">
+    <header className="h-[36px] bg-[var(--bg)] border-b border-[var(--border-subtle)] flex items-center pl-4 pr-3 z-50 shrink-0 font-mono">
       {/* Left: Logo + subtitle + stats */}
-      <div className="flex items-center gap-3">
-        {/* Globe icon */}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--status-live)] shrink-0" aria-hidden="true">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+      <div className="flex items-center gap-2">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--status-live)] shrink-0" aria-hidden="true">
+          <polygon points="22,12 17,3.4 7,3.4 2,12 7,20.6 17,20.6" />
+          <path d="M2 12h20M12 3.4L16 12l-4 8.6M12 3.4L8 12l4 8.6" />
         </svg>
 
-        <div className="flex items-center gap-2">
-          <span className="text-[12px] text-[var(--text)] tracking-tight whitespace-nowrap font-bold uppercase">
-            polyworld
+        <div className="flex items-center gap-1.5">
+          <span className="text-[12px] text-[var(--text)] tracking-tight whitespace-nowrap font-bold">
+            PolyWorld
           </span>
-          <span className="text-[13px] text-[var(--text-faint)] uppercase tracking-widest hidden md:inline">
+          <span className="text-[10px] text-[var(--text-faint)] uppercase tracking-widest hidden md:inline">
             global situation
           </span>
         </div>
 
-        <div className="hidden sm:flex items-center gap-2 text-[12px] text-[var(--text-muted)] ml-2">
+        <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] ml-1">
           <span>
             <strong className="text-[var(--text-secondary)]">{marketCount}</strong> mapped
           </span>
@@ -95,10 +94,10 @@ export default function Header({
       <div className="flex-1" />
 
       {/* Right: Status pill + sync info + refresh */}
-      <div className="flex items-center gap-2 text-[12px]">
+      <div className="flex items-center gap-1.5 text-[11px]">
         {/* Status pill */}
         <span
-          className={`flex items-center gap-1.5 px-2 py-0.5 border text-[13px] uppercase tracking-wide ${
+          className={`flex items-center gap-1 px-1.5 py-px border text-[11px] uppercase tracking-wide ${
             dataMode === "live"
               ? "border-[#22c55e]/30 text-[#22c55e]"
               : dataMode === "sample"
@@ -121,7 +120,7 @@ export default function Header({
         {/* Sync time / stale warning */}
         {syncInfo ? (
           <span
-            className={`hidden sm:inline text-[13px] ${
+            className={`hidden sm:inline text-[11px] ${
               syncInfo.stale ? "text-[#ffaa00]" : "text-[var(--text-faint)]"
             }`}
             title={`Last sync: ${lastSyncTime}`}
@@ -129,7 +128,7 @@ export default function Header({
             {syncInfo.stale && "\u26A0 "}synced {syncInfo.text}
           </span>
         ) : (
-          <span className="hidden sm:inline text-[var(--text-faint)] text-[13px]">
+          <span className="hidden sm:inline text-[var(--text-faint)] text-[11px]">
             {lastRefresh || "\u2026"}
           </span>
         )}
@@ -137,7 +136,7 @@ export default function Header({
         <button
           onClick={onRefresh}
           disabled={loading}
-          className="text-[var(--text-muted)] px-1.5 py-0.5 text-[12px] border border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] transition-colors disabled:opacity-40"
+          className="text-[var(--text-muted)] px-1.5 py-px text-[11px] border border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] transition-colors disabled:opacity-40"
         >
           refresh
         </button>

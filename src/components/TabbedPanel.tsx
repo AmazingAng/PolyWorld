@@ -76,14 +76,14 @@ export default function TabbedPanel({
   }, [selectedMarket, mapped, unmapped]);
 
   return (
-    <aside className="w-[370px] bg-[#0a0a0a] border-l border-[#1e1e1e] flex flex-col shrink-0 hidden md:flex">
+    <aside className="w-[340px] bg-[#0a0a0a] border-l border-[#1e1e1e] flex flex-col shrink-0 hidden md:flex">
       {/* Tab bar */}
       <div className="flex border-b border-[#1e1e1e] shrink-0">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className={`flex-1 py-2 text-[12px] font-mono tracking-wide transition-colors ${
+            className={`flex-1 py-1.5 text-[10px] font-mono tracking-wide transition-colors ${
               activeTab === tab.id
                 ? "text-[#e8e8e8] bg-[#141414] border-b border-[#e8e8e8]"
                 : "text-[#777] hover:text-[#a0a0a0] hover:bg-[#0e0e0e]"
@@ -109,15 +109,17 @@ export default function TabbedPanel({
 
         {activeTab === "detail" && (
           selectedMarket ? (
-            <MarketDetailPanel
-              market={selectedMarket}
-              relatedMarkets={relatedMarkets}
-              onBack={() => {
-                onSelectMarket(null);
-                onTabChange("markets");
-              }}
-              onSelectMarket={handleMarketClick}
-            />
+            <div className="p-2">
+              <MarketDetailPanel
+                market={selectedMarket}
+                relatedMarkets={relatedMarkets}
+                onBack={() => {
+                  onSelectMarket(null);
+                  onTabChange("markets");
+                }}
+                onSelectMarket={handleMarketClick}
+              />
+            </div>
           ) : (
             <DetailEmptyState
               mapped={mapped}
@@ -130,15 +132,17 @@ export default function TabbedPanel({
 
         {activeTab === "country" && (
           selectedCountry ? (
-            <CountryPanel
-              countryName={selectedCountry}
-              mapped={mapped}
-              unmapped={unmapped}
-              onSelectMarket={handleMarketClick}
-            />
+            <div className="p-2">
+              <CountryPanel
+                countryName={selectedCountry}
+                mapped={mapped}
+                unmapped={unmapped}
+                onSelectMarket={handleMarketClick}
+              />
+            </div>
           ) : (
-            <div className="p-3 font-mono">
-              <div className="text-[12px] text-[#777] mb-3">
+            <div className="p-2 font-mono">
+              <div className="text-[11px] text-[#777] mb-2">
                 click a country on the map to view related markets
               </div>
               <TopCountries mapped={mapped} onSelectMarket={handleMarketClick} />
@@ -146,17 +150,23 @@ export default function TabbedPanel({
           )
         )}
 
-        {activeTab === "live" && <LivePanel />}
+        {activeTab === "live" && (
+          <div className="p-2">
+            <LivePanel />
+          </div>
+        )}
 
         {activeTab === "settings" && (
-          <SettingsPanel
-            activeCategories={activeCategories}
-            onToggleCategory={onToggleCategory}
-            timeRange={timeRange}
-            onTimeRangeChange={onTimeRangeChange}
-            autoRefresh={autoRefresh}
-            onToggleAutoRefresh={onToggleAutoRefresh}
-          />
+          <div className="p-2">
+            <SettingsPanel
+              activeCategories={activeCategories}
+              onToggleCategory={onToggleCategory}
+              timeRange={timeRange}
+              onTimeRangeChange={onTimeRangeChange}
+              autoRefresh={autoRefresh}
+              onToggleAutoRefresh={onToggleAutoRefresh}
+            />
+          </div>
         )}
       </div>
     </aside>
@@ -182,13 +192,13 @@ function DetailEmptyState({
     .slice(0, 5);
 
   return (
-    <div className="p-3 font-mono">
-      <div className="text-[12px] text-[#777] mb-3">
+    <div className="p-2 font-mono">
+      <div className="text-[11px] text-[#777] mb-2">
         select a market to view full details
       </div>
       {topMovers.length > 0 && (
         <>
-          <div className="text-[13px] uppercase tracking-[0.1em] text-[#777] mb-2">top movers</div>
+          <div className="text-[10px] uppercase tracking-[0.1em] text-[#777] mb-1.5">top movers</div>
           {topMovers.map((m) => (
             <MarketCard key={m.id} market={m} showChange onClick={() => onSelectMarket(m)} />
           ))}
@@ -220,15 +230,15 @@ function TopCountries({
 
   return (
     <>
-      <div className="text-[13px] uppercase tracking-[0.1em] text-[#777] mb-2">top locations</div>
-      <div className="space-y-0.5">
+      <div className="text-[10px] uppercase tracking-[0.1em] text-[#777] mb-1.5">top locations</div>
+      <div className="space-y-1">
         {sorted.map(([loc, count]) => {
           const topMarket = mapped.find((m) => m.location === loc);
           return (
             <button
               key={loc}
               onClick={() => topMarket && onSelectMarket(topMarket)}
-              className="w-full text-left flex items-center justify-between px-2.5 py-1.5 border border-[#1e1e1e] hover:bg-[#141414] transition-colors text-[12px] font-mono"
+              className="w-full text-left flex items-center justify-between px-2 py-1.5 border border-[#1e1e1e] hover:bg-[#141414] transition-colors text-[11px] font-mono"
             >
               <span className="text-[#ccc]">{loc.toLowerCase()}</span>
               <span className="text-[#777]">{count} markets</span>
@@ -377,11 +387,11 @@ function MarketsTab({
 // --- Search bar ---
 function SearchBar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <div className="p-2 border-b border-[#1e1e1e]">
+    <div className="px-2 py-1.5 border-b border-[#1e1e1e]">
       <div className="relative">
         <svg
           className="absolute left-2 top-1/2 -translate-y-1/2 text-[#777]"
-          width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
+          width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
         >
           <circle cx="7" cy="7" r="5" />
           <path d="M11 11l3 3" />
@@ -391,12 +401,12 @@ function SearchBar({ value, onChange }: { value: string; onChange: (v: string) =
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="search markets..."
-          className="w-full bg-[#111] border border-[#1e1e1e] text-[13px] text-[#ccc] font-mono py-1.5 pl-7 pr-2 placeholder:text-[#8a8a8a] focus:outline-none focus:border-[#333] transition-colors"
+          className="w-full bg-[#111] border border-[#1e1e1e] text-[11px] text-[#ccc] font-mono py-1 pl-7 pr-2 placeholder:text-[#8a8a8a] focus:outline-none focus:border-[#333] transition-colors"
         />
         {value && (
           <button
             onClick={() => onChange("")}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-[#777] hover:text-[#ccc] text-[13px]"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-[#777] hover:text-[#ccc] text-[11px]"
           >
             ×
           </button>
@@ -409,10 +419,10 @@ function SearchBar({ value, onChange }: { value: string; onChange: (v: string) =
 // --- Skeleton card ---
 function SkeletonCard() {
   return (
-    <div className="border border-[#1e1e1e] px-2.5 py-2 mb-1 animate-pulse">
+    <div className="border border-[#1e1e1e] px-2.5 py-1.5 mb-1 animate-pulse">
       <div className="h-2 w-20 bg-[#1a1a1a] rounded-sm mb-2" />
-      <div className="h-3 w-full bg-[#1a1a1a] rounded-sm mb-1" />
-      <div className="h-3 w-3/4 bg-[#1a1a1a] rounded-sm mb-2" />
+      <div className="h-2.5 w-full bg-[#1a1a1a] rounded-sm mb-1" />
+      <div className="h-2.5 w-3/4 bg-[#1a1a1a] rounded-sm mb-2" />
       <div className="flex justify-between">
         <div className="h-2.5 w-12 bg-[#1a1a1a] rounded-sm" />
         <div className="h-2.5 w-16 bg-[#1a1a1a] rounded-sm" />
@@ -429,8 +439,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="p-3 border-b border-[#1e1e1e]">
-      <h3 className="text-[12px] font-mono uppercase tracking-[0.1em] text-[#777] mb-2">
+    <div className="px-2 py-1.5 border-b border-[#1e1e1e]">
+      <h3 className="text-[10px] font-mono uppercase tracking-[0.1em] text-[#777] mb-1">
         {title}
       </h3>
       {children}

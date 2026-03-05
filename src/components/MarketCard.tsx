@@ -150,10 +150,10 @@ export default function MarketCard({
       }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className="border border-[var(--border-subtle)] px-2.5 py-2 mb-1 cursor-pointer hover:bg-[var(--surface-hover)] transition-colors focus:outline-none font-mono"
+      className="border border-[var(--border-subtle)] px-2.5 py-1.5 mb-1 cursor-pointer hover:bg-[var(--surface-hover)] transition-colors focus:outline-none font-mono"
       style={{ borderLeft: `2px solid ${color}` }}
     >
-      <div className="flex items-center gap-1.5 text-[12px] text-[var(--text-muted)] mb-1">
+      <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] mb-1">
         {market.impactLevel && market.impactLevel !== "info" && (
           <span
             className="w-1.5 h-1.5 rounded-full shrink-0"
@@ -169,34 +169,34 @@ export default function MarketCard({
           <span className="text-[var(--text-faint)]">{"\u00B7"} {activeCount} outcomes</span>
         )}
         {marketIsNew && (
-          <span className="text-[13px] text-[var(--bg)] bg-[#22c55e] px-1 py-px ml-auto uppercase tracking-wider leading-none font-bold">
+          <span className="text-[10px] text-[var(--bg)] bg-[#22c55e] px-1 py-px ml-auto uppercase tracking-wider leading-none font-bold">
             new
           </span>
         )}
         {(market.closed || (market.endDate && new Date(market.endDate).getTime() < Date.now())) && (
-          <span className="text-[13px] text-[#ff4444] border border-[#ff4444]/30 px-1 py-px ml-auto uppercase">
+          <span className="text-[10px] text-[#ff4444] border border-[#ff4444]/30 px-1 py-px ml-auto uppercase">
             closed
           </span>
         )}
       </div>
-      <div className="text-[13px] text-[var(--text-secondary)] leading-[1.4] mb-1.5 line-clamp-2">
+      <div className="text-[12px] text-[var(--text-secondary)] leading-[1.35] mb-1 line-clamp-2">
         {market.title}
       </div>
-      <div className="flex items-center justify-between text-[12px]">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="flex items-center justify-between text-[11px]">
+        <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-[var(--text)]">
             {market.prob !== null ? formatPct(market.prob) : "\u2014"}
           </span>
           {topOption && topOption.label && (
-            <span className="text-[11px] text-[var(--text-muted)] truncate max-w-[120px]" title={topOption.label}>
+            <span className="text-[10px] text-[var(--text-muted)] truncate max-w-[120px]" title={topOption.label}>
               {topOption.label}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           {showChange && (
             <span
-              className={`text-[12px] ${
+              className={`text-[11px] ${
                 chg.cls === "up"
                   ? "text-[#22c55e]"
                   : chg.cls === "down"
@@ -207,7 +207,7 @@ export default function MarketCard({
               {chg.text}
             </span>
           )}
-          <span className="text-[13px] text-[var(--text-ghost)]">
+          <span className="text-[11px] text-[var(--text-ghost)]">
             {market.volume24h ? `vol ${formatVolume(market.volume24h)} 24h` : `vol ${formatVolume(market.volume)}`}
           </span>
         </div>

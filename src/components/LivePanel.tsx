@@ -42,12 +42,12 @@ export default function LivePanel() {
     <div className="font-mono">
       {/* Active player */}
       {activeStream ? (
-        <div className="mb-3">
+        <div className="mb-2">
           <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#ff4444] animate-pulse" />
-              <span className="text-[13px] text-[var(--text-secondary)]">{activeStream.name}</span>
-              <span className="text-[13px] text-[var(--text-faint)]">{activeStream.region}</span>
+              <span className="text-[11px] text-[var(--text-secondary)]">{activeStream.name}</span>
+              <span className="text-[11px] text-[var(--text-faint)]">{activeStream.region}</span>
             </div>
             <div className="flex items-center gap-1">
               {/* Mode toggle: HLS / Embed */}
@@ -66,7 +66,7 @@ export default function LivePanel() {
               )}
               <button
                 onClick={() => setActiveStream(null)}
-                className="text-[13px] text-[var(--text-faint)] hover:text-[var(--text-secondary)] transition-colors px-1.5 py-0.5 border border-[var(--border-subtle)]"
+                className="text-[10px] text-[var(--text-faint)] hover:text-[var(--text-secondary)] transition-colors px-1.5 py-0.5 border border-[var(--border-subtle)]"
               >
                 close
               </button>
@@ -90,9 +90,9 @@ export default function LivePanel() {
           </div>
         </div>
       ) : (
-        <div className="mb-3 border border-[var(--border-subtle)] bg-[var(--bg)] flex items-center justify-center" style={{ height: 160 }}>
+        <div className="mb-2 border border-[var(--border-subtle)] bg-[var(--bg)] flex items-center justify-center" style={{ height: 120 }}>
           <div className="text-center">
-            <div className="text-[12px] text-[var(--text-faint)]">select a stream to watch</div>
+            <div className="text-[11px] text-[var(--text-faint)]">select a stream to watch</div>
           </div>
         </div>
       )}
@@ -106,7 +106,7 @@ export default function LivePanel() {
             <button
               key={stream.name}
               onClick={() => selectStream(stream)}
-              className={`text-left px-2 py-1.5 border transition-colors ${
+              className={`text-left p-2 border transition-colors ${
                 isActive
                   ? "border-[#22c55e]/30 bg-[#22c55e]/5"
                   : "border-[var(--border-subtle)] hover:bg-[var(--surface)]"
@@ -114,7 +114,7 @@ export default function LivePanel() {
             >
               <div className="flex items-center justify-between">
                 <span
-                  className={`text-[12px] ${
+                  className={`text-[11px] ${
                     isActive ? "text-[#22c55e]" : "text-[var(--text-secondary)]"
                   }`}
                 >
@@ -131,7 +131,7 @@ export default function LivePanel() {
                   />
                 </div>
               </div>
-              <div className="text-[13px] text-[var(--text-faint)]">{stream.region}</div>
+              <div className="text-[10px] text-[var(--text-faint)]">{stream.region}</div>
             </button>
           );
         })}
