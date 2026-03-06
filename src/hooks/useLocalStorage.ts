@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 /**
  * Generic localStorage hook with version control and error handling.
- * - Lazy initialization from localStorage
+ * - SSR-safe: always returns defaultValue on server and first client render
+ * - Hydrates from localStorage in a useEffect (avoids hydration mismatch)
  * - Writes on value change
  * - Version mismatch → discard and use default
  * - Graceful fallback for storage full / private mode
@@ -12,35 +13,37 @@ import { useState, useEffect, useCallback, useRef } from "react";
 export function useLocalStorage<T extends { version: number }>(
   key: string,
   defaultValue: T
-): [T, (value: T | ((prev: T) => T)) => void] {
-  const [state, setState] = useState<T>(() => {
+): [T, (value: T | ((prev: T) => T)) => void, boolean] {
+  // Always start with default for SSR consistency
+  const [state, setState] = useState<T>(defaultValue);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Hydrate from localStorage after mount
+  useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
       if (raw) {
         const parsed = JSON.parse(raw) as T;
         if (parsed.version === defaultValue.version) {
-          return parsed;
+          setState(parsed);
         }
       }
     } catch {
       // corrupted or unavailable
     }
-    return defaultValue;
-  });
+    setIsHydrated(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
-  const isFirstRender = useRef(true);
-
+  // Persist changes — only after hydration is complete
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
+    if (!isHydrated) return;
     try {
       localStorage.setItem(key, JSON.stringify(state));
     } catch {
       // storage full or unavailable — silently fail
     }
-  }, [key, state]);
+  }, [key, state, isHydrated]);
 
   const setValue = useCallback(
     (value: T | ((prev: T) => T)) => {
@@ -52,5 +55,5 @@ export function useLocalStorage<T extends { version: number }>(
     []
   );
 
-  return [state, setValue];
+  return [state, setValue, isHydrated];
 }

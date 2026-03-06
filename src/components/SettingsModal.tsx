@@ -13,6 +13,11 @@ export interface PanelVisibility {
   news: boolean;
   live: boolean;
   watchlist: boolean;
+  leaderboard: boolean;
+  smartMoney: boolean;
+  whaleTrades: boolean;
+  orderbook: boolean;
+  sentiment: boolean;
 }
 
 interface SettingsModalProps {
@@ -51,10 +56,14 @@ const TABS: { key: Tab; label: string }[] = [
 const PANEL_LABELS: Record<string, string> = {
   watchlist: "Watchlist",
   markets: "Markets",
-  detail: "Market Detail",
-  country: "Country",
+  country: "Region",
   news: "News Feed",
   live: "Live Streams",
+  leaderboard: "Leaderboard",
+  smartMoney: "Smart Trades",
+  whaleTrades: "Whale Trades",
+  orderbook: "Order Book",
+  sentiment: "Sentiment",
 };
 
 export default function SettingsModal({

@@ -239,6 +239,39 @@ const GEO: Record<string, [number, number]> = {
   minnesota: [46.73, -94.68],
 };
 
+// City/leader/keyword → parent country for display purposes
+const PARENT_COUNTRY: Record<string, string> = {
+  washington: "United States", "new york": "United States",
+  london: "United Kingdom", beijing: "China", shanghai: "China", "hong kong": "China",
+  moscow: "Russia", kyiv: "Ukraine", taipei: "Taiwan",
+  jerusalem: "Israel", tehran: "Iran", tokyo: "Japan",
+  berlin: "Germany", paris: "France", brussels: "Belgium",
+  mumbai: "India", delhi: "India", seoul: "South Korea",
+  baghdad: "Iraq", riyadh: "Saudi Arabia", ankara: "Turkey",
+  cairo: "Egypt", nairobi: "Kenya",
+  trump: "United States", biden: "United States", kamala: "United States",
+  desantis: "United States", newsom: "United States", vance: "United States",
+  "elon musk": "United States",
+  "xi jinping": "China", putin: "Russia", zelensky: "Ukraine",
+  macron: "France", starmer: "United Kingdom", scholz: "Germany",
+  netanyahu: "Israel", lula: "Brazil", milei: "Argentina",
+  erdogan: "Turkey", trudeau: "Canada", carney: "Canada", poilievre: "Canada",
+  "kim jong": "North Korea", khamenei: "Iran",
+  gaza: "Palestine", hamas: "Palestine", hezbollah: "Lebanon",
+  crimea: "Ukraine", dubai: "United Arab Emirates",
+  scotland: "United Kingdom",
+  california: "United States", texas: "United States", florida: "United States",
+  pennsylvania: "United States", michigan: "United States", wisconsin: "United States",
+  arizona: "United States", nevada: "United States", ohio: "United States",
+  "north carolina": "United States", georgia: "United States", iowa: "United States",
+  virginia: "United States", colorado: "United States", minnesota: "United States",
+};
+
+export function getParentCountry(location: string): string | null {
+  const key = location.toLowerCase();
+  return PARENT_COUNTRY[key] || null;
+}
+
 // Short keys need case-sensitive whole-word matching
 const SHORT_KEYS = new Set(["us", "uk", "eu", "uae", "un"]);
 

@@ -7,23 +7,34 @@ const STORAGE_KEY = "pw:panel-col-spans";
 /**
  * Manages per-panel column span state, persisted to localStorage.
  * Each panel can span 1 or 2 columns in the panels grid.
+ * SSR-safe: starts with empty defaults, hydrates from localStorage after mount.
  */
 export function usePanelColSpans() {
-  const [colSpans, setColSpans] = useState<Record<string, number>>(() => {
-    if (typeof window === "undefined") return {};
+  const [colSpans, setColSpans] = useState<Record<string, number>>({});
+  const hydrated = useRef(false);
+
+  // Hydrate from localStorage after mount
+  useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          setColSpans(parsed);
+        }
+      }
     } catch {}
-    return {};
-  });
+    hydrated.current = true;
+  }, []);
 
-  const isFirst = useRef(true);
+  // Persist changes after hydration
+  const skipNext = useRef(true);
   useEffect(() => {
-    if (isFirst.current) {
-      isFirst.current = false;
+    if (skipNext.current) {
+      skipNext.current = false;
       return;
     }
+    if (!hydrated.current) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(colSpans));
     } catch {}

@@ -2,8 +2,8 @@ import type { NewsSource } from "@/types";
 
 export const NEWS_SOURCES: NewsSource[] = [
   {
-    name: "Reuters",
-    feedUrl: "https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best",
+    name: "NYT World",
+    feedUrl: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
     region: "Global",
   },
   {
@@ -22,13 +22,13 @@ export const NEWS_SOURCES: NewsSource[] = [
     region: "United States",
   },
   {
-    name: "AP News",
-    feedUrl: "https://rsshub.app/apnews/topics/apf-topnews",
-    region: "United States",
+    name: "CoinDesk",
+    feedUrl: "https://www.coindesk.com/arc/outboundfeeds/rss/",
+    region: "Global",
   },
   {
-    name: "NPR",
-    feedUrl: "https://feeds.npr.org/1001/rss.xml",
+    name: "Politico",
+    feedUrl: "https://rss.politico.com/politics-news.xml",
     region: "United States",
   },
   {
@@ -60,5 +60,15 @@ export const NEWS_SOURCES: NewsSource[] = [
     name: "CNA",
     feedUrl: "https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml",
     region: "Singapore",
+  },
+  {
+    name: "ABC News",
+    feedUrl: "https://abcnews.go.com/abcnews/internationalheadlines",
+    region: "United States",
+  },
+  {
+    name: "Decrypt",
+    feedUrl: "https://decrypt.co/feed",
+    region: "Global",
   },
 ];

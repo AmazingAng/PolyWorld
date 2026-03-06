@@ -110,6 +110,38 @@ function initSchema(db: Database.Database) {
       UNIQUE(news_id, market_id)
     );
     CREATE INDEX IF NOT EXISTS idx_news_matches_market ON news_market_matches(market_id);
+
+    -- Smart Money: top PnL wallets from leaderboard
+    CREATE TABLE IF NOT EXISTS smart_wallets (
+      address TEXT PRIMARY KEY,
+      username TEXT,
+      pnl REAL,
+      volume REAL,
+      rank INTEGER,
+      profile_image TEXT,
+      updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+
+    -- Smart Money: large trades on tracked markets
+    CREATE TABLE IF NOT EXISTS whale_trades (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      wallet TEXT NOT NULL,
+      condition_id TEXT NOT NULL,
+      event_id TEXT,
+      side TEXT NOT NULL,
+      size REAL NOT NULL,
+      price REAL,
+      usdc_size REAL,
+      outcome TEXT,
+      title TEXT,
+      slug TEXT,
+      timestamp TEXT NOT NULL,
+      is_smart_wallet INTEGER DEFAULT 0,
+      fetched_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_whale_trades_event ON whale_trades(event_id, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_whale_trades_wallet ON whale_trades(wallet);
+    CREATE INDEX IF NOT EXISTS idx_whale_trades_time ON whale_trades(timestamp DESC);
   `);
 }
 
@@ -134,5 +166,19 @@ function migrate(db: Database.Database) {
     if (!existing.has(col)) {
       db.exec(`ALTER TABLE events ADD COLUMN ${col} ${type}`);
     }
+  }
+
+  // Ensure whale_trades dedup index exists (may need to clean duplicates first)
+  const idxExists = db.prepare(
+    `SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_whale_trades_dedup'`
+  ).get();
+  if (!idxExists) {
+    // Remove duplicates before creating unique index
+    db.exec(`
+      DELETE FROM whale_trades WHERE id NOT IN (
+        SELECT MIN(id) FROM whale_trades GROUP BY wallet, condition_id, timestamp
+      )
+    `);
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_whale_trades_dedup ON whale_trades(wallet, condition_id, timestamp)`);
   }
 }

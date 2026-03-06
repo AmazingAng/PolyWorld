@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useColResize } from "@/hooks/useColResize";
+import { useRowResize } from "@/hooks/useRowResize";
 
 interface PanelProps {
   title: string;
@@ -15,6 +16,9 @@ interface PanelProps {
   colSpan?: number;
   onColSpanChange?: (span: number) => void;
   onColSpanReset?: () => void;
+  rowSpan?: number;
+  onRowSpanChange?: (span: number) => void;
+  onRowSpanReset?: () => void;
 }
 
 export default function Panel({
@@ -29,10 +33,14 @@ export default function Panel({
   colSpan,
   onColSpanChange,
   onColSpanReset,
+  rowSpan,
+  onRowSpanChange,
+  onRowSpanReset,
 }: PanelProps) {
   const [expanded, setExpanded] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
-  const { onMouseDown } = useColResize(colSpan ?? 1, onColSpanChange);
+  const { onMouseDown: onColMouseDown } = useColResize(colSpan ?? 1, onColSpanChange);
+  const { onMouseDown: onRowMouseDown } = useRowResize(rowSpan ?? 2, onRowSpanChange);
 
   // Escape key to close
   useEffect(() => {
@@ -44,8 +52,10 @@ export default function Panel({
     return () => document.removeEventListener("keydown", handler);
   }, [expanded]);
 
-  const spanStyle: React.CSSProperties | undefined =
-    colSpan === 2 ? { gridColumn: "1 / -1" } : colSpan === 1 ? { gridColumn: "span 1" } : undefined;
+  const spanStyle: React.CSSProperties = {};
+  if (colSpan === 2) spanStyle.gridColumn = "1 / -1";
+  else if (colSpan === 1) spanStyle.gridColumn = "span 1";
+  if (rowSpan && rowSpan !== 2) spanStyle.gridRow = `span ${rowSpan}`;
 
   return (
     <div
@@ -100,11 +110,23 @@ export default function Panel({
       {onColSpanChange && !expanded && (
         <div
           className="panel-col-resize-handle"
-          onMouseDown={onMouseDown}
+          onMouseDown={onColMouseDown}
           onDoubleClick={onColSpanReset}
           title="Drag to resize · Double-click to reset"
         >
           <div className="panel-col-resize-bar" />
+        </div>
+      )}
+
+      {/* Bottom-edge resize handle */}
+      {onRowSpanChange && !expanded && (
+        <div
+          className="panel-row-resize-handle"
+          onMouseDown={onRowMouseDown}
+          onDoubleClick={onRowSpanReset}
+          title="Drag to resize height · Double-click to reset"
+        >
+          <div className="panel-row-resize-bar" />
         </div>
       )}
     </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { ProcessedMarket, Category } from "@/types";
+import { ProcessedMarket, Category, SmartWallet, WhaleTrade } from "@/types";
 import { processEvents, getSampleData } from "@/lib/polymarket";
 import Header from "@/components/Header";
 import Panel from "@/components/Panel";
@@ -22,7 +22,13 @@ import { useWatchlist } from "@/hooks/useWatchlist";
 import { useAlerts, AlertConfig } from "@/hooks/useAlerts";
 import { useBrowserNotifications } from "@/hooks/useBrowserNotifications";
 import WatchlistPanel from "@/components/WatchlistPanel";
+import SmartMoneyPanel from "@/components/SmartMoneyPanel";
+import LeaderboardPanel from "@/components/LeaderboardPanel";
+import WhaleTradesPanel from "@/components/WhaleTradesPanel";
+import OrderBookPanel from "@/components/OrderBook";
+import SentimentPanel from "@/components/SentimentPanel";
 import { usePanelColSpans } from "@/hooks/usePanelColSpans";
+import { usePanelRowSpans } from "@/hooks/usePanelRowSpans";
 
 const WorldMap = dynamic(() => import("@/components/WorldMap"), {
   ssr: false,
@@ -39,7 +45,7 @@ const WorldMap = dynamic(() => import("@/components/WorldMap"), {
 const REFRESH_INTERVAL = 45000;
 
 const DEFAULT_COL_SPANS: Record<string, number> = {
-  markets: 2, country: 2, news: 2, live: 2, watchlist: 2, detail: 1,
+  markets: 2, country: 2, news: 2, live: 2, watchlist: 2, detail: 1, leaderboard: 1, smartMoney: 1, whaleTrades: 1, orderbook: 1, sentiment: 1,
 };
 
 const TIME_THRESHOLDS: Record<TimeRange, number> = {
@@ -144,12 +150,12 @@ function MapBottomDetail({
 }
 
 export default function Home() {
-  const { prefs, updatePref } = usePreferences();
+  const { prefs, updatePref, hydrated: prefsReady } = usePreferences();
 
   const [mapped, setMapped] = useState<ProcessedMarket[]>([]);
   const [unmapped, setUnmapped] = useState<ProcessedMarket[]>([]);
   const [activeCategories, setActiveCategories] = useState<Set<Category>>(
-    () => new Set(prefs.activeCategories as Category[])
+    () => new Set(["Politics", "Geopolitics", "Crypto", "Sports", "Finance", "Tech", "Culture", "Other"] as Category[])
   );
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
@@ -163,27 +169,31 @@ export default function Home() {
   } | null>(null);
   const [signals, setSignals] = useState<ProcessedMarket[]>([]);
   const [newMarkets, setNewMarkets] = useState<ProcessedMarket[]>([]);
-  const [timeRange, setTimeRange] = useState<TimeRange>(prefs.timeRange as TimeRange);
+  const [timeRange, setTimeRange] = useState<TimeRange>("ALL");
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(prefs.autoRefresh);
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [selectedMarket, setSelectedMarket] = useState<ProcessedMarket | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [panelVisibility, setPanelVisibility] = useState<PanelVisibility>(() => {
-    const defaults: PanelVisibility = { markets: true, detail: true, country: true, news: true, live: true, watchlist: true };
-    return { ...defaults, ...prefs.panelVisibility };
-  });
-  const [panelOrder, setPanelOrder] = useState<string[]>(() => {
-    const po = prefs.panelOrder;
-    if (!po.includes("watchlist")) return ["watchlist", ...po];
-    return po;
-  });
+  const [smartMoneyLeaderboard, setSmartMoneyLeaderboard] = useState<SmartWallet[]>([]);
+  const [smartMoneyTrades, setSmartMoneyTrades] = useState<WhaleTrade[]>([]);
+  const [smartMoneySmartTrades, setSmartMoneySmartTrades] = useState<WhaleTrade[]>([]);
+  const [smartMoneyLastSync, setSmartMoneyLastSync] = useState<string | null>(null);
+  const [smartWalletFilter, setSmartWalletFilter] = useState<string | null>(null);
+  const [panelVisibility, setPanelVisibility] = useState<PanelVisibility>(
+    { markets: true, detail: true, country: true, news: true, live: true, watchlist: true, leaderboard: true, smartMoney: true, whaleTrades: true, orderbook: true, sentiment: true }
+  );
+  const [panelOrder, setPanelOrder] = useState<string[]>(
+    ["sentiment", "watchlist", "markets", "country", "news", "live", "leaderboard", "smartMoney", "whaleTrades", "orderbook"]
+  );
   const panelsRef = useRef<HTMLDivElement>(null);
 
   // Watchlist
   const { watchedIds, isWatched, toggleWatch, removeWatch, count: watchedCount, addedAt } = useWatchlist();
   const { getColSpan, setColSpan, resetColSpan } = usePanelColSpans();
   const colSpanFor = (id: string) => getColSpan(id, DEFAULT_COL_SPANS[id] ?? 1);
+  const { getRowSpan, setRowSpan, resetRowSpan } = usePanelRowSpans();
+  const rowSpanFor = (id: string) => getRowSpan(id, 2);
 
   // Alerts
   const { alerts, history: alertHistory, unreadCount, addAlert, removeAlert, toggleAlert, evaluateAlerts, markRead, markAllRead, clearHistory } = useAlerts();
@@ -191,12 +201,36 @@ export default function Home() {
   const [alertManagerOpen, setAlertManagerOpen] = useState(false);
   const [alertPrefill, setAlertPrefill] = useState<{ marketId?: string; marketTitle?: string } | undefined>(undefined);
 
-  // Sync preferences back to localStorage
-  useEffect(() => { updatePref("activeCategories", Array.from(activeCategories)); }, [activeCategories, updatePref]);
-  useEffect(() => { updatePref("timeRange", timeRange); }, [timeRange, updatePref]);
-  useEffect(() => { updatePref("autoRefresh", autoRefresh); }, [autoRefresh, updatePref]);
-  useEffect(() => { updatePref("panelVisibility", panelVisibility); }, [panelVisibility, updatePref]);
-  useEffect(() => { updatePref("panelOrder", panelOrder); }, [panelOrder, updatePref]);
+  // Hydrate local state from prefs once localStorage has actually loaded
+  const prefsHydrated = useRef(false);
+  useEffect(() => {
+    if (!prefsReady || prefsHydrated.current) return;
+    prefsHydrated.current = true;
+    setActiveCategories(new Set(prefs.activeCategories as Category[]));
+    setTimeRange(prefs.timeRange as TimeRange);
+    setAutoRefresh(prefs.autoRefresh);
+    setMapWidthPct(prefs.mapWidthPct);
+    setRegion(prefs.region);
+    setColorMode(prefs.colorMode);
+    const defaults: PanelVisibility = { markets: true, detail: true, country: true, news: true, live: true, watchlist: true, leaderboard: true, smartMoney: true, whaleTrades: true, orderbook: true, sentiment: true };
+    setPanelVisibility({ ...defaults, ...prefs.panelVisibility });
+    let po = prefs.panelOrder;
+    if (!po.includes("sentiment")) po = ["sentiment", ...po];
+    if (!po.includes("watchlist")) po = ["watchlist", ...po];
+    if (!po.includes("smartMoney")) po = [...po, "smartMoney"];
+    if (!po.includes("leaderboard")) po = [...po, "leaderboard"];
+    if (!po.includes("whaleTrades")) po = [...po, "whaleTrades"];
+    if (!po.includes("orderbook")) po = [...po, "orderbook"];
+    setPanelOrder(po);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefsReady]);
+
+  // Sync preferences back to localStorage — only after hydration is complete
+  useEffect(() => { if (prefsHydrated.current) updatePref("activeCategories", Array.from(activeCategories)); }, [activeCategories, updatePref]);
+  useEffect(() => { if (prefsHydrated.current) updatePref("timeRange", timeRange); }, [timeRange, updatePref]);
+  useEffect(() => { if (prefsHydrated.current) updatePref("autoRefresh", autoRefresh); }, [autoRefresh, updatePref]);
+  useEffect(() => { if (prefsHydrated.current) updatePref("panelVisibility", panelVisibility); }, [panelVisibility, updatePref]);
+  useEffect(() => { if (prefsHydrated.current) updatePref("panelOrder", panelOrder); }, [panelOrder, updatePref]);
 
   const handlePanelReorder = useCallback((newOrder: string[]) => {
     setPanelOrder(newOrder);
@@ -205,11 +239,11 @@ export default function Home() {
   usePanelDrag(panelsRef, panelOrder, handlePanelReorder);
 
   // Resize state: left/right split (percentage of viewport) and top/bottom split (px)
-  const [mapWidthPct, setMapWidthPct] = useState(prefs.mapWidthPct);
+  const [mapWidthPct, setMapWidthPct] = useState(58);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(420);
   const [marketSearch, setMarketSearch] = useState<string | undefined>(undefined);
-  const [region, setRegion] = useState<string>(prefs.region);
-  const [colorMode, setColorMode] = useState<"category" | "impact">(prefs.colorMode);
+  const [region, setRegion] = useState<string>("global");
+  const [colorMode, setColorMode] = useState<"category" | "impact">("category");
 
   // Sync remaining preferences
   useEffect(() => { updatePref("mapWidthPct", mapWidthPct); }, [mapWidthPct, updatePref]);
@@ -231,6 +265,7 @@ export default function Home() {
   }, []);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const smartMoneyTimerRef = useRef<NodeJS.Timeout | null>(null);
   const flyToTimer = useRef<NodeJS.Timeout | null>(null);
   const seenSignalIds = useRef<Set<string>>(new Set());
   const seenMarketIds = useRef<Set<string>>(new Set());
@@ -290,9 +325,24 @@ export default function Home() {
     setLoading(false);
   }, []);
 
+  const fetchSmartMoney = useCallback(async () => {
+    try {
+      const res = await fetch("/api/smart-money");
+      if (!res.ok) return;
+      const data = await res.json();
+      setSmartMoneyLeaderboard(data.leaderboard || []);
+      setSmartMoneyTrades(data.recentTrades || []);
+      setSmartMoneySmartTrades(data.smartTrades || []);
+      setSmartMoneyLastSync(data.lastSync || null);
+    } catch {
+      // non-critical
+    }
+  }, []);
+
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    fetchSmartMoney();
+  }, [fetchData, fetchSmartMoney]);
 
   // Restore cached selections after data loads
   const restoredRef = useRef(false);
@@ -320,6 +370,17 @@ export default function Home() {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [fetchData, autoRefresh]);
+
+  // Independent 30s polling for smart money (matches server-side cache TTL)
+  useEffect(() => {
+    if (smartMoneyTimerRef.current) clearInterval(smartMoneyTimerRef.current);
+    if (autoRefresh) {
+      smartMoneyTimerRef.current = setInterval(fetchSmartMoney, 30_000);
+    }
+    return () => {
+      if (smartMoneyTimerRef.current) clearInterval(smartMoneyTimerRef.current);
+    };
+  }, [fetchSmartMoney, autoRefresh]);
 
   // Alert evaluation on data refresh
   const alertEvalRef = useRef(false);
@@ -424,6 +485,10 @@ export default function Home() {
     (market: ProcessedMarket) => {
       setSelectedMarket(market);
       try { sessionStorage.setItem("pw:selectedMarket", market.id); } catch {}
+      if (market.location) {
+        setSelectedCountry(market.location);
+        try { sessionStorage.setItem("pw:selectedCountry", market.location); } catch {}
+      }
       if (market.coords) handleFlyTo(market.coords, market.id);
     },
     [handleFlyTo]
@@ -441,6 +506,7 @@ export default function Home() {
         lastSyncTime={lastSyncTime}
         onOpenSettings={() => setSettingsOpen(true)}
         watchedCount={watchedCount}
+        whaleTradeCount={smartMoneyTrades.length}
         alertUnreadCount={unreadCount}
         alertManagerOpen={alertManagerOpen}
         onOpenAlertManager={() => setAlertManagerOpen((v) => !v)}
@@ -533,6 +599,9 @@ export default function Home() {
                       colSpan={colSpanFor("markets")}
                       onColSpanChange={(s) => setColSpan("markets", s)}
                       onColSpanReset={() => resetColSpan("markets")}
+                      rowSpan={rowSpanFor("markets")}
+                      onRowSpanChange={(s) => setRowSpan("markets", s)}
+                      onRowSpanReset={() => resetRowSpan("markets")}
                     />
                   );
                 case "country":
@@ -540,11 +609,14 @@ export default function Home() {
                     <Panel
                       key="country"
                       panelId="country"
-                      title="Country"
+                      title="Region"
                       count={selectedCountry || "—"}
                       colSpan={colSpanFor("country")}
                       onColSpanChange={(s) => setColSpan("country", s)}
                       onColSpanReset={() => resetColSpan("country")}
+                      rowSpan={rowSpanFor("country")}
+                      onRowSpanChange={(s) => setRowSpan("country", s)}
+                      onRowSpanReset={() => resetRowSpan("country")}
                     >
                       {selectedCountry ? (
                         <CountryPanel
@@ -557,7 +629,7 @@ export default function Home() {
                         />
                       ) : (
                         <div className="text-[12px] text-[#777] font-mono">
-                          click a country on the map to view related markets
+                          click a region on the map to view related markets
                         </div>
                       )}
                     </Panel>
@@ -572,6 +644,9 @@ export default function Home() {
                       colSpan={colSpanFor("news")}
                       onColSpanChange={(s) => setColSpan("news", s)}
                       onColSpanReset={() => resetColSpan("news")}
+                      rowSpan={rowSpanFor("news")}
+                      onRowSpanChange={(s) => setRowSpan("news", s)}
+                      onRowSpanReset={() => resetRowSpan("news")}
                       headerRight={
                         <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: selectedMarket ? "var(--green)" : "var(--text-muted)" }}>
                           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: selectedMarket ? "var(--green)" : "var(--text-ghost)" }} />
@@ -595,6 +670,9 @@ export default function Home() {
                       colSpan={colSpanFor("live")}
                       onColSpanChange={(s) => setColSpan("live", s)}
                       onColSpanReset={() => resetColSpan("live")}
+                      rowSpan={rowSpanFor("live")}
+                      onRowSpanChange={(s) => setRowSpan("live", s)}
+                      onRowSpanReset={() => resetRowSpan("live")}
                     >
                       <LivePanel />
                     </Panel>
@@ -608,6 +686,9 @@ export default function Home() {
                       colSpan={colSpanFor("watchlist")}
                       onColSpanChange={(s) => setColSpan("watchlist", s)}
                       onColSpanReset={() => resetColSpan("watchlist")}
+                      rowSpan={rowSpanFor("watchlist")}
+                      onRowSpanChange={(s) => setRowSpan("watchlist", s)}
+                      onRowSpanReset={() => resetRowSpan("watchlist")}
                       headerRight={
                         watchedCount > 0 ? (
                           <span className="text-[10px] text-[var(--text-muted)] font-mono">
@@ -625,10 +706,131 @@ export default function Home() {
                         unmapped={unmapped}
                         addedAt={addedAt}
                         onSelectMarket={handleSelectMarketFromPanel}
-                        onRemoveWatch={removeWatch}
                         isWatched={isWatched}
                         onToggleWatch={toggleWatch}
                       />
+                    </Panel>
+                  );
+                case "leaderboard":
+                  return (
+                    <Panel
+                      key="leaderboard"
+                      panelId="leaderboard"
+                      title="Leaderboard"
+                      count={smartMoneyLeaderboard.length > 0 ? `${smartMoneyLeaderboard.length}` : undefined}
+                      colSpan={colSpanFor("leaderboard")}
+                      onColSpanChange={(s) => setColSpan("leaderboard", s)}
+                      onColSpanReset={() => resetColSpan("leaderboard")}
+                      rowSpan={rowSpanFor("leaderboard")}
+                      onRowSpanChange={(s) => setRowSpan("leaderboard", s)}
+                      onRowSpanReset={() => resetRowSpan("leaderboard")}
+                    >
+                      <LeaderboardPanel
+                        leaderboard={smartMoneyLeaderboard}
+                        onSelectWallet={(addr) => setSmartWalletFilter(addr)}
+                      />
+                    </Panel>
+                  );
+                case "smartMoney":
+                  return (
+                    <Panel
+                      key="smartMoney"
+                      panelId="smartMoney"
+                      title="Smart Trades"
+                      badge={
+                        smartMoneySmartTrades.length > 0 ? (
+                          <span className="panel-data-badge live">
+                            {smartMoneySmartTrades.length} smart
+                          </span>
+                        ) : undefined
+                      }
+                      colSpan={colSpanFor("smartMoney")}
+                      onColSpanChange={(s) => setColSpan("smartMoney", s)}
+                      onColSpanReset={() => resetColSpan("smartMoney")}
+                      rowSpan={rowSpanFor("smartMoney")}
+                      onRowSpanChange={(s) => setRowSpan("smartMoney", s)}
+                      onRowSpanReset={() => resetRowSpan("smartMoney")}
+                    >
+                      <SmartMoneyPanel
+                        smartTrades={smartMoneySmartTrades}
+                        walletFilter={smartWalletFilter}
+                        onClearFilter={() => setSmartWalletFilter(null)}
+                        onSelectMarket={(slug) => {
+                          const all = [...mapped, ...unmapped];
+                          const found = all.find(m => m.slug === slug);
+                          if (found) handleSelectMarketFromPanel(found);
+                        }}
+                      />
+                    </Panel>
+                  );
+                case "whaleTrades":
+                  return (
+                    <Panel
+                      key="whaleTrades"
+                      panelId="whaleTrades"
+                      title="Whale Trades"
+                      badge={
+                        smartMoneyTrades.length > 0 ? (
+                          <span className="panel-data-badge">
+                            {smartMoneyTrades.length}
+                          </span>
+                        ) : undefined
+                      }
+                      colSpan={colSpanFor("whaleTrades")}
+                      onColSpanChange={(s) => setColSpan("whaleTrades", s)}
+                      onColSpanReset={() => resetColSpan("whaleTrades")}
+                      rowSpan={rowSpanFor("whaleTrades")}
+                      onRowSpanChange={(s) => setRowSpan("whaleTrades", s)}
+                      onRowSpanReset={() => resetRowSpan("whaleTrades")}
+                    >
+                      <WhaleTradesPanel
+                        trades={smartMoneyTrades}
+                        onSelectMarket={(slug) => {
+                          const all = [...mapped, ...unmapped];
+                          const found = all.find(m => m.slug === slug);
+                          if (found) handleSelectMarketFromPanel(found);
+                        }}
+                      />
+                    </Panel>
+                  );
+                case "orderbook":
+                  return (
+                    <Panel
+                      key="orderbook"
+                      panelId="orderbook"
+                      title="Order Book"
+                      badge={selectedMarket && !selectedMarket.closed ? <span className="panel-data-badge live">live</span> : undefined}
+                      colSpan={colSpanFor("orderbook")}
+                      onColSpanChange={(s) => setColSpan("orderbook", s)}
+                      onColSpanReset={() => resetColSpan("orderbook")}
+                      rowSpan={rowSpanFor("orderbook")}
+                      onRowSpanChange={(s) => setRowSpan("orderbook", s)}
+                      onRowSpanReset={() => resetRowSpan("orderbook")}
+                      headerRight={
+                        selectedMarket ? (
+                          <span className="text-[10px] font-mono truncate max-w-[200px] text-[var(--text-dim)]" title={selectedMarket.title}>
+                            {selectedMarket.title}
+                          </span>
+                        ) : undefined
+                      }
+                    >
+                      <OrderBookPanel selectedMarket={selectedMarket} />
+                    </Panel>
+                  );
+                case "sentiment":
+                  return (
+                    <Panel
+                      key="sentiment"
+                      panelId="sentiment"
+                      title="Sentiment"
+                      colSpan={colSpanFor("sentiment")}
+                      onColSpanChange={(s) => setColSpan("sentiment", s)}
+                      onColSpanReset={() => resetColSpan("sentiment")}
+                      rowSpan={rowSpanFor("sentiment")}
+                      onRowSpanChange={(s) => setRowSpan("sentiment", s)}
+                      onRowSpanReset={() => resetRowSpan("sentiment")}
+                    >
+                      <SentimentPanel />
                     </Panel>
                   );
                 default:

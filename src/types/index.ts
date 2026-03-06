@@ -85,6 +85,7 @@ export interface ProcessedMarket {
   impactScore: number;
   impactLevel: ImpactLevel;
   anomaly?: AnomalyInfo;
+  smartMoney?: SmartMoneyFlow | null;
 }
 
 export interface GeoResult {
@@ -108,4 +109,68 @@ export interface NewsSource {
   name: string;
   feedUrl: string;
   region: string;
+}
+
+export interface SmartWallet {
+  address: string;
+  username: string | null;
+  pnl: number;
+  volume: number;
+  rank: number;
+  profileImage: string | null;
+}
+
+export interface WhaleTrade {
+  wallet: string;
+  username?: string;
+  conditionId: string;
+  eventId: string | null;
+  side: "BUY" | "SELL";
+  size: number;
+  price: number;
+  usdcSize: number;
+  outcome: string;
+  title: string;
+  slug: string;
+  timestamp: string;
+  isSmartWallet: boolean;
+}
+
+export interface OrderBookLevel {
+  price: number;
+  size: number;
+  cumSize: number;
+}
+
+export interface OrderBookData {
+  bids: OrderBookLevel[];
+  asks: OrderBookLevel[];
+  lastTradePrice: number;
+  spread: number;
+  midPrice: number;
+  tickSize: number;
+}
+
+export interface SentimentSubScore {
+  name: string;
+  value: number;
+  weight: number;
+}
+
+export interface SentimentIndex {
+  score: number;
+  label: string;
+  subScores: SentimentSubScore[];
+  activeMarkets: number;
+  updatedAt: string;
+}
+
+export interface SmartMoneyFlow {
+  smartBuys: number;
+  smartSells: number;
+  whaleBuys: number;
+  whaleSells: number;
+  netFlow: "bullish" | "bearish" | "neutral";
+  topWallets: Array<{ address: string; username: string | null; side: "BUY" | "SELL"; size: number }>;
+  recentTrades: WhaleTrade[];
 }

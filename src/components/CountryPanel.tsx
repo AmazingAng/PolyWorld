@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { ProcessedMarket } from "@/types";
 import { getCountryFlag, marketMatchesCountry } from "@/lib/countries";
+import { getParentCountry } from "@/lib/geo";
 import { formatVolume } from "@/lib/format";
 import MarketCard from "./MarketCard";
 
@@ -23,19 +24,41 @@ export default function CountryPanel({
   isWatched,
   onToggleWatch,
 }: CountryPanelProps) {
-  const flag = getCountryFlag(countryName);
+  const parentCountry = getParentCountry(countryName);
+  const displayName = parentCountry ? `${countryName}, ${parentCountry}` : countryName;
+  const flagSource = parentCountry || countryName;
+  const flag = getCountryFlag(flagSource);
+
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // Reset summary when country changes
+  // Reset summary when region changes
   useEffect(() => {
     setAiSummary(null);
   }, [countryName]);
 
-  const allMarkets = [...mapped, ...unmapped];
-  const countryMarkets = allMarkets
-    .filter((m) => marketMatchesCountry(m.location, countryName))
-    .sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0));
+  const allMarkets = useMemo(() => [...mapped, ...unmapped], [mapped, unmapped]);
+
+  const countryMarkets = useMemo(() => {
+    const seen = new Set<string>();
+    const results: ProcessedMarket[] = [];
+    // Match against the selected location
+    for (const m of allMarkets) {
+      if (marketMatchesCountry(m.location, countryName)) {
+        if (!seen.has(m.id)) { seen.add(m.id); results.push(m); }
+      }
+    }
+    // Also match against parent country if it's a city/sub-region
+    if (parentCountry) {
+      for (const m of allMarkets) {
+        if (!seen.has(m.id) && marketMatchesCountry(m.location, parentCountry)) {
+          seen.add(m.id);
+          results.push(m);
+        }
+      }
+    }
+    return results.sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0));
+  }, [allMarkets, countryName, parentCountry]);
 
   const totalVol = countryMarkets.reduce((s, m) => s + m.volume, 0);
   const activeCount = countryMarkets.filter((m) => m.active && !m.closed).length;
@@ -52,7 +75,7 @@ export default function CountryPanel({
           type: "country",
           cacheKey: `country:${countryName}`,
           context: {
-            country: countryName,
+            country: displayName,
             markets: countryMarkets.slice(0, 8).map((m) => ({
               title: m.title,
               prob: m.prob,
@@ -68,14 +91,14 @@ export default function CountryPanel({
       setAiSummary("Failed to generate summary");
     }
     setAiLoading(false);
-  }, [countryName, countryMarkets, aiLoading]);
+  }, [countryName, displayName, countryMarkets, aiLoading]);
 
   return (
     <div className="font-mono">
-      {/* Country header */}
+      {/* Region header */}
       <div className="flex items-center gap-1.5 mb-2">
         <span className="text-[14px]">{flag}</span>
-        <h2 className="text-[12px] text-[var(--text)]">{countryName}</h2>
+        <h2 className="text-[12px] text-[var(--text)]">{displayName}</h2>
         <button
           onClick={fetchCountrySummary}
           disabled={aiLoading || countryMarkets.length === 0}
@@ -124,7 +147,7 @@ export default function CountryPanel({
       {/* Markets list */}
       {countryMarkets.length === 0 ? (
         <div className="text-[12px] text-[var(--text-ghost)] py-4">
-          no markets found for this country
+          no markets found for this region
         </div>
       ) : (
         <div>

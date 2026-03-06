@@ -25,8 +25,13 @@ const DEFAULT_PREFERENCES: UserPreferences = {
     news: true,
     live: true,
     watchlist: true,
+    leaderboard: true,
+    smartMoney: true,
+    whaleTrades: true,
+    orderbook: true,
+    sentiment: true,
   },
-  panelOrder: ["watchlist", "markets", "country", "news", "live"],
+  panelOrder: ["sentiment", "watchlist", "markets", "country", "news", "live", "leaderboard", "smartMoney", "whaleTrades", "orderbook"],
   activeCategories: [
     "Politics", "Geopolitics", "Crypto", "Sports",
     "Finance", "Tech", "Culture", "Other",
@@ -39,7 +44,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 };
 
 export function usePreferences() {
-  const [prefs, setPrefs] = useLocalStorage<UserPreferences>(
+  const [prefs, setPrefs, hydrated] = useLocalStorage<UserPreferences>(
     "pw:preferences",
     DEFAULT_PREFERENCES
   );
@@ -51,5 +56,5 @@ export function usePreferences() {
     [setPrefs]
   );
 
-  return { prefs, updatePref };
+  return { prefs, updatePref, hydrated };
 }

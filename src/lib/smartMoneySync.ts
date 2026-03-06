@@ -1,0 +1,186 @@
+import { getDb } from "./db";
+import { fetchLeaderboard, fetchFullLeaderboard, fetchMarketTrades } from "./smartMoney";
+
+const SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const FULL_LEADERBOARD_INTERVAL = 60 * 60 * 1000; // 1 hour
+let syncTimer: ReturnType<typeof setInterval> | null = null;
+let fullLeaderboardTimer: ReturnType<typeof setInterval> | null = null;
+let lastFullSync = 0;
+
+/**
+ * Full leaderboard sync: fetch all wallets with PnL >= $100k.
+ * Runs once on startup and then every hour.
+ */
+export async function runFullLeaderboardSync(): Promise<void> {
+  const db = getDb();
+  try {
+    console.log("[smartMoney] Starting full leaderboard sync (PnL >= $100k)...");
+    const leaderboard = await fetchFullLeaderboard(100_000);
+    if (leaderboard.length === 0) return;
+
+    const upsertWallet = db.prepare(`
+      INSERT INTO smart_wallets (address, username, pnl, volume, rank, profile_image, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      ON CONFLICT(address) DO UPDATE SET
+        username = excluded.username,
+        pnl = excluded.pnl,
+        volume = excluded.volume,
+        rank = excluded.rank,
+        profile_image = excluded.profile_image,
+        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+    `);
+
+    // Remove wallets that dropped below threshold
+    db.transaction(() => {
+      db.prepare(`DELETE FROM smart_wallets WHERE 1`).run();
+      for (const w of leaderboard) {
+        upsertWallet.run(
+          w.address,
+          w.username || null,
+          w.pnl,
+          w.volume,
+          w.rank,
+          w.profileImage || null
+        );
+      }
+    })();
+
+    lastFullSync = Date.now();
+    console.log(`[smartMoney] Full leaderboard sync complete — ${leaderboard.length} wallets (PnL >= $100k)`);
+  } catch (err) {
+    console.error("[smartMoney] Full leaderboard sync error:", err);
+  }
+}
+
+export async function runSmartMoneySync(): Promise<void> {
+  const db = getDb();
+
+  try {
+    // 1. Quick top-50 refresh (keeps rank/pnl fresh between full syncs)
+    const leaderboard = await fetchLeaderboard(50);
+    if (leaderboard.length > 0) {
+      const upsertWallet = db.prepare(`
+        INSERT INTO smart_wallets (address, username, pnl, volume, rank, profile_image, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        ON CONFLICT(address) DO UPDATE SET
+          username = excluded.username,
+          pnl = excluded.pnl,
+          volume = excluded.volume,
+          rank = excluded.rank,
+          profile_image = excluded.profile_image,
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      `);
+      const txn = db.transaction(() => {
+        for (const w of leaderboard) {
+          upsertWallet.run(
+            w.address,
+            w.username || null,
+            w.pnl,
+            w.volume,
+            w.rank,
+            w.profileImage || null
+          );
+        }
+      });
+      txn();
+      console.log(`[smartMoney] Synced ${leaderboard.length} wallets`);
+    }
+
+    // Build a set of smart wallet addresses for cross-referencing
+    const smartAddresses = new Set(
+      (
+        db.prepare(`SELECT address FROM smart_wallets`).all() as Array<{ address: string }>
+      ).map((r) => r.address.toLowerCase())
+    );
+
+    // 2. Build event slug → id map for matching trades to our DB
+    const eventsBySlug = new Map<string, { id: string; title: string; slug: string }>();
+    const eventRows = db
+      .prepare(`SELECT id, title, slug FROM events WHERE is_active = 1`)
+      .all() as Array<{ id: string; title: string; slug: string }>;
+    for (const e of eventRows) {
+      eventsBySlug.set(e.slug, e);
+    }
+
+    const insertTrade = db.prepare(`
+      INSERT OR IGNORE INTO whale_trades
+        (wallet, condition_id, event_id, side, size, price, usdc_size, outcome, title, slug, timestamp, is_smart_wallet)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const storeTrades = (trades: Awaited<ReturnType<typeof fetchMarketTrades>>, smartOnly: boolean) => {
+      let count = 0;
+      for (const t of trades) {
+        if (!t.wallet) continue;
+        const isSmart = smartAddresses.has(t.wallet.toLowerCase());
+        if (smartOnly && !isSmart) continue;
+
+        const event = eventsBySlug.get(t.eventSlug) || eventsBySlug.get(t.slug);
+        insertTrade.run(
+          t.wallet,
+          t.conditionId,
+          event?.id || null,
+          t.side,
+          t.size,
+          t.price,
+          t.usdcSize,
+          t.outcome,
+          t.title,
+          t.eventSlug || t.slug,
+          t.timestamp,
+          isSmart ? 1 : 0
+        );
+        count++;
+      }
+      return count;
+    };
+
+    // 3a. Fetch whale trades (>= $5000, all wallets)
+    const whaleTrades = await fetchMarketTrades("", 5000);
+    let totalTrades = 0;
+    const txn = db.transaction(() => {
+      totalTrades += storeTrades(whaleTrades, false);
+    });
+    txn();
+
+    // 3b. Fetch lower-threshold trades (>= $1000), only keep smart wallet ones
+    // This captures smart money activity that wouldn't meet the whale threshold
+    const smartTrades = await fetchMarketTrades("", 1000);
+    let smartTradeCount = 0;
+    const txn2 = db.transaction(() => {
+      smartTradeCount = storeTrades(smartTrades, true);
+    });
+    txn2();
+    totalTrades += smartTradeCount;
+
+    // 4. Cleanup trades older than 7 days
+    db.prepare(
+      `DELETE FROM whale_trades WHERE timestamp < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-7 days')`
+    ).run();
+
+    console.log(
+      `[smartMoney] Sync complete — ${leaderboard.length} wallets, ${totalTrades} trades (${smartTradeCount} smart)`
+    );
+  } catch (err) {
+    console.error("[smartMoney] Sync error:", err);
+  }
+}
+
+export function startSmartMoneySync() {
+  if (syncTimer) return;
+  console.log("[smartMoney] Starting smart money sync (5min trades + 1h full leaderboard)");
+
+  // Full leaderboard sync on startup (after short delay), then every hour
+  setTimeout(() => {
+    runFullLeaderboardSync().then(() => runSmartMoneySync());
+  }, 10_000);
+
+  fullLeaderboardTimer = setInterval(() => {
+    runFullLeaderboardSync();
+  }, FULL_LEADERBOARD_INTERVAL);
+
+  // Trade sync every 5 minutes
+  syncTimer = setInterval(() => {
+    runSmartMoneySync();
+  }, SYNC_INTERVAL);
+}

@@ -4,5 +4,7 @@ export async function register() {
     startSyncLoop();
     const { startNewsSyncLoop } = await import("./lib/newsSync");
     startNewsSyncLoop();
+    const { startSmartMoneySync } = await import("./lib/smartMoneySync");
+    startSmartMoneySync();
   }
 }

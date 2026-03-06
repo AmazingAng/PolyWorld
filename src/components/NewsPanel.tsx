@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { ProcessedMarket, NewsItem } from "@/types";
 import { NEWS_SOURCES } from "@/lib/newsSources";
 
@@ -34,10 +34,169 @@ function timeAgo(dateStr: string): string {
   return `${days}d`;
 }
 
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+type ExtendedNewsItem = NewsItem & { relevance_score?: number };
+
+function NewsPopover({
+  item,
+  anchorRect,
+  selectedMarket,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  item: ExtendedNewsItem;
+  anchorRect: DOMRect;
+  selectedMarket: ProcessedMarket | null;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}) {
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; direction: "left" | "right" }>({ top: 0, left: 0, direction: "left" });
+
+  useEffect(() => {
+    const vw = window.innerWidth;
+    // Try to place to the left of the anchor; if not enough room, place to the right
+    const popoverWidth = 340;
+    const gap = 6;
+    let left: number;
+    let direction: "left" | "right";
+    if (anchorRect.left - popoverWidth - gap > 0) {
+      left = anchorRect.left - popoverWidth - gap;
+      direction = "left";
+    } else {
+      left = anchorRect.right + gap;
+      direction = "right";
+    }
+    // Clamp to viewport
+    if (left + popoverWidth > vw) left = vw - popoverWidth - 8;
+    if (left < 8) left = 8;
+
+    // Vertically align to the anchor top, clamp to viewport
+    const vh = window.innerHeight;
+    let top = anchorRect.top;
+    // We'll estimate max height as 300px for clamping
+    if (top + 300 > vh) top = vh - 308;
+    if (top < 8) top = 8;
+
+    setPos({ top, left, direction });
+  }, [anchorRect]);
+
+  return (
+    <div
+      ref={popoverRef}
+      className="news-popover"
+      style={{ top: pos.top, left: pos.left }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      {/* Source + time header */}
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-[10px] font-bold uppercase text-[var(--text-dim)]">
+          {item.source}
+        </span>
+        <span className="text-[10px] text-[var(--text-ghost)]">
+          {formatDate(item.publishedAt)}
+        </span>
+      </div>
+
+      {/* Title */}
+      <div className="text-[12px] font-semibold leading-snug text-[var(--text)] mb-2">
+        {item.title}
+      </div>
+
+      {/* Image */}
+      {item.imageUrl && (
+        <div className="mb-2 rounded overflow-hidden border border-[var(--border-subtle)]">
+          <img
+            src={item.imageUrl}
+            alt=""
+            className="w-full h-auto max-h-[140px] object-cover"
+            loading="lazy"
+          />
+        </div>
+      )}
+
+      {/* Summary / content */}
+      {item.summary && (
+        <div className="text-[11px] leading-relaxed text-[var(--text-dim)] whitespace-pre-line">
+          {item.summary}
+        </div>
+      )}
+
+      {/* Relevance */}
+      {selectedMarket && item.relevance_score != null && (
+        <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-[var(--border-subtle)]">
+          <span className="text-[9px] text-[var(--text-faint)] uppercase">relevance</span>
+          <div className="flex-1 h-[3px] bg-[var(--border)] rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${Math.round(item.relevance_score * 100)}%`,
+                background: "var(--green)",
+              }}
+            />
+          </div>
+          <span className="text-[9px] text-[var(--green)]">
+            {Math.round(item.relevance_score * 100)}%
+          </span>
+        </div>
+      )}
+
+      {/* Categories */}
+      {item.categories.length > 0 && (
+        <div className="flex gap-1 flex-wrap mt-2">
+          {item.categories.map((cat) => (
+            <span key={cat} className="text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-faint)] rounded-sm">
+              {cat}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Read more link */}
+      <div className="mt-2 pt-1.5 border-t border-[var(--border-subtle)]">
+        <span className="text-[10px] text-[var(--text-faint)]">
+          hover to read &middot; click card to open source &rarr;
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
-  const [items, setItems] = useState<(NewsItem & { relevance_score?: number })[]>([]);
+  const [items, setItems] = useState<ExtendedNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [hoveredItem, setHoveredItem] = useState<ExtendedNewsItem | null>(null);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showPopover = useCallback((item: ExtendedNewsItem, rect: DOMRect) => {
+    if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null; }
+    setHoveredItem(item);
+    setAnchorRect(rect);
+  }, []);
+
+  const scheduleHide = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => {
+      setHoveredItem(null);
+      setAnchorRect(null);
+    }, 200);
+  }, []);
+
+  const cancelHide = useCallback(() => {
+    if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null; }
+  }, []);
 
   const fetchNews = useCallback(async () => {
     try {
@@ -57,7 +216,7 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
   useEffect(() => {
     setLoading(true);
     fetchNews();
-    const timer = setInterval(fetchNews, 120_000); // refresh every 2 min
+    const timer = setInterval(fetchNews, 120_000);
     return () => clearInterval(timer);
   }, [fetchNews]);
 
@@ -66,7 +225,6 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
     return items.filter((item) => item.source === sourceFilter);
   }, [items, sourceFilter]);
 
-  // Unique sources present in current items
   const activeSources = useMemo(() => {
     const set = new Set(items.map((i) => i.source));
     return NEWS_SOURCES.filter((s) => set.has(s.name));
@@ -133,14 +291,13 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
             href={item.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="block border border-[var(--border-subtle)] px-2.5 py-1.5 transition-colors"
+            className="block border border-[var(--border-subtle)] px-2.5 py-1.5 transition-colors hover:bg-[var(--surface-hover)]"
             style={{ textDecoration: "none" }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "var(--surface-hover)";
+              const rect = e.currentTarget.getBoundingClientRect();
+              showPopover(item, rect);
             }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "transparent";
-            }}
+            onMouseLeave={scheduleHide}
           >
             {/* Source + time */}
             <div className="flex items-center gap-1.5 mb-0.5">
@@ -202,6 +359,17 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
           </a>
         ))}
       </div>
+
+      {/* Popover — rendered via portal-like fixed positioning */}
+      {hoveredItem && anchorRect && (
+        <NewsPopover
+          item={hoveredItem}
+          anchorRect={anchorRect}
+          selectedMarket={selectedMarket}
+          onMouseEnter={cancelHide}
+          onMouseLeave={scheduleHide}
+        />
+      )}
     </div>
   );
 }

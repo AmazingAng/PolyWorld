@@ -10,7 +10,6 @@ interface WatchlistPanelProps {
   unmapped: ProcessedMarket[];
   addedAt: Record<string, number>;
   onSelectMarket: (market: ProcessedMarket) => void;
-  onRemoveWatch: (id: string) => void;
   isWatched: (id: string) => boolean;
   onToggleWatch: (id: string) => void;
 }
@@ -21,7 +20,6 @@ export default function WatchlistPanel({
   unmapped,
   addedAt,
   onSelectMarket,
-  onRemoveWatch,
   isWatched,
   onToggleWatch,
 }: WatchlistPanelProps) {
@@ -59,28 +57,14 @@ export default function WatchlistPanel({
     <div className="font-mono">
       {/* Market list */}
       {watchedMarkets.map((m) => (
-        <div key={m.id} className="relative group">
-          <MarketCard
-            market={m}
-            showChange
-            onClick={() => onSelectMarket(m)}
-            isWatched={isWatched(m.id)}
-            onToggleWatch={() => onToggleWatch(m.id)}
-          />
-          {/* Remove button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemoveWatch(m.id);
-            }}
-            className="absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center text-[var(--text-faint)] hover:text-[#ff4444] opacity-0 group-hover:opacity-100 transition-opacity"
-            title="Remove from watchlist"
-          >
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 4l8 8M12 4l-8 8" />
-            </svg>
-          </button>
-        </div>
+        <MarketCard
+          key={m.id}
+          market={m}
+          showChange
+          onClick={() => onSelectMarket(m)}
+          isWatched={isWatched(m.id)}
+          onToggleWatch={() => onToggleWatch(m.id)}
+        />
       ))}
 
       {/* Markets not found (deleted/expired) */}

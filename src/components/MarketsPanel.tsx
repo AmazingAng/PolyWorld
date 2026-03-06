@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { ProcessedMarket, Category } from "@/types";
 import MarketCard from "./MarketCard";
 import { useColResize } from "@/hooks/useColResize";
+import { useRowResize } from "@/hooks/useRowResize";
 
 interface MarketsPanelProps {
   mapped: ProcessedMarket[];
@@ -18,6 +19,9 @@ interface MarketsPanelProps {
   colSpan?: number;
   onColSpanChange?: (span: number) => void;
   onColSpanReset?: () => void;
+  rowSpan?: number;
+  onRowSpanChange?: (span: number) => void;
+  onRowSpanReset?: () => void;
 }
 
 type SortTab = "default" | "impact";
@@ -36,6 +40,9 @@ export default function MarketsPanel({
   colSpan,
   onColSpanChange,
   onColSpanReset,
+  rowSpan,
+  onRowSpanChange,
+  onRowSpanReset,
 }: MarketsPanelProps) {
   const [search, setSearch] = useState("");
   const [sortTab, setSortTab] = useState<SortTab>("default");
@@ -121,6 +128,7 @@ export default function MarketsPanel({
   const impactSorted = useMemo(
     () =>
       [...(searchFiltered || filtered)]
+        .filter((m) => !m.closed)
         .sort((a, b) => (b.impactScore || 0) - (a.impactScore || 0))
         .slice(0, 20),
     [searchFiltered, filtered]
@@ -138,9 +146,12 @@ export default function MarketsPanel({
 
   const totalCount = searchFiltered ? searchFiltered.length : filtered.length;
   const { onMouseDown: handleResizeStart } = useColResize(colSpan ?? 2, onColSpanChange);
+  const { onMouseDown: handleRowResizeStart } = useRowResize(rowSpan ?? 2, onRowSpanChange);
 
-  const spanStyle: React.CSSProperties | undefined =
-    colSpan === 2 ? { gridColumn: "1 / -1" } : colSpan === 1 ? { gridColumn: "span 1" } : undefined;
+  const spanStyle: React.CSSProperties = {};
+  if (colSpan === 2) spanStyle.gridColumn = "1 / -1";
+  else if (colSpan === 1) spanStyle.gridColumn = "span 1";
+  if (rowSpan && rowSpan !== 2) spanStyle.gridRow = `span ${rowSpan}`;
 
   return (
     <div data-panel="markets" className={`panel${colSpan === 2 ? " panel-wide" : ""}${expanded ? " panel-expanded" : ""}`} style={spanStyle}>
@@ -316,6 +327,18 @@ export default function MarketsPanel({
           title="Drag to resize · Double-click to reset"
         >
           <div className="panel-col-resize-bar" />
+        </div>
+      )}
+
+      {/* Bottom-edge resize handle */}
+      {onRowSpanChange && !expanded && (
+        <div
+          className="panel-row-resize-handle"
+          onMouseDown={handleRowResizeStart}
+          onDoubleClick={onRowSpanReset}
+          title="Drag to resize height · Double-click to reset"
+        >
+          <div className="panel-row-resize-bar" />
         </div>
       )}
     </div>

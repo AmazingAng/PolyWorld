@@ -205,6 +205,14 @@ export default function MarketCard({
           <span className="text-[var(--text)]">
             {market.prob !== null ? formatPct(market.prob) : "\u2014"}
           </span>
+          {market.smartMoney && market.smartMoney.netFlow !== "neutral" && (
+            <span
+              className={`smart-money-indicator ${market.smartMoney.netFlow === "bullish" ? "flow-bullish" : "flow-bearish"}`}
+              title={`${market.smartMoney.smartBuys} smart buys, ${market.smartMoney.whaleBuys + market.smartMoney.whaleSells} whale trades`}
+            >
+              $
+            </span>
+          )}
           {topOption && topOption.label && (
             <span className="text-[10px] text-[var(--text-muted)] truncate max-w-[120px]" title={topOption.label}>
               {topOption.label}

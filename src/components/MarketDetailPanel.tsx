@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { ProcessedMarket, PolymarketMarket } from "@/types";
+import { ProcessedMarket, PolymarketMarket, SmartMoneyFlow } from "@/types";
 import { CATEGORY_COLORS } from "@/lib/categories";
 import { formatVolume, formatPct, formatChange } from "@/lib/format";
 import Sparkline from "./Sparkline";
@@ -752,6 +752,100 @@ export default function MarketDetailPanel({
               polymarket {"\u2192"}
             </a>
           </div>
+        </div>
+      )}
+
+      {/* ============ SMART MONEY SECTION ============ */}
+      {market.smartMoney && (market.smartMoney.whaleBuys > 0 || market.smartMoney.whaleSells > 0) && (
+        <SmartMoneySection smartMoney={market.smartMoney} />
+      )}
+    </div>
+  );
+}
+
+function SmartMoneySection({ smartMoney }: { smartMoney: SmartMoneyFlow }) {
+  const [expanded, setExpanded] = useState(true);
+  const flowColor = smartMoney.netFlow === "bullish" ? "#22c55e" : smartMoney.netFlow === "bearish" ? "#ff4444" : "var(--text-faint)";
+
+  return (
+    <div className="mt-5 border border-[var(--border-subtle)] rounded-sm px-3 py-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)]">smart money</span>
+          <span className="smart-money-badge">$</span>
+          <span className="text-[11px] font-bold uppercase" style={{ color: flowColor }}>
+            {smartMoney.netFlow}
+          </span>
+        </div>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-[10px] text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors"
+        >
+          {expanded ? "collapse" : "expand"}
+        </button>
+      </div>
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          {/* Flow stats */}
+          <div className="flex gap-4 text-[11px] tabular-nums">
+            <span className="text-[#22c55e]">{smartMoney.smartBuys} smart buys</span>
+            <span className="text-[#ff4444]">{smartMoney.smartSells} smart sells</span>
+            <span className="text-[var(--text-dim)]">{smartMoney.whaleBuys} whale buys</span>
+            <span className="text-[var(--text-dim)]">{smartMoney.whaleSells} whale sells</span>
+          </div>
+
+          {/* Top wallets */}
+          {smartMoney.topWallets.length > 0 && (
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-1.5">top wallets</div>
+              <div className="space-y-1">
+                {smartMoney.topWallets.map((w, i) => (
+                  <div key={i} className="flex items-center gap-2 text-[11px]">
+                    <span className="text-[var(--text-muted)] truncate w-24">
+                      {w.username || `${w.address.slice(0, 6)}...${w.address.slice(-4)}`}
+                    </span>
+                    <span className={w.side === "BUY" ? "text-[#22c55e]" : "text-[#ff4444]"}>
+                      {w.side}
+                    </span>
+                    <span className="text-[var(--text-dim)] tabular-nums">
+                      ${formatVolume(w.size)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent trades */}
+          {smartMoney.recentTrades.length > 0 && (
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-1.5">recent trades</div>
+              <div className="space-y-1">
+                {smartMoney.recentTrades.map((t, i) => (
+                  <div key={i} className="flex items-center gap-2 text-[11px]">
+                    <span className="text-[var(--text-faint)] tabular-nums w-8 shrink-0">
+                      {(() => {
+                        const diff = Date.now() - new Date(t.timestamp).getTime();
+                        const mins = Math.floor(diff / 60000);
+                        if (mins < 60) return `${mins}m`;
+                        return `${Math.floor(mins / 60)}h`;
+                      })()}
+                    </span>
+                    <span className="text-[var(--text-muted)] truncate w-16 shrink-0">
+                      {t.username || `${t.wallet.slice(0, 6)}...`}
+                    </span>
+                    <span className={`font-bold shrink-0 ${t.side === "BUY" ? "text-[#22c55e]" : "text-[#ff4444]"}`}>
+                      {t.side}
+                    </span>
+                    <span className="text-[var(--text-dim)] tabular-nums">
+                      ${formatVolume(t.usdcSize || t.size)}
+                    </span>
+                    {t.isSmartWallet && <span className="smart-money-badge">$</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
