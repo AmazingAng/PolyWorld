@@ -61,7 +61,7 @@ export default function SidePanel({
                 m.coords
                   ? onFlyTo(m.coords, m.id)
                   : window.open(
-                      `https://polymarket.com/event/${encodeURIComponent(m.slug)}`,
+                      `https://polymarket.com/event/${encodeURIComponent(m.slug)}?via=pw`,
                       "_blank",
                       "noopener,noreferrer"
                     )
@@ -84,7 +84,7 @@ export default function SidePanel({
                 m.coords
                   ? onFlyTo(m.coords, m.id)
                   : window.open(
-                      `https://polymarket.com/event/${encodeURIComponent(m.slug)}`,
+                      `https://polymarket.com/event/${encodeURIComponent(m.slug)}?via=pw`,
                       "_blank",
                       "noopener,noreferrer"
                     )
@@ -106,7 +106,7 @@ export default function SidePanel({
                 m.coords
                   ? onFlyTo(m.coords, m.id)
                   : window.open(
-                      `https://polymarket.com/event/${encodeURIComponent(m.slug)}`,
+                      `https://polymarket.com/event/${encodeURIComponent(m.slug)}?via=pw`,
                       "_blank",
                       "noopener,noreferrer"
                     )
@@ -126,7 +126,7 @@ export default function SidePanel({
               market={m}
               onClick={() =>
                 window.open(
-                  `https://polymarket.com/event/${encodeURIComponent(m.slug)}`,
+                  `https://polymarket.com/event/${encodeURIComponent(m.slug)}?via=pw`,
                   "_blank",
                   "noopener,noreferrer"
                 )

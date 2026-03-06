@@ -523,7 +523,7 @@ export default function MarketDetailPanel({
             {m.volume && <span>vol {formatVolume(parseFloat(String(m.volume)))}</span>}
             {m.liquidity && <span>{"\u00B7"} liq {formatVolume(parseFloat(String(m.liquidity)))}</span>}
             {mChg.text !== "\u2014" && <span>{"\u00B7"} {mChg.text}</span>}
-            <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}`} target="_blank" rel="noopener noreferrer" className="text-[var(--text-ghost)] hover:text-[var(--text-dim)] ml-auto transition-colors">
+            <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[var(--text-ghost)] hover:text-[var(--text-dim)] ml-auto transition-colors">
               trade {"\u2192"}
             </a>
           </div>
@@ -744,11 +744,11 @@ export default function MarketDetailPanel({
 
           <div className="flex items-center gap-4 mt-4">
             {market.commentCount > 0 && (
-              <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--text-faint)] hover:text-[var(--text-dim)] transition-colors">
+              <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--text-faint)] hover:text-[var(--text-dim)] transition-colors">
                 {market.commentCount} comments {"\u2192"}
               </a>
             )}
-            <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--text-faint)] hover:text-[var(--text-dim)] transition-colors">
+            <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--text-faint)] hover:text-[var(--text-dim)] transition-colors">
               polymarket {"\u2192"}
             </a>
           </div>

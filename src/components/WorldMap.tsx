@@ -690,7 +690,7 @@ export default function WorldMap({
         <div style="font-size:11px;color:#8a8a8a;margin-bottom:2px;text-transform:lowercase;">${escapeHtml(market.location || market.category)}</div>
         ${marketsHtml}
         <div style="font-size:11px;color:#777;margin-top:3px;">vol ${formatVolume(market.volume)} · 24h ${formatVolume(market.volume24h)}</div>
-        <a href="https://polymarket.com/event/${encodeURIComponent(market.slug)}" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;font-size:11px;color:#a0a0a0;text-decoration:none;">polymarket →</a>
+        <a href="https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;font-size:11px;color:#a0a0a0;text-decoration:none;">polymarket →</a>
       </div>`;
   }, [isWatched]);
 
