@@ -18,6 +18,9 @@ export interface PanelVisibility {
   whaleTrades: boolean;
   orderbook: boolean;
   sentiment: boolean;
+  tweets: boolean;
+  trader: boolean;
+  chart: boolean;
 }
 
 interface SettingsModalProps {
@@ -38,7 +41,7 @@ interface SettingsModalProps {
 }
 
 const CATEGORIES: Category[] = [
-  "Politics", "Geopolitics", "Crypto", "Sports",
+  "Politics", "Crypto", "Sports",
   "Finance", "Tech", "Culture", "Other",
 ];
 
@@ -64,6 +67,9 @@ const PANEL_LABELS: Record<string, string> = {
   whaleTrades: "Whale Trades",
   orderbook: "Order Book",
   sentiment: "Sentiment",
+  tweets: "Tweets",
+  trader: "Trader",
+  chart: "Price Chart",
 };
 
 export default function SettingsModal({

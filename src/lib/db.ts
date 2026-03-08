@@ -58,6 +58,7 @@ function initSchema(db: Database.Database) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_snapshots_event_time ON price_snapshots(event_id, recorded_at);
+    CREATE INDEX IF NOT EXISTS idx_snapshots_recorded_at ON price_snapshots(recorded_at);
 
     CREATE TABLE IF NOT EXISTS market_snapshots (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,6 +71,7 @@ function initSchema(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_market_snapshots_event_time ON market_snapshots(event_id, recorded_at);
     CREATE INDEX IF NOT EXISTS idx_market_snapshots_market_time ON market_snapshots(market_id, recorded_at);
+    CREATE INDEX IF NOT EXISTS idx_market_snapshots_recorded_at ON market_snapshots(recorded_at);
 
     CREATE TABLE IF NOT EXISTS sync_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,6 +124,19 @@ function initSchema(db: Database.Database) {
       updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
 
+    -- Leaderboard cache: top 50 per time period (TODAY, WEEKLY, MONTHLY, ALL)
+    CREATE TABLE IF NOT EXISTS leaderboard_cache (
+      time_period TEXT NOT NULL,
+      rank INTEGER NOT NULL,
+      address TEXT NOT NULL,
+      username TEXT,
+      pnl REAL,
+      volume REAL,
+      profile_image TEXT,
+      updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      PRIMARY KEY (time_period, rank)
+    );
+
     -- Smart Money: large trades on tracked markets
     CREATE TABLE IF NOT EXISTS whale_trades (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -142,6 +157,28 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_whale_trades_event ON whale_trades(event_id, timestamp);
     CREATE INDEX IF NOT EXISTS idx_whale_trades_wallet ON whale_trades(wallet);
     CREATE INDEX IF NOT EXISTS idx_whale_trades_time ON whale_trades(timestamp DESC);
+
+    CREATE TABLE IF NOT EXISTS tweet_items (
+      id TEXT PRIMARY KEY,
+      handle TEXT NOT NULL,
+      author_name TEXT,
+      text TEXT NOT NULL,
+      url TEXT NOT NULL UNIQUE,
+      published_at TEXT,
+      fetched_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_tweets_published ON tweet_items(published_at DESC);
+
+    CREATE TABLE IF NOT EXISTS tweet_market_matches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tweet_id TEXT NOT NULL,
+      market_id TEXT NOT NULL,
+      relevance_score REAL DEFAULT 0,
+      match_method TEXT DEFAULT 'keyword',
+      created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      UNIQUE(tweet_id, market_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_tweet_matches_market ON tweet_market_matches(market_id);
   `);
 }
 
@@ -160,6 +197,9 @@ function migrate(db: Database.Database) {
     ["is_closed", "INTEGER DEFAULT 0"],
     ["comment_count", "INTEGER DEFAULT 0"],
     ["tags_json", "TEXT DEFAULT '[]'"],
+    ["ai_geo_done", "INTEGER DEFAULT 0"],
+    ["geo_city", "TEXT"],
+    ["geo_country", "TEXT"],
   ];
 
   for (const [col, type] of migrations) {
@@ -181,4 +221,7 @@ function migrate(db: Database.Database) {
     `);
     db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_whale_trades_dedup ON whale_trades(wallet, condition_id, timestamp)`);
   }
+
+  // Index for AI geocoding queries
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_events_ai_geo_done ON events(ai_geo_done)`);
 }

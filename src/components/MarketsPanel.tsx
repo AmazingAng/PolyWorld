@@ -22,6 +22,7 @@ interface MarketsPanelProps {
   rowSpan?: number;
   onRowSpanChange?: (span: number) => void;
   onRowSpanReset?: () => void;
+  maxColSpan?: number;
 }
 
 type SortTab = "default" | "impact";
@@ -43,6 +44,7 @@ export default function MarketsPanel({
   rowSpan,
   onRowSpanChange,
   onRowSpanReset,
+  maxColSpan,
 }: MarketsPanelProps) {
   const [search, setSearch] = useState("");
   const [sortTab, setSortTab] = useState<SortTab>("default");
@@ -145,12 +147,11 @@ export default function MarketsPanel({
       : {};
 
   const totalCount = searchFiltered ? searchFiltered.length : filtered.length;
-  const { onMouseDown: handleResizeStart } = useColResize(colSpan ?? 2, onColSpanChange);
+  const { onMouseDown: handleResizeStart } = useColResize(colSpan ?? 2, onColSpanChange, maxColSpan);
   const { onMouseDown: handleRowResizeStart } = useRowResize(rowSpan ?? 2, onRowSpanChange);
 
   const spanStyle: React.CSSProperties = {};
-  if (colSpan === 2) spanStyle.gridColumn = "1 / -1";
-  else if (colSpan === 1) spanStyle.gridColumn = "span 1";
+  if (colSpan && colSpan > 1) spanStyle.gridColumn = `span ${colSpan}`;
   if (rowSpan && rowSpan !== 2) spanStyle.gridRow = `span ${rowSpan}`;
 
   return (

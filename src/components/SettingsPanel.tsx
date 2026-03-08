@@ -6,7 +6,6 @@ import type { TimeRange } from "./TimeRangeFilter";
 
 const CATEGORIES: Category[] = [
   "Politics",
-  "Geopolitics",
   "Crypto",
   "Sports",
   "Finance",

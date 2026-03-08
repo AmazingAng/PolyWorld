@@ -1,27 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import type { ProcessedMarket, NewsItem } from "@/types";
-import { NEWS_SOURCES } from "@/lib/newsSources";
+import type { ProcessedMarket, TweetItem } from "@/types";
+import { TWEET_SOURCES, HANDLE_ABBREVS } from "@/lib/tweetSources";
 
-interface NewsPanelProps {
+interface TweetsPanelProps {
   selectedMarket: ProcessedMarket | null;
 }
-
-const SOURCE_ABBREVS: Record<string, string> = {
-  Reuters: "R",
-  "BBC World": "BBC",
-  "Al Jazeera": "AJ",
-  Bloomberg: "BL",
-  "AP News": "AP",
-  NPR: "NPR",
-  "France 24": "F24",
-  "DW News": "DW",
-  CNBC: "CNBC",
-  "The Guardian": "GU",
-  "NHK World": "NHK",
-  CNA: "CNA",
-};
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -44,143 +29,109 @@ function formatDate(dateStr: string): string {
   });
 }
 
-type ExtendedNewsItem = NewsItem & { relevance_score?: number };
-
-function NewsPopover({
+function TweetPopover({
   item,
   anchorRect,
   selectedMarket,
   onMouseEnter,
   onMouseLeave,
 }: {
-  item: ExtendedNewsItem;
+  item: TweetItem;
   anchorRect: DOMRect;
   selectedMarket: ProcessedMarket | null;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) {
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number; direction: "left" | "right" }>({ top: 0, left: 0, direction: "left" });
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   useEffect(() => {
     const vw = window.innerWidth;
-    // Try to place to the left of the anchor; if not enough room, place to the right
     const popoverWidth = 340;
     const gap = 6;
     let left: number;
-    let direction: "left" | "right";
     if (anchorRect.left - popoverWidth - gap > 0) {
       left = anchorRect.left - popoverWidth - gap;
-      direction = "left";
     } else {
       left = anchorRect.right + gap;
-      direction = "right";
     }
-    // Clamp to viewport
     if (left + popoverWidth > vw) left = vw - popoverWidth - 8;
     if (left < 8) left = 8;
 
-    // Vertically align to the anchor top, clamp to viewport
     const vh = window.innerHeight;
     let top = anchorRect.top;
-    // We'll estimate max height as 300px for clamping
     if (top + 300 > vh) top = vh - 308;
     if (top < 8) top = 8;
 
-    setPos({ top, left, direction });
+    setPos({ top, left });
   }, [anchorRect]);
 
   return (
     <div
       ref={popoverRef}
-      className="news-popover"
+      className="tweet-popover"
       style={{ top: pos.top, left: pos.left }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
-      {/* Source + time header */}
+      {/* Handle + time header */}
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-[10px] font-bold uppercase text-[var(--text-dim)]">
-          {item.source}
+        <span className="text-[10px] font-bold text-[var(--text-dim)]">
+          @{item.handle}
         </span>
         <span className="text-[10px] text-[var(--text-ghost)]">
-          {formatDate(item.publishedAt)}
+          {item.authorName}
         </span>
       </div>
 
-      {/* Title */}
-      <div className="text-[12px] font-semibold leading-snug text-[var(--text)] mb-2">
-        {item.title}
+      {/* Timestamp */}
+      <div className="text-[10px] text-[var(--text-ghost)] mb-2">
+        {formatDate(item.publishedAt)}
       </div>
 
-      {/* Image */}
-      {item.imageUrl && (
-        <div className="mb-2 rounded overflow-hidden border border-[var(--border-subtle)]">
-          <img
-            src={item.imageUrl}
-            alt=""
-            className="w-full h-auto max-h-[140px] object-cover"
-            loading="lazy"
-          />
-        </div>
-      )}
-
-      {/* Summary / content */}
-      {item.summary && (
-        <div className="text-[11px] leading-relaxed text-[var(--text-dim)] whitespace-pre-line">
-          {item.summary}
-        </div>
-      )}
+      {/* Full tweet text */}
+      <div className="text-[12px] leading-relaxed text-[var(--text)] whitespace-pre-line">
+        {item.text}
+      </div>
 
       {/* Relevance */}
-      {selectedMarket && item.relevance_score != null && (
+      {selectedMarket && item.relevanceScore != null && (
         <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-[var(--border-subtle)]">
           <span className="text-[9px] text-[var(--text-faint)] uppercase">relevance</span>
           <div className="flex-1 h-[3px] bg-[var(--border)] rounded-full overflow-hidden">
             <div
               className="h-full rounded-full"
               style={{
-                width: `${Math.round(item.relevance_score * 100)}%`,
+                width: `${Math.round(item.relevanceScore * 100)}%`,
                 background: "var(--green)",
               }}
             />
           </div>
           <span className="text-[9px] text-[var(--green)]">
-            {Math.round(item.relevance_score * 100)}%
+            {Math.round(item.relevanceScore * 100)}%
           </span>
         </div>
       )}
 
-      {/* Categories */}
-      {item.categories.length > 0 && (
-        <div className="flex gap-1 flex-wrap mt-2">
-          {item.categories.map((cat, i) => (
-            <span key={`${cat}-${i}`} className="text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-faint)] rounded-sm">
-              {cat}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Read more link */}
+      {/* Open link hint */}
       <div className="mt-2 pt-1.5 border-t border-[var(--border-subtle)]">
         <span className="text-[10px] text-[var(--text-faint)]">
-          hover to read &middot; click card to open source &rarr;
+          hover to read &middot; click card to open tweet &rarr;
         </span>
       </div>
     </div>
   );
 }
 
-export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
-  const [items, setItems] = useState<ExtendedNewsItem[]>([]);
+export default function TweetsPanel({ selectedMarket }: TweetsPanelProps) {
+  const [items, setItems] = useState<TweetItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
-  const [hoveredItem, setHoveredItem] = useState<ExtendedNewsItem | null>(null);
+  const [handleFilter, setHandleFilter] = useState<string | null>(null);
+  const [hoveredItem, setHoveredItem] = useState<TweetItem | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showPopover = useCallback((item: ExtendedNewsItem, rect: DOMRect) => {
+  const showPopover = useCallback((item: TweetItem, rect: DOMRect) => {
     if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null; }
     setHoveredItem(item);
     setAnchorRect(rect);
@@ -198,10 +149,10 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
     if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null; }
   }, []);
 
-  const fetchNews = useCallback(async () => {
+  const fetchTweets = useCallback(async () => {
     try {
       const params = selectedMarket ? `?marketId=${selectedMarket.id}` : "";
-      const res = await fetch(`/api/news${params}`);
+      const res = await fetch(`/api/tweets${params}`);
       if (res.ok) {
         const data = await res.json();
         setItems(data);
@@ -215,48 +166,48 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
 
   useEffect(() => {
     setLoading(true);
-    fetchNews();
-    const timer = setInterval(fetchNews, 120_000);
+    fetchTweets();
+    const timer = setInterval(fetchTweets, 90_000);
     return () => clearInterval(timer);
-  }, [fetchNews]);
+  }, [fetchTweets]);
 
   const filteredItems = useMemo(() => {
-    if (!sourceFilter) return items;
-    return items.filter((item) => item.source === sourceFilter);
-  }, [items, sourceFilter]);
+    if (!handleFilter) return items;
+    return items.filter((item) => item.handle === handleFilter);
+  }, [items, handleFilter]);
 
-  const activeSources = useMemo(() => {
-    const set = new Set(items.map((i) => i.source));
-    return NEWS_SOURCES.filter((s) => set.has(s.name));
+  const activeHandles = useMemo(() => {
+    const set = new Set(items.map((i) => i.handle));
+    return TWEET_SOURCES.filter((s) => set.has(s.handle));
   }, [items]);
 
   return (
     <div>
-      {/* Source filter pills */}
+      {/* Handle filter pills */}
       <div className="flex gap-1 flex-wrap mb-2">
         <button
-          onClick={() => setSourceFilter(null)}
+          onClick={() => setHandleFilter(null)}
           className="text-[10px] font-mono px-1.5 py-0.5 border transition-colors"
           style={{
-            borderColor: !sourceFilter ? "rgba(68,255,136,0.4)" : "var(--border)",
-            color: !sourceFilter ? "var(--green)" : "var(--text-muted)",
-            background: !sourceFilter ? "rgba(68,255,136,0.08)" : "transparent",
+            borderColor: !handleFilter ? "rgba(68,255,136,0.4)" : "var(--border)",
+            color: !handleFilter ? "var(--green)" : "var(--text-muted)",
+            background: !handleFilter ? "rgba(68,255,136,0.08)" : "transparent",
           }}
         >
           ALL
         </button>
-        {activeSources.map((s) => (
+        {activeHandles.map((s) => (
           <button
-            key={s.name}
-            onClick={() => setSourceFilter(sourceFilter === s.name ? null : s.name)}
+            key={s.handle}
+            onClick={() => setHandleFilter(handleFilter === s.handle ? null : s.handle)}
             className="text-[10px] font-mono px-1.5 py-0.5 border transition-colors"
             style={{
-              borderColor: sourceFilter === s.name ? "rgba(68,255,136,0.4)" : "var(--border)",
-              color: sourceFilter === s.name ? "var(--green)" : "var(--text-muted)",
-              background: sourceFilter === s.name ? "rgba(68,255,136,0.08)" : "transparent",
+              borderColor: handleFilter === s.handle ? "rgba(68,255,136,0.4)" : "var(--border)",
+              color: handleFilter === s.handle ? "var(--green)" : "var(--text-muted)",
+              background: handleFilter === s.handle ? "rgba(68,255,136,0.08)" : "transparent",
             }}
           >
-            {SOURCE_ABBREVS[s.name] || s.name.slice(0, 3).toUpperCase()}
+            {HANDLE_ABBREVS[s.handle] || s.handle.slice(0, 3).toUpperCase()}
           </button>
         ))}
       </div>
@@ -278,12 +229,12 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
       {!loading && filteredItems.length === 0 && (
         <div className="text-[12px] text-[var(--text-muted)] font-mono py-4 text-center">
           {selectedMarket
-            ? "no related news found for this market"
-            : "no news items available yet"}
+            ? "no related tweets found for this market"
+            : "no tweets available yet"}
         </div>
       )}
 
-      {/* News cards */}
+      {/* Tweet cards */}
       <div className="space-y-1">
         {filteredItems.map((item) => (
           <a
@@ -299,60 +250,44 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
             }}
             onMouseLeave={scheduleHide}
           >
-            {/* Source + time */}
+            {/* Handle + time */}
             <div className="flex items-center gap-1.5 mb-0.5">
-              <span className="text-[10px] font-mono font-bold uppercase" style={{ color: "var(--text-dim)" }}>
-                {item.source}
+              <span className="text-[10px] font-mono font-bold" style={{ color: "var(--text-dim)" }}>
+                @{item.handle}
               </span>
               <span className="text-[10px] font-mono" style={{ color: "var(--text-ghost)" }}>
                 {timeAgo(item.publishedAt)}
               </span>
             </div>
 
-            {/* Title */}
+            {/* Tweet text */}
             <div
               className="text-[12px] font-mono leading-tight mb-0.5"
               style={{
                 color: "var(--text)",
                 display: "-webkit-box",
-                WebkitLineClamp: 2,
+                WebkitLineClamp: 3,
                 WebkitBoxOrient: "vertical",
                 overflow: "hidden",
               }}
             >
-              {item.title}
+              {item.text}
             </div>
 
-            {/* Summary */}
-            {item.summary && (
-              <div
-                className="text-[10px] font-mono leading-snug"
-                style={{
-                  color: "var(--text-muted)",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                }}
-              >
-                {item.summary}
-              </div>
-            )}
-
             {/* Relevance bar (only in market mode) */}
-            {selectedMarket && item.relevance_score != null && (
+            {selectedMarket && item.relevanceScore != null && (
               <div className="flex items-center gap-1.5 mt-1">
                 <div className="flex-1 h-[3px] bg-[var(--border)] rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full"
                     style={{
-                      width: `${Math.round(item.relevance_score * 100)}%`,
+                      width: `${Math.round(item.relevanceScore * 100)}%`,
                       background: "var(--green)",
                     }}
                   />
                 </div>
                 <span className="text-[9px] font-mono" style={{ color: "var(--green)" }}>
-                  {Math.round(item.relevance_score * 100)}%
+                  {Math.round(item.relevanceScore * 100)}%
                 </span>
               </div>
             )}
@@ -360,9 +295,9 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
         ))}
       </div>
 
-      {/* Popover — rendered via portal-like fixed positioning */}
+      {/* Popover */}
       {hoveredItem && anchorRect && (
-        <NewsPopover
+        <TweetPopover
           item={hoveredItem}
           anchorRect={anchorRect}
           selectedMarket={selectedMarket}

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { ProcessedMarket, PolymarketMarket, SmartMoneyFlow } from "@/types";
 import { CATEGORY_COLORS } from "@/lib/categories";
 import { formatVolume, formatPct, formatChange } from "@/lib/format";
-import Sparkline from "./Sparkline";
+import ChartPanel from "./ChartPanel";
 
 interface MarketDetailPanelProps {
   market: ProcessedMarket;
@@ -166,21 +166,49 @@ export default function MarketDetailPanel({
   const color = CATEGORY_COLORS[market.category] || CATEGORY_COLORS.Other;
   const chg = formatChange(market.change);
   const [rulesExpanded, setRulesExpanded] = useState(false);
-  const [chartHours, setChartHours] = useState(24);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiExpanded, setAiExpanded] = useState(true);
-
   // Reset AI summary when market changes
   useEffect(() => {
     setAiSummary(null);
-    setAiExpanded(true);
   }, [market.id]);
 
   const fetchAiSummary = useCallback(async () => {
     if (aiLoading) return;
     setAiLoading(true);
     try {
+      // Fetch enrichment data in parallel (non-critical, wrapped in try/catch)
+      let newsData: Array<{ title: string; summary?: string | null }> | undefined;
+      let smartMoneyData: { netFlow: "bullish" | "bearish" | "neutral"; smartBuys: number; smartSells: number; whaleBuys: number; whaleSells: number } | undefined;
+      let priceHistory: string | undefined;
+
+      try {
+        const [newsRes] = await Promise.all([
+          fetch(`/api/news?marketId=${encodeURIComponent(market.id)}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        ]);
+        if (Array.isArray(newsRes) && newsRes.length > 0) {
+          newsData = newsRes.slice(0, 5).map((n: { title: string; summary?: string | null }) => ({ title: n.title, summary: n.summary }));
+        }
+      } catch { /* non-critical */ }
+
+      // Extract smart money data if available
+      if (market.smartMoney) {
+        const sm = market.smartMoney;
+        smartMoneyData = {
+          netFlow: sm.netFlow,
+          smartBuys: sm.smartBuys,
+          smartSells: sm.smartSells,
+          whaleBuys: sm.whaleBuys,
+          whaleSells: sm.whaleSells,
+        };
+      }
+
+      // Compute price history from change
+      if (market.change !== null) {
+        const dir = market.change > 0 ? "up" : market.change < 0 ? "down" : "flat";
+        priceHistory = `${dir} ${Math.abs(market.change * 100).toFixed(1)}% in 24h`;
+      }
+
       const res = await fetch("/api/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -195,6 +223,9 @@ export default function MarketDetailPanel({
             volume24h: market.volume24h,
             description: market.description,
             relatedTitles: relatedMarkets.slice(0, 3).map((m) => m.title),
+            news: newsData,
+            smartMoney: smartMoneyData,
+            priceHistory,
           },
         }),
       });
@@ -204,15 +235,13 @@ export default function MarketDetailPanel({
       } else if (data.error) {
         setAiSummary(`Error: ${data.error}`);
       }
-    } catch (err) {
+    } catch {
       setAiSummary("Failed to generate summary");
     }
     setAiLoading(false);
   }, [market, relatedMarkets, aiLoading]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(600);
-  const [chartWidth, setChartWidth] = useState(240);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -220,15 +249,6 @@ export default function MarketDetailPanel({
       for (const e of entries) setContainerWidth(Math.floor(e.contentRect.width));
     });
     obs.observe(containerRef.current);
-    return () => obs.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-    const obs = new ResizeObserver((entries) => {
-      for (const e of entries) setChartWidth(Math.floor(e.contentRect.width - 16));
-    });
-    obs.observe(chartRef.current);
     return () => obs.disconnect();
   }, []);
 
@@ -329,9 +349,7 @@ export default function MarketDetailPanel({
   const labelColWidth = useMemo(() => {
     if (parsedOutcomes.length === 0) return 56;
     const maxLen = Math.max(...parsedOutcomes.map(o => o.abbr.length));
-    // ~7px per character at 11px monospace, plus 4px padding
-    // Allow up to 200px for longer labels (sports markets etc.)
-    return Math.max(48, Math.min(200, maxLen * 7 + 4));
+    return Math.max(48, Math.min(72, maxLen * 6.5 + 4));
   }, [parsedOutcomes]);
 
   // If labels are very long, use a stacked layout (label above bar) instead of inline
@@ -343,172 +361,98 @@ export default function MarketDetailPanel({
 
   // --- Multi-binary outcomes: compact Polymarket-style list ---
   const multiBinaryContent = multiBinary && (
-    <div className={stackedLayout ? "space-y-2.5" : "space-y-2"}>
+    <div className="space-y-0">
       {parsedOutcomes.map(({ m, idx, yesPrice, entity, abbr, mChg, isWinner }) => {
         const pct = yesPrice * 100;
-        const barColor = isWinner ? "#22c55e" : color;
+        const barColor = "#22c55e";
         const vol24h = parseFloat(String(m.volume_24hr || m.volume || 0));
-        const liq = parseFloat(String(m.liquidity || 0));
         return (
           <div
             key={m.id || idx}
-            className={`px-2 rounded-sm hover:bg-[var(--surface)] transition-colors ${stackedLayout ? "py-2.5 border-b border-[var(--border-subtle)] last:border-0" : "py-2 border-b border-[var(--border-subtle)] last:border-0"}`}
+            className="flex items-center gap-1.5 px-1.5 py-[3px] hover:bg-[var(--surface)] transition-colors border-b border-[var(--border-subtle)] last:border-0"
             title={entity}
           >
-            {stackedLayout ? (
-              <>
-                {/* Stacked: label on its own line */}
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-[11px] font-medium ${isWinner ? "text-[#22c55e]" : "text-[var(--text-secondary)]"}`}>
-                    {abbr}
-                  </span>
-                  <span className={`text-[11px] tabular-nums ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-dim)]"}`}>
-                    {pct.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="h-3.5 bg-[var(--bg)] rounded-sm relative overflow-hidden border border-[var(--border-subtle)] mb-1">
-                  <div
-                    className="h-full rounded-sm transition-all duration-500 ease-out"
-                    style={{
-                      width: `${Math.max(pct, 1)}%`,
-                      background: `linear-gradient(90deg, ${barColor}aa, ${barColor}55)`,
-                    }}
-                  />
-                </div>
-                <div className="flex items-center gap-3 text-[10px] tabular-nums text-[var(--text-faint)]">
-                  <span className={mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : ""}>
-                    {mChg.text}
-                  </span>
-                  <span>vol {formatVolume(vol24h)}</span>
-                  <span>liq {formatVolume(liq)}</span>
-                </div>
-              </>
-            ) : (
-              <>
-                {/* Inline: label + bar + percentage on one row */}
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`text-[11px] shrink-0 truncate font-medium cursor-default ${isWinner ? "text-[#22c55e]" : "text-[var(--text-secondary)]"}`}
-                    style={{ width: labelColWidth }}
-                  >
-                    {abbr}
-                  </span>
-                  <div className="flex-1 h-3.5 bg-[var(--bg)] rounded-sm relative overflow-hidden border border-[var(--border-subtle)]">
-                    <div
-                      className="h-full rounded-sm transition-all duration-500 ease-out"
-                      style={{
-                        width: `${Math.max(pct, 1)}%`,
-                        background: `linear-gradient(90deg, ${barColor}aa, ${barColor}55)`,
-                      }}
-                    />
-                  </div>
-                  <span className={`text-[11px] w-11 text-right tabular-nums shrink-0 ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-dim)]"}`}>
-                    {pct.toFixed(1)}%
-                  </span>
-                </div>
-                {/* Row 2: stats */}
-                <div className="flex items-center gap-3 text-[10px] tabular-nums mt-0.5" style={{ paddingLeft: labelColWidth + 8 }}>
-                  <span className={mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}>
-                    {mChg.text}
-                  </span>
-                  <span className="text-[var(--text-faint)]">
-                    vol {formatVolume(vol24h)}
-                  </span>
-                  <span className="text-[var(--text-faint)]">
-                    liq {formatVolume(liq)}
-                  </span>
-                </div>
-              </>
-            )}
+            <span
+              className={`text-[10px] shrink-0 truncate ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-secondary)]"}`}
+              style={{ width: labelColWidth }}
+            >
+              {abbr}
+            </span>
+            <div className="flex-1 h-3 bg-[var(--bg)] rounded-sm relative overflow-hidden">
+              <div
+                className="h-full rounded-sm transition-all duration-500 ease-out"
+                style={{ width: `${Math.max(pct, 1)}%`, background: `linear-gradient(90deg, ${barColor}aa, ${barColor}44)` }}
+              />
+            </div>
+            <span className={`text-[10px] w-10 text-right tabular-nums shrink-0 ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-dim)]"}`}>
+              {pct.toFixed(1)}%
+            </span>
+            <span className={`text-[9px] w-10 text-right tabular-nums shrink-0 ${mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
+              {mChg.text}
+            </span>
+            <span className="text-[9px] w-8 text-right tabular-nums shrink-0 text-[var(--text-faint)]">
+              {formatVolume(vol24h)}
+            </span>
           </div>
         );
       })}
+      <div className="flex justify-end px-1.5 pt-1">
+        <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors">
+          trade {"\u2192"}
+        </a>
+      </div>
     </div>
   );
 
   // --- Regular outcomes: card-based display ---
   const regularContent = !multiBinary && hasOutcomes && (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {regularCards.map(({ m, i, prices, outcomeLabels, mChg, winnerIdx }) => {
         let cardTitle = m.groupItemTitle || m.question || "\u2014";
-        // Strip redundant event title prefix from question
         if (!m.groupItemTitle && m.question && market.title) {
           const q = m.question;
           const prefix = market.title;
           if (q === prefix) {
-            cardTitle = q; // same as event — show as-is
+            cardTitle = q;
           } else if (q.startsWith(prefix)) {
             const suffix = q.slice(prefix.length).replace(/^[\s\-:·]+/, "").trim();
             if (suffix) cardTitle = suffix;
           }
         }
+        const isSimpleYesNo = outcomeLabels.length === 2 && outcomeLabels[0] === "Yes" && outcomeLabels[1] === "No"
+          && (!m.question || m.question === market.title || cardTitle === market.title);
         const maxLabelLen = Math.max(...outcomeLabels.map(l => l.length), 0);
-        const regLabelW = Math.max(48, Math.min(200, maxLabelLen * 7 + 4));
-        const regStacked = maxLabelLen > 16;
+        const regLabelW = isSimpleYesNo ? 24 : Math.max(28, Math.min(72, maxLabelLen * 6.5 + 4));
         return (
-        <div key={m.id || i} className="border border-[var(--border-subtle)] rounded-sm px-3 py-2.5 text-[12px]">
-          <div className="text-[var(--text)] font-bold text-[13px] line-clamp-2 mb-2" title={m.question || ""}>
-            {cardTitle}
-          </div>
+        <div key={m.id || i} className={`border border-[var(--border-subtle)] rounded-sm px-2 ${isSimpleYesNo ? "py-1.5" : "py-2"} text-[11px]`}>
+          {!isSimpleYesNo && (
+            <div className="text-[var(--text)] font-bold text-[11px] line-clamp-1 mb-1" title={m.question || ""}>
+              {cardTitle}
+            </div>
+          )}
           {prices.length > 0 && outcomeLabels.length > 0 ? (
-            <div className={regStacked ? "space-y-2" : "space-y-1.5"}>
+            <div className="space-y-[2px]">
               {outcomeLabels.map((label, j) => {
                 const pct = prices[j] != null ? prices[j] * 100 : 0;
                 const isW = winnerIdx === j;
-                const barColor = isW ? "#22c55e" : j === 0 ? color : "#6b7280";
-                return regStacked ? (
-                  <div key={j}>
-                    <div className={`text-[11px] mb-0.5 ${isW ? "text-[#22c55e] font-bold" : "text-[var(--text-dim)]"}`} title={label}>
-                      {label}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-4 bg-[var(--bg)] rounded-sm relative overflow-hidden border border-[var(--border-subtle)]">
-                        <div
-                          className="h-full rounded-sm transition-all duration-500 ease-out"
-                          style={{
-                            width: `${Math.max(pct, 2)}%`,
-                            background: `linear-gradient(90deg, ${barColor}${isW ? "dd" : "99"}, ${barColor}${isW ? "aa" : "55"})`,
-                            boxShadow: pct > 10 ? `0 0 8px ${barColor}30` : "none",
-                          }}
-                        />
-                        {pct > 30 && (
-                          <span className="absolute inset-y-0 left-1.5 flex items-center text-[10px] font-bold" style={{ color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>
-                            {pct.toFixed(1)}%
-                          </span>
-                        )}
-                      </div>
-                      {pct <= 30 && (
-                        <span className={`text-[11px] w-10 text-right tabular-nums ${isW ? "text-[#22c55e]" : "text-[var(--text-secondary)]"}`}>
-                          {pct.toFixed(1)}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div key={j} className="flex items-center gap-2">
-                    <span className={`text-[11px] shrink-0 truncate ${isW ? "text-[#22c55e] font-bold" : "text-[var(--text-dim)]"}`} style={{ width: regLabelW }} title={label}>
+                const isYes = label === "Yes";
+                const isNo = label === "No";
+                const barColor = isW ? "#22c55e" : isYes ? "#22c55e" : isNo ? "#ff4444" : j === 0 ? color : "#6b7280";
+                const labelColor = isW ? "#22c55e" : isYes ? "#22c55e" : isNo ? "#ff4444" : "var(--text-dim)";
+                return (
+                  <div key={j} className="flex items-center gap-1.5">
+                    <span className="text-[10px] shrink-0 truncate font-medium" style={{ color: labelColor, width: regLabelW }} title={label}>
                       {label}
                     </span>
-                    <div className="flex-1 h-4 bg-[var(--bg)] rounded-sm relative overflow-hidden border border-[var(--border-subtle)]">
+                    <div className="flex-1 h-3 bg-[var(--bg)] rounded-sm relative overflow-hidden">
                       <div
                         className="h-full rounded-sm transition-all duration-500 ease-out"
-                        style={{
-                          width: `${Math.max(pct, 2)}%`,
-                          background: `linear-gradient(90deg, ${barColor}${isW ? "dd" : "99"}, ${barColor}${isW ? "aa" : "55"})`,
-                          boxShadow: pct > 10 ? `0 0 8px ${barColor}30` : "none",
-                        }}
+                        style={{ width: `${Math.max(pct, 2)}%`, background: `linear-gradient(90deg, ${barColor}99, ${barColor}44)` }}
                       />
-                      {pct > 30 && (
-                        <span className="absolute inset-y-0 left-1.5 flex items-center text-[10px] font-bold" style={{ color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>
-                          {pct.toFixed(1)}%
-                        </span>
-                      )}
                     </div>
-                    {pct <= 30 && (
-                      <span className={`text-[11px] w-10 text-right tabular-nums ${isW ? "text-[#22c55e]" : "text-[var(--text-secondary)]"}`}>
-                        {pct.toFixed(1)}%
-                      </span>
-                    )}
+                    <span className="text-[10px] w-10 text-right tabular-nums shrink-0" style={{ color: labelColor }}>
+                      {pct.toFixed(1)}%
+                    </span>
                   </div>
                 );
               })}
@@ -519,10 +463,10 @@ export default function MarketDetailPanel({
               <span className={mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}>{mChg.text}</span>
             </div>
           )}
-          <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-[var(--border-subtle)] text-[11px] text-[var(--text-faint)]">
-            {m.volume && <span>vol {formatVolume(parseFloat(String(m.volume)))}</span>}
-            {m.liquidity && <span>{"\u00B7"} liq {formatVolume(parseFloat(String(m.liquidity)))}</span>}
-            {mChg.text !== "\u2014" && <span>{"\u00B7"} {mChg.text}</span>}
+          <div className="flex items-center gap-2 mt-1 pt-1 border-t border-[var(--border-subtle)] text-[9px] text-[var(--text-faint)]">
+            {m.volume && <span>{formatVolume(parseFloat(String(m.volume)))}</span>}
+            {m.liquidity && <span>liq {formatVolume(parseFloat(String(m.liquidity)))}</span>}
+            {mChg.text !== "\u2014" && <span className={mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : ""}>{mChg.text}</span>}
             <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[var(--text-ghost)] hover:text-[var(--text-dim)] ml-auto transition-colors">
               trade {"\u2192"}
             </a>
@@ -548,107 +492,80 @@ export default function MarketDetailPanel({
       <div className={`flex gap-5 ${isWide && hasOutcomes ? "flex-row items-stretch" : "flex-col"}`}>
 
         {/* Left: info + chart */}
-        <div className={`min-w-0 flex flex-col gap-4 ${isWide && hasOutcomes ? "flex-1" : ""}`}>
-          {/* Header */}
-          <div className="flex items-start gap-3">
+        <div className={`min-w-0 flex flex-col gap-2 ${isWide && hasOutcomes ? "flex-1" : ""}`}>
+          {/* Row 1: title + AI button */}
+          <div className="flex items-start gap-2">
             {market.image ? (
-              <img src={market.image} alt="" className="w-10 h-10 rounded-md object-cover shrink-0 border border-[var(--border)]" />
+              <img src={market.image} alt="" className="w-7 h-7 rounded object-cover shrink-0 border border-[var(--border)] mt-0.5" />
             ) : (
-              <div className="w-10 h-10 rounded-md shrink-0 flex items-center justify-center text-[16px] font-bold border border-[var(--border)]" style={{ background: `${color}18`, color }}>
+              <div className="w-7 h-7 rounded shrink-0 flex items-center justify-center text-[12px] font-bold border border-[var(--border)] mt-0.5" style={{ background: `${color}18`, color }}>
                 {market.title.charAt(0).toUpperCase()}
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] mb-1 flex-wrap">
-                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
-                {market.category.toLowerCase()}
-                {market.location && <span className="text-[var(--text-faint)]">{"\u00B7"} {market.location.toLowerCase()}</span>}
-                {(market.closed || (market.endDate && new Date(market.endDate).getTime() < Date.now())) ? (
-                  <span className="text-[11px] px-1.5 py-0.5 bg-[#ff4444]/10 text-[#ff4444] border border-[#ff4444]/20 uppercase rounded-sm">closed</span>
-                ) : market.active ? (
-                  <span className="text-[11px] px-1.5 py-0.5 bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/20 uppercase rounded-sm">active</span>
-                ) : null}
-                {market.endDate && <span className="text-[var(--text-faint)]">{"\u00B7"} {formatEndDate(market.endDate)}</span>}
-              </div>
               <div className="flex items-center gap-1.5">
-                <h2 className="text-[13px] text-[var(--text)] leading-[1.5]">{market.title}</h2>
-                <button
-                  onClick={fetchAiSummary}
-                  disabled={aiLoading}
-                  className="shrink-0 text-[var(--text-faint)] hover:text-[#f59e0b] transition-colors disabled:opacity-50"
-                  title="AI Summary"
-                >
-                  {aiLoading ? (
-                    <span className="inline-block w-3 h-3 border border-[#f59e0b] border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <span className="text-[14px]">{"\u2728"}</span>
+                <h2 className="text-[11px] text-[var(--text)] leading-[1.4] line-clamp-2" title={market.title}>{market.title}</h2>
+                <div className="relative shrink-0 ai-summary-trigger">
+                  <button
+                    onClick={fetchAiSummary}
+                    disabled={aiLoading}
+                    className={`shrink-0 transition-colors disabled:opacity-50 ${aiSummary ? "text-[#f59e0b]" : "text-[var(--text-faint)] hover:text-[#f59e0b]"}`}
+                    title={aiSummary ? undefined : "Generate AI Summary"}
+                  >
+                    {aiLoading ? (
+                      <span className="inline-block w-3 h-3 border border-[#f59e0b] border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <span className="text-[13px]">{"\u2728"}</span>
+                    )}
+                  </button>
+                  {aiSummary && (
+                    <div className="ai-summary-tooltip">
+                      <p className="text-[11px] text-[var(--text-dim)] leading-[1.5]">{aiSummary}</p>
+                    </div>
                   )}
-                </button>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* AI Summary */}
-          {aiSummary && (
-            <div className="border border-[#f59e0b]/20 bg-[#f59e0b]/5 rounded-sm px-3 py-2">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] uppercase tracking-wider text-[#f59e0b]">{"\u2728"} ai summary</span>
-                <button
-                  onClick={() => setAiExpanded(!aiExpanded)}
-                  className="text-[10px] text-[var(--text-faint)] hover:text-[var(--text-muted)]"
-                >
-                  {aiExpanded ? "collapse" : "expand"}
-                </button>
-              </div>
-              {aiExpanded && (
-                <p className="text-[12px] text-[var(--text-dim)] leading-[1.6]">{aiSummary}</p>
-              )}
+          {/* Row 2: prob + change + meta tags — single dense line */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[20px] text-[var(--text)] font-bold tracking-tight leading-none tabular-nums">
+              {market.prob !== null ? formatPct(market.prob) : "\u2014"}
+            </span>
+            {topOptionLabel && (
+              <span className="text-[11px] text-[var(--text-muted)] max-w-[120px] truncate" title={topOptionLabel}>
+                {topOptionLabel}
+              </span>
+            )}
+            <span className={`text-[11px] tabular-nums ${chg.cls === "up" ? "text-[#22c55e]" : chg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
+              {chg.text}
+            </span>
+            <div className="flex items-center gap-1.5 ml-auto text-[10px] text-[var(--text-faint)]">
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+              <span>{market.category.toLowerCase()}</span>
+              {market.location && <><span>{"\u00B7"}</span><span>{market.location.toLowerCase()}</span></>}
+              {(market.closed || (market.endDate && new Date(market.endDate).getTime() < Date.now())) ? (
+                <span className="text-[#ff4444]">closed</span>
+              ) : market.active ? (
+                <span className="text-[#22c55e]">active</span>
+              ) : null}
+              {market.endDate && <><span>{"\u00B7"}</span><span>{formatEndDate(market.endDate)}</span></>}
             </div>
-          )}
+          </div>
 
-          {/* Prob + Stats */}
-          <div>
-            <div className="flex items-baseline gap-3 mb-1.5 flex-wrap">
-              <span className="text-[24px] text-[var(--text)] font-bold tracking-tight">
-                {market.prob !== null ? formatPct(market.prob) : "\u2014"}
-              </span>
-              {topOptionLabel && (
-                <span className="text-[13px] text-[var(--text-muted)]" title={topOptionLabel}>
-                  {topOptionLabel}
-                </span>
-              )}
-              <span className={`text-[13px] ${chg.cls === "up" ? "text-[#22c55e]" : chg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
-                {chg.text}<span className="text-[11px] text-[var(--text-faint)] ml-0.5">24h</span>
-              </span>
-            </div>
-            <div className="flex gap-4 text-[11px] text-[var(--text-muted)] tabular-nums">
-              <span>Vol {formatVolume(market.volume)}</span>
-              <span>24h {formatVolume(market.volume24h)}</span>
-              <span>Liq {formatVolume(market.liquidity)}</span>
-            </div>
+          {/* Row 3: vol / 24h / liq — compact stats */}
+          <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)] tabular-nums">
+            <span>Vol <span className="text-[var(--text-dim)]">{formatVolume(market.volume)}</span></span>
+            <span>24h <span className="text-[var(--text-dim)]">{formatVolume(market.volume24h)}</span></span>
+            <span>Liq <span className="text-[var(--text-dim)]">{formatVolume(market.liquidity)}</span></span>
           </div>
 
           {market.closed && hasOutcomes && <ResolutionBanner markets={activeMarketsList} />}
 
-          {/* Chart */}
-          <div ref={chartRef} className="flex-1 min-h-0">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)]">price</div>
-              <div className="flex gap-0.5 bg-[var(--bg)] border border-[var(--border-subtle)] rounded-sm p-0.5">
-                {[1, 24, 168, 720].map((h) => (
-                  <button
-                    key={h}
-                    onClick={() => setChartHours(h)}
-                    className={`px-1.5 py-0.5 text-[11px] rounded-sm transition-all ${chartHours === h ? "text-[var(--text)] bg-[var(--surface-hover)] font-semibold" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`}
-                  >
-                    {h === 1 ? "1h" : h === 24 ? "24h" : h === 168 ? "7d" : "30d"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="bg-[var(--bg)] border border-[var(--border)] rounded-sm p-2" style={{ boxShadow: "inset 0 1px 4px rgba(0,0,0,0.3)" }}>
-              <Sparkline eventId={market.id} hours={chartHours} width={chartWidth > 0 ? chartWidth : 240} height={200} multiSeries={activeMarketsList.length > 1} />
-            </div>
+          {/* Chart — reuse Price Chart panel */}
+          <div className="flex-1 min-h-0 rounded-sm overflow-hidden border border-[var(--border)]" style={{ minHeight: 230, maxHeight: 270 }}>
+            <ChartPanel selectedMarket={market} lineOnly />
           </div>
         </div>
 

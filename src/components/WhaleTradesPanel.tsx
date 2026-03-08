@@ -7,6 +7,7 @@ import { formatVolume } from "@/lib/format";
 interface WhaleTradesPanelProps {
   trades: WhaleTrade[];
   onSelectMarket?: (slug: string) => void;
+  onSelectWallet?: (address: string) => void;
 }
 
 function truncAddr(addr: string): string {
@@ -31,6 +32,7 @@ function tradeKey(t: WhaleTrade): string {
 export default function WhaleTradesPanel({
   trades,
   onSelectMarket,
+  onSelectWallet,
 }: WhaleTradesPanelProps) {
   const [walletFilter, setWalletFilter] = useState<string | null>(null);
 
@@ -91,7 +93,7 @@ export default function WhaleTradesPanel({
                     {timeAgo(t.timestamp)}
                   </span>
                   <button
-                    onClick={() => setWalletFilter(t.wallet)}
+                    onClick={() => { setWalletFilter(t.wallet); onSelectWallet?.(t.wallet); }}
                     className="text-[10px] text-[var(--text-muted)] truncate w-16 shrink-0 text-left hover:text-[var(--text)] transition-colors"
                     title={t.wallet}
                   >

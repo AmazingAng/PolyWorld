@@ -23,10 +23,13 @@ import { useAlerts, AlertConfig } from "@/hooks/useAlerts";
 import { useBrowserNotifications } from "@/hooks/useBrowserNotifications";
 import WatchlistPanel from "@/components/WatchlistPanel";
 import SmartMoneyPanel from "@/components/SmartMoneyPanel";
-import LeaderboardPanel from "@/components/LeaderboardPanel";
+import LeaderboardPanel, { type LeaderboardPeriod } from "@/components/LeaderboardPanel";
 import WhaleTradesPanel from "@/components/WhaleTradesPanel";
 import OrderBookPanel from "@/components/OrderBook";
+import ChartPanel from "@/components/ChartPanel";
 import SentimentPanel from "@/components/SentimentPanel";
+import TweetsPanel from "@/components/TweetsPanel";
+import TraderPanel from "@/components/TraderPanel";
 import { usePanelColSpans } from "@/hooks/usePanelColSpans";
 import { usePanelRowSpans } from "@/hooks/usePanelRowSpans";
 
@@ -45,7 +48,7 @@ const WorldMap = dynamic(() => import("@/components/WorldMap"), {
 const REFRESH_INTERVAL = 45000;
 
 const DEFAULT_COL_SPANS: Record<string, number> = {
-  markets: 2, country: 2, news: 2, live: 2, watchlist: 2, detail: 1, leaderboard: 1, smartMoney: 1, whaleTrades: 1, orderbook: 1, sentiment: 1,
+  markets: 2, country: 2, news: 2, tweets: 1, live: 2, watchlist: 2, detail: 2, leaderboard: 1, trader: 2, smartMoney: 1, whaleTrades: 1, orderbook: 1, sentiment: 1, chart: 2,
 };
 
 const TIME_THRESHOLDS: Record<TimeRange, number> = {
@@ -57,105 +60,13 @@ const TIME_THRESHOLDS: Record<TimeRange, number> = {
   ALL: 0,
 };
 
-function MapBottomDetail({
-  selectedMarket,
-  relatedMarkets,
-  onBack,
-  onSelectMarket,
-  onTagClick,
-  height,
-  isWatched,
-  onToggleWatch,
-  onCreateAlert,
-}: {
-  selectedMarket: ProcessedMarket | null;
-  relatedMarkets: ProcessedMarket[];
-  onBack: () => void;
-  onSelectMarket: (m: ProcessedMarket) => void;
-  onTagClick: (tag: string) => void;
-  height: number;
-  isWatched?: boolean;
-  onToggleWatch?: () => void;
-  onCreateAlert?: () => void;
-}) {
-  return (
-    <div className="map-bottom-panel" style={{ height }}>
-      <div className="overlay-header">
-        <div className="flex items-center gap-2">
-          <span className="panel-title" style={{ fontSize: 11 }}>Market Detail</span>
-          {selectedMarket && (
-            <span className="panel-data-badge live">selected</span>
-          )}
-        </div>
-        {/* Action buttons in header */}
-        {selectedMarket && (
-          <div className="flex items-center gap-1">
-            {onToggleWatch && (
-              <button
-                onClick={onToggleWatch}
-                className={`flex items-center gap-1 px-1.5 py-0.5 border rounded-sm text-[10px] transition-colors ${
-                  isWatched
-                    ? "border-[#f59e0b]/40 text-[#f59e0b] hover:bg-[#f59e0b]/10"
-                    : "border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)]"
-                }`}
-                title={isWatched ? "Remove from watchlist" : "Add to watchlist"}
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill={isWatched ? "#f59e0b" : "none"} stroke={isWatched ? "#f59e0b" : "currentColor"} strokeWidth="1.5">
-                  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
-                </svg>
-                <span>{isWatched ? "WATCHING" : "WATCH"}</span>
-              </button>
-            )}
-            {onCreateAlert && (
-              <button
-                onClick={onCreateAlert}
-                className="flex items-center gap-1 px-1.5 py-0.5 border border-[var(--border)] rounded-sm text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors"
-                title="Create alert"
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                </svg>
-                <span>ALERT</span>
-              </button>
-            )}
-            <button
-              onClick={onBack}
-              className="flex items-center gap-1 px-1.5 py-0.5 border border-[var(--border)] rounded-sm text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors"
-              title="Close detail"
-            >
-              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4l8 8M12 4l-8 8" /></svg>
-              <span>CLOSE</span>
-            </button>
-          </div>
-        )}
-      </div>
-      <div className="overlay-content">
-        {selectedMarket ? (
-          <MarketDetailPanel
-            market={selectedMarket}
-            relatedMarkets={relatedMarkets}
-            onBack={onBack}
-            onSelectMarket={onSelectMarket}
-            onTagClick={onTagClick}
-          />
-        ) : (
-          <div className="text-[12px] text-[var(--text-muted)] font-mono">
-            click a market bubble or card to view details
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function Home() {
   const { prefs, updatePref, hydrated: prefsReady } = usePreferences();
 
   const [mapped, setMapped] = useState<ProcessedMarket[]>([]);
   const [unmapped, setUnmapped] = useState<ProcessedMarket[]>([]);
   const [activeCategories, setActiveCategories] = useState<Set<Category>>(
-    () => new Set(["Politics", "Geopolitics", "Crypto", "Sports", "Finance", "Tech", "Culture", "Other"] as Category[])
+    () => new Set(["Politics", "Crypto", "Sports", "Finance", "Tech", "Culture", "Other"] as Category[])
   );
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
@@ -176,17 +87,25 @@ export default function Home() {
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [smartMoneyLeaderboard, setSmartMoneyLeaderboard] = useState<SmartWallet[]>([]);
+  const [leaderboardPeriod, setLeaderboardPeriod] = useState<LeaderboardPeriod>("all");
+  const lbCacheRef = useRef<Record<string, SmartWallet[]>>({});
   const [smartMoneyTrades, setSmartMoneyTrades] = useState<WhaleTrade[]>([]);
   const [smartMoneySmartTrades, setSmartMoneySmartTrades] = useState<WhaleTrade[]>([]);
   const [smartMoneyLastSync, setSmartMoneyLastSync] = useState<string | null>(null);
   const [smartWalletFilter, setSmartWalletFilter] = useState<string | null>(null);
+  const [traderPanelWallet, setTraderPanelWallet] = useState<string | null>(null);
+  const [traderWalletName, setTraderWalletName] = useState<string | null>(null);
+  const [traderAddrInput, setTraderAddrInput] = useState("");
   const [panelVisibility, setPanelVisibility] = useState<PanelVisibility>(
-    { markets: true, detail: true, country: true, news: true, live: true, watchlist: true, leaderboard: true, smartMoney: true, whaleTrades: true, orderbook: true, sentiment: true }
+    { markets: true, detail: true, country: true, news: true, live: true, watchlist: true, leaderboard: true, smartMoney: true, whaleTrades: true, orderbook: true, sentiment: true, tweets: true, trader: true, chart: true }
   );
   const [panelOrder, setPanelOrder] = useState<string[]>(
-    ["sentiment", "watchlist", "markets", "country", "news", "live", "leaderboard", "smartMoney", "whaleTrades", "orderbook"]
+    ["sentiment", "watchlist", "markets", "country", "news", "tweets", "live", "leaderboard", "trader", "smartMoney", "whaleTrades", "orderbook", "chart"]
   );
   const panelsRef = useRef<HTMLDivElement>(null);
+  const [bottomPanelOrder, setBottomPanelOrder] = useState<string[]>(["detail"]);
+  const [isDragging, setIsDragging] = useState(false);
+  const bottomPanelsRef = useRef<HTMLDivElement>(null);
 
   // Watchlist
   const { watchedIds, isWatched, toggleWatch, removeWatch, count: watchedCount, addedAt } = useWatchlist();
@@ -212,7 +131,7 @@ export default function Home() {
     setMapWidthPct(prefs.mapWidthPct);
     setRegion(prefs.region);
     setColorMode(prefs.colorMode);
-    const defaults: PanelVisibility = { markets: true, detail: true, country: true, news: true, live: true, watchlist: true, leaderboard: true, smartMoney: true, whaleTrades: true, orderbook: true, sentiment: true };
+    const defaults: PanelVisibility = { markets: true, detail: true, country: true, news: true, live: true, watchlist: true, leaderboard: true, smartMoney: true, whaleTrades: true, orderbook: true, sentiment: true, tweets: true, trader: true, chart: true };
     setPanelVisibility({ ...defaults, ...prefs.panelVisibility });
     let po = prefs.panelOrder;
     if (!po.includes("sentiment")) po = ["sentiment", ...po];
@@ -221,7 +140,15 @@ export default function Home() {
     if (!po.includes("leaderboard")) po = [...po, "leaderboard"];
     if (!po.includes("whaleTrades")) po = [...po, "whaleTrades"];
     if (!po.includes("orderbook")) po = [...po, "orderbook"];
+    if (!po.includes("tweets")) po = [...po, "tweets"];
+    if (!po.includes("trader")) po = [...po, "trader"];
+    if (!po.includes("chart")) po = [...po, "chart"];
+    // Hydrate bottom panel order (migration for existing users)
+    let bpo = prefs.bottomPanelOrder;
+    if (!bpo || !Array.isArray(bpo)) bpo = ["detail"];
+    po = po.filter((id) => !bpo.includes(id)); // no dupes across grids
     setPanelOrder(po);
+    setBottomPanelOrder(bpo);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefsReady]);
 
@@ -231,16 +158,41 @@ export default function Home() {
   useEffect(() => { if (prefsHydrated.current) updatePref("autoRefresh", autoRefresh); }, [autoRefresh, updatePref]);
   useEffect(() => { if (prefsHydrated.current) updatePref("panelVisibility", panelVisibility); }, [panelVisibility, updatePref]);
   useEffect(() => { if (prefsHydrated.current) updatePref("panelOrder", panelOrder); }, [panelOrder, updatePref]);
+  useEffect(() => { if (prefsHydrated.current) updatePref("bottomPanelOrder", bottomPanelOrder); }, [bottomPanelOrder, updatePref]);
 
   const handlePanelReorder = useCallback((newOrder: string[]) => {
     setPanelOrder(newOrder);
   }, []);
 
-  usePanelDrag(panelsRef, panelOrder, handlePanelReorder);
+  const handleBottomReorder = useCallback((newOrder: string[]) => {
+    setBottomPanelOrder(newOrder);
+  }, []);
+
+  const handlePanelTransfer = useCallback((
+    _panelId: string,
+    fromIdx: number,
+    toIdx: number,
+    newFrom: string[],
+    newTo: string[]
+  ) => {
+    // grids: [0] = bottom, [1] = right
+    const setters = [setBottomPanelOrder, setPanelOrder];
+    setters[fromIdx](newFrom);
+    setters[toIdx](newTo);
+  }, []);
+
+  usePanelDrag({
+    grids: [
+      { ref: bottomPanelsRef, panelOrder: bottomPanelOrder, onReorder: handleBottomReorder },
+      { ref: panelsRef, panelOrder: panelOrder, onReorder: handlePanelReorder },
+    ],
+    onTransfer: handlePanelTransfer,
+    onDragStateChange: setIsDragging,
+  });
 
   // Resize state: left/right split (percentage of viewport) and top/bottom split (px)
-  const [mapWidthPct, setMapWidthPct] = useState(58);
-  const [bottomPanelHeight, setBottomPanelHeight] = useState(420);
+  const [mapWidthPct, setMapWidthPct] = useState(60);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(360);
   const [marketSearch, setMarketSearch] = useState<string | undefined>(undefined);
   const [region, setRegion] = useState<string>("global");
   const [colorMode, setColorMode] = useState<"category" | "impact">("category");
@@ -273,6 +225,7 @@ export default function Home() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setNewMarkets([]); // Clear stale new markets from previous refresh
     try {
       const res = await fetch("/api/markets");
       if (!res.ok) throw new Error("API error");
@@ -325,17 +278,37 @@ export default function Home() {
     setLoading(false);
   }, []);
 
-  const fetchSmartMoney = useCallback(async () => {
+  const fetchSmartMoney = useCallback(async (period?: LeaderboardPeriod, leaderboardOnly?: boolean) => {
     try {
-      const res = await fetch("/api/smart-money");
+      const p = period ?? leaderboardPeriod;
+      const params = `period=${p}${leaderboardOnly ? "&leaderboardOnly=1" : ""}`;
+      const res = await fetch(`/api/smart-money?${params}`);
       if (!res.ok) return;
       const data = await res.json();
-      setSmartMoneyLeaderboard(data.leaderboard || []);
-      setSmartMoneyTrades(data.recentTrades || []);
-      setSmartMoneySmartTrades(data.smartTrades || []);
-      setSmartMoneyLastSync(data.lastSync || null);
+      const lb = data.leaderboard || [];
+      lbCacheRef.current[p] = lb;
+      setSmartMoneyLeaderboard(lb);
+      if (!leaderboardOnly) {
+        setSmartMoneyTrades(data.recentTrades || []);
+        setSmartMoneySmartTrades(data.smartTrades || []);
+        setSmartMoneyLastSync(data.lastSync || null);
+      }
     } catch {
       // non-critical
+    }
+  }, [leaderboardPeriod]);
+
+  // Pre-fetch all leaderboard periods into cache on startup
+  const lbPrefetchedRef = useRef(false);
+  useEffect(() => {
+    if (lbPrefetchedRef.current) return;
+    lbPrefetchedRef.current = true;
+    const periods: LeaderboardPeriod[] = ["day", "week", "month", "all"];
+    for (const p of periods) {
+      fetch(`/api/smart-money?period=${p}&leaderboardOnly=1`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => { if (data?.leaderboard) lbCacheRef.current[p] = data.leaderboard; })
+        .catch(() => {});
     }
   }, []);
 
@@ -460,6 +433,17 @@ export default function Home() {
     setPanelVisibility((prev) => ({ ...prev, [panel]: !prev[panel as keyof PanelVisibility] }));
   }, []);
 
+  // Derived panel locations
+  const bottomPanelSet = useMemo(() => new Set(bottomPanelOrder), [bottomPanelOrder]);
+  const rightVisiblePanels = useMemo(
+    () => panelOrder.filter((k) => panelVisibility[k as keyof PanelVisibility] && !bottomPanelSet.has(k)),
+    [panelOrder, panelVisibility, bottomPanelSet]
+  );
+  const bottomVisiblePanels = useMemo(
+    () => bottomPanelOrder.filter((k) => panelVisibility[k as keyof PanelVisibility]),
+    [bottomPanelOrder, panelVisibility]
+  );
+
   // Related markets for detail panel
   const relatedMarkets = useMemo(() => {
     if (!selectedMarket) return [];
@@ -475,11 +459,18 @@ export default function Home() {
       .slice(0, 5);
   }, [selectedMarket, mapped, unmapped]);
 
+  // Filter out closed/ended markets
+  const isEnded = useCallback((m: ProcessedMarket) =>
+    m.closed || (m.endDate != null && new Date(m.endDate).getTime() < Date.now()), []);
+
   const timeFiltered = useMemo(() => {
+    const active = mapped.filter((m) => !isEnded(m));
     const threshold = TIME_THRESHOLDS[timeRange];
-    if (threshold === 0) return mapped;
-    return mapped.filter((m) => (m.volume24h || 0) >= threshold);
-  }, [mapped, timeRange]);
+    if (threshold === 0) return active;
+    return active.filter((m) => (m.volume24h || 0) >= threshold);
+  }, [mapped, timeRange, isEnded]);
+  const activeMapped = useMemo(() => mapped.filter((m) => !isEnded(m)), [mapped, isEnded]);
+  const activeUnmapped = useMemo(() => unmapped.filter((m) => !isEnded(m)), [unmapped, isEnded]);
 
   const handleSelectMarketFromPanel = useCallback(
     (market: ProcessedMarket) => {
@@ -493,6 +484,486 @@ export default function Home() {
     },
     [handleFlyTo]
   );
+
+  function renderPanel(key: string) {
+    const maxColSpan = bottomPanelSet.has(key) ? 3 : 2;
+    switch (key) {
+      case "detail":
+        return (
+          <Panel
+            key="detail"
+            panelId="detail"
+            title="Market Detail"
+            badge={selectedMarket ? (
+              <span className="panel-data-badge live" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }} onClick={() => { setSelectedMarket(null); try { sessionStorage.removeItem("pw:selectedMarket"); } catch {} }} title="Unselect market">
+                selected
+                <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 4l8 8M12 4l-8 8" /></svg>
+              </span>
+            ) : undefined}
+            colSpan={colSpanFor("detail")}
+            onColSpanChange={(s) => setColSpan("detail", s)}
+            onColSpanReset={() => resetColSpan("detail")}
+            rowSpan={rowSpanFor("detail")}
+            onRowSpanChange={(s) => setRowSpan("detail", s)}
+            onRowSpanReset={() => resetRowSpan("detail")}
+            maxColSpan={maxColSpan}
+            headerRight={selectedMarket ? (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => toggleWatch(selectedMarket.id)}
+                  className={`p-1 rounded-sm transition-colors ${
+                    isWatched(selectedMarket.id)
+                      ? "text-[#f59e0b] hover:bg-[#f59e0b]/10"
+                      : "text-[var(--text-dim)] hover:text-[var(--text)]"
+                  }`}
+                  title={isWatched(selectedMarket.id) ? "Remove from watchlist" : "Add to watchlist"}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill={isWatched(selectedMarket.id) ? "#f59e0b" : "none"} stroke={isWatched(selectedMarket.id) ? "#f59e0b" : "currentColor"} strokeWidth="1.5">
+                    <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => {
+                    setAlertPrefill({ marketId: selectedMarket.id, marketTitle: selectedMarket.title });
+                    setAlertManagerOpen(true);
+                  }}
+                  className="p-1 rounded-sm text-[var(--text-dim)] hover:text-[var(--text)] transition-colors"
+                  title="Create alert"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                </button>
+              </div>
+            ) : undefined}
+          >
+            {selectedMarket ? (
+              <MarketDetailPanel
+                market={selectedMarket}
+                relatedMarkets={relatedMarkets}
+                onBack={() => { setSelectedMarket(null); try { sessionStorage.removeItem("pw:selectedMarket"); } catch {} }}
+                onSelectMarket={handleSelectMarketFromPanel}
+                onTagClick={(tag) => setMarketSearch(tag)}
+              />
+            ) : (
+              <div className="text-[12px] text-[var(--text-muted)] font-mono">
+                click a market bubble or card to view details
+              </div>
+            )}
+          </Panel>
+        );
+      case "markets":
+        return (
+          <MarketsPanel
+            key="markets"
+            mapped={activeMapped}
+            unmapped={activeUnmapped}
+            activeCategories={activeCategories}
+            onFlyTo={handleFlyTo}
+            onSelectMarket={handleSelectMarketFromPanel}
+            loading={loading}
+            externalSearch={marketSearch}
+            isWatched={isWatched}
+            onToggleWatch={toggleWatch}
+            colSpan={colSpanFor("markets")}
+            onColSpanChange={(s) => setColSpan("markets", s)}
+            onColSpanReset={() => resetColSpan("markets")}
+            rowSpan={rowSpanFor("markets")}
+            onRowSpanChange={(s) => setRowSpan("markets", s)}
+            onRowSpanReset={() => resetRowSpan("markets")}
+            maxColSpan={maxColSpan}
+          />
+        );
+      case "country":
+        return (
+          <Panel
+            key="country"
+            panelId="country"
+            title="Region"
+            count={selectedCountry || "—"}
+            colSpan={colSpanFor("country")}
+            onColSpanChange={(s) => setColSpan("country", s)}
+            onColSpanReset={() => resetColSpan("country")}
+            rowSpan={rowSpanFor("country")}
+            onRowSpanChange={(s) => setRowSpan("country", s)}
+            onRowSpanReset={() => resetRowSpan("country")}
+            maxColSpan={maxColSpan}
+          >
+            {selectedCountry ? (
+              <CountryPanel
+                countryName={selectedCountry}
+                mapped={mapped}
+                unmapped={unmapped}
+                onSelectMarket={handleSelectMarketFromPanel}
+                isWatched={isWatched}
+                onToggleWatch={toggleWatch}
+              />
+            ) : (
+              <div className="text-[12px] text-[#777] font-mono">
+                click a region on the map to view related markets
+              </div>
+            )}
+          </Panel>
+        );
+      case "news":
+        return (
+          <Panel
+            key="news"
+            panelId="news"
+            title="News"
+            className="panel-news"
+            colSpan={colSpanFor("news")}
+            onColSpanChange={(s) => setColSpan("news", s)}
+            onColSpanReset={() => resetColSpan("news")}
+            rowSpan={rowSpanFor("news")}
+            onRowSpanChange={(s) => setRowSpan("news", s)}
+            onRowSpanReset={() => resetRowSpan("news")}
+            maxColSpan={maxColSpan}
+            headerRight={
+              <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: selectedMarket ? "var(--green)" : "var(--text-muted)" }}>
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: selectedMarket ? "var(--green)" : "var(--text-ghost)" }} />
+                {selectedMarket
+                  ? `${selectedMarket.title.slice(0, 50)}${selectedMarket.title.length > 50 ? "\u2026" : ""}`
+                  : "global feed"}
+              </span>
+            }
+          >
+            <NewsPanel selectedMarket={selectedMarket} />
+          </Panel>
+        );
+      case "tweets":
+        return (
+          <Panel
+            key="tweets"
+            panelId="tweets"
+            title="Tweets"
+            className="panel-tweets"
+            colSpan={colSpanFor("tweets")}
+            onColSpanChange={(s) => setColSpan("tweets", s)}
+            onColSpanReset={() => resetColSpan("tweets")}
+            rowSpan={rowSpanFor("tweets")}
+            onRowSpanChange={(s) => setRowSpan("tweets", s)}
+            onRowSpanReset={() => resetRowSpan("tweets")}
+            maxColSpan={maxColSpan}
+            headerRight={
+              <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: selectedMarket ? "var(--green)" : "var(--text-muted)" }}>
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: selectedMarket ? "var(--green)" : "var(--text-ghost)" }} />
+                {selectedMarket
+                  ? `${selectedMarket.title.slice(0, 50)}${selectedMarket.title.length > 50 ? "\u2026" : ""}`
+                  : "all accounts"}
+              </span>
+            }
+          >
+            <TweetsPanel selectedMarket={selectedMarket} />
+          </Panel>
+        );
+      case "live":
+        return (
+          <Panel
+            key="live"
+            panelId="live"
+            title="Live Streams"
+            className="panel-live"
+            badge={<span className="panel-data-badge live">live</span>}
+            colSpan={colSpanFor("live")}
+            onColSpanChange={(s) => setColSpan("live", s)}
+            onColSpanReset={() => resetColSpan("live")}
+            rowSpan={rowSpanFor("live")}
+            onRowSpanChange={(s) => setRowSpan("live", s)}
+            onRowSpanReset={() => resetRowSpan("live")}
+            maxColSpan={maxColSpan}
+          >
+            <LivePanel />
+          </Panel>
+        );
+      case "watchlist":
+        return (
+          <Panel
+            key="watchlist"
+            panelId="watchlist"
+            title="Watchlist"
+            colSpan={colSpanFor("watchlist")}
+            onColSpanChange={(s) => setColSpan("watchlist", s)}
+            onColSpanReset={() => resetColSpan("watchlist")}
+            rowSpan={rowSpanFor("watchlist")}
+            onRowSpanChange={(s) => setRowSpan("watchlist", s)}
+            onRowSpanReset={() => resetRowSpan("watchlist")}
+            maxColSpan={maxColSpan}
+            headerRight={
+              watchedCount > 0 ? (
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="1.5" className="inline -mt-px mr-0.5">
+                    <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+                  </svg>
+                  {watchedCount} watched
+                </span>
+              ) : undefined
+            }
+          >
+            <WatchlistPanel
+              watchedIds={watchedIds}
+              mapped={mapped}
+              unmapped={unmapped}
+              addedAt={addedAt}
+              onSelectMarket={handleSelectMarketFromPanel}
+              isWatched={isWatched}
+              onToggleWatch={toggleWatch}
+            />
+          </Panel>
+        );
+      case "leaderboard":
+        return (
+          <Panel
+            key="leaderboard"
+            panelId="leaderboard"
+            title="Leaderboard"
+            count={smartMoneyLeaderboard.length > 0 ? `${smartMoneyLeaderboard.length}` : undefined}
+            colSpan={colSpanFor("leaderboard")}
+            onColSpanChange={(s) => setColSpan("leaderboard", s)}
+            onColSpanReset={() => resetColSpan("leaderboard")}
+            rowSpan={rowSpanFor("leaderboard")}
+            onRowSpanChange={(s) => setRowSpan("leaderboard", s)}
+            onRowSpanReset={() => resetRowSpan("leaderboard")}
+            maxColSpan={maxColSpan}
+            headerRight={
+              <div className="flex gap-0.5">
+                {(["day", "week", "month", "all"] as LeaderboardPeriod[]).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => {
+                      setLeaderboardPeriod(p);
+                      const cached = lbCacheRef.current[p];
+                      if (cached) setSmartMoneyLeaderboard(cached);
+                      else fetchSmartMoney(p, true);
+                    }}
+                    className="px-1.5 py-0 text-[9px] rounded transition-colors leading-[18px]"
+                    style={{
+                      background: leaderboardPeriod === p ? "rgba(34,197,94,0.15)" : "transparent",
+                      color: leaderboardPeriod === p ? "#22c55e" : "var(--text-faint)",
+                      border: `1px solid ${leaderboardPeriod === p ? "rgba(34,197,94,0.3)" : "transparent"}`,
+                    }}
+                  >
+                    {p === "day" ? "D" : p === "week" ? "W" : p === "month" ? "M" : "ALL"}
+                  </button>
+                ))}
+              </div>
+            }
+          >
+            <LeaderboardPanel
+              leaderboard={smartMoneyLeaderboard}
+              onSelectWallet={(addr) => {
+                setSmartWalletFilter(addr);
+                setTraderPanelWallet(addr);
+                const w = smartMoneyLeaderboard.find((e) => e.address === addr);
+                setTraderWalletName(w?.username || null);
+              }}
+            />
+          </Panel>
+        );
+      case "smartMoney":
+        return (
+          <Panel
+            key="smartMoney"
+            panelId="smartMoney"
+            title="Smart Trades"
+            badge={
+              smartMoneySmartTrades.length > 0 ? (
+                <span className="panel-data-badge live">
+                  {smartMoneySmartTrades.length} smart
+                </span>
+              ) : undefined
+            }
+            colSpan={colSpanFor("smartMoney")}
+            onColSpanChange={(s) => setColSpan("smartMoney", s)}
+            onColSpanReset={() => resetColSpan("smartMoney")}
+            rowSpan={rowSpanFor("smartMoney")}
+            onRowSpanChange={(s) => setRowSpan("smartMoney", s)}
+            onRowSpanReset={() => resetRowSpan("smartMoney")}
+            maxColSpan={maxColSpan}
+          >
+            <SmartMoneyPanel
+              smartTrades={smartMoneySmartTrades}
+              walletFilter={smartWalletFilter}
+              onClearFilter={() => setSmartWalletFilter(null)}
+              onSelectWallet={(addr) => {
+                setTraderPanelWallet(addr);
+                const t = smartMoneySmartTrades.find((e) => e.wallet === addr);
+                setTraderWalletName(t?.username || null);
+              }}
+              onSelectMarket={(slug) => {
+                const all = [...mapped, ...unmapped];
+                const found = all.find(m => m.slug === slug);
+                if (found) handleSelectMarketFromPanel(found);
+              }}
+            />
+          </Panel>
+        );
+      case "whaleTrades":
+        return (
+          <Panel
+            key="whaleTrades"
+            panelId="whaleTrades"
+            title="Whale Trades"
+            badge={
+              smartMoneyTrades.length > 0 ? (
+                <span className="panel-data-badge">
+                  {smartMoneyTrades.length}
+                </span>
+              ) : undefined
+            }
+            colSpan={colSpanFor("whaleTrades")}
+            onColSpanChange={(s) => setColSpan("whaleTrades", s)}
+            onColSpanReset={() => resetColSpan("whaleTrades")}
+            rowSpan={rowSpanFor("whaleTrades")}
+            onRowSpanChange={(s) => setRowSpan("whaleTrades", s)}
+            onRowSpanReset={() => resetRowSpan("whaleTrades")}
+            maxColSpan={maxColSpan}
+          >
+            <WhaleTradesPanel
+              trades={smartMoneyTrades}
+              onSelectWallet={(addr) => {
+                setTraderPanelWallet(addr);
+                const t = smartMoneyTrades.find((e) => e.wallet === addr);
+                setTraderWalletName(t?.username || null);
+              }}
+              onSelectMarket={(slug) => {
+                const all = [...mapped, ...unmapped];
+                const found = all.find(m => m.slug === slug);
+                if (found) handleSelectMarketFromPanel(found);
+              }}
+            />
+          </Panel>
+        );
+      case "orderbook":
+        return (
+          <Panel
+            key="orderbook"
+            panelId="orderbook"
+            title="Order Book"
+            badge={selectedMarket && !selectedMarket.closed ? <span className="panel-data-badge live">live</span> : undefined}
+            colSpan={colSpanFor("orderbook")}
+            onColSpanChange={(s) => setColSpan("orderbook", s)}
+            onColSpanReset={() => resetColSpan("orderbook")}
+            rowSpan={rowSpanFor("orderbook")}
+            onRowSpanChange={(s) => setRowSpan("orderbook", s)}
+            onRowSpanReset={() => resetRowSpan("orderbook")}
+            maxColSpan={maxColSpan}
+            headerRight={
+              selectedMarket ? (
+                <span className="text-[10px] font-mono truncate max-w-[200px] text-[var(--text-dim)]" title={selectedMarket.title}>
+                  {selectedMarket.title}
+                </span>
+              ) : undefined
+            }
+          >
+            <OrderBookPanel selectedMarket={selectedMarket} />
+          </Panel>
+        );
+      case "trader": {
+        const handleTraderGo = () => {
+          const addr = traderAddrInput.trim();
+          if (/^0x[a-fA-F0-9]{40}$/i.test(addr)) {
+            setTraderPanelWallet(addr);
+            setTraderWalletName(null);
+            setTraderAddrInput("");
+          }
+        };
+        return (
+          <Panel
+            key="trader"
+            panelId="trader"
+            title="Trader"
+            colSpan={colSpanFor("trader")}
+            onColSpanChange={(s) => setColSpan("trader", s)}
+            onColSpanReset={() => resetColSpan("trader")}
+            rowSpan={rowSpanFor("trader")}
+            onRowSpanChange={(s) => setRowSpan("trader", s)}
+            onRowSpanReset={() => resetRowSpan("trader")}
+            maxColSpan={maxColSpan}
+            headerRight={
+              <div className="flex items-center gap-1">
+                {traderPanelWallet ? (
+                  <>
+                    <span className="text-[10px] font-mono text-[var(--text-dim)]" title={traderPanelWallet}>
+                      {traderWalletName || `${traderPanelWallet.slice(0, 6)}…${traderPanelWallet.slice(-4)}`}
+                    </span>
+                    <button
+                      onClick={() => { setTraderPanelWallet(null); setTraderWalletName(null); }}
+                      className="text-[10px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors"
+                      title="Clear"
+                    >
+                      &times;
+                    </button>
+                  </>
+                ) : null}
+                <input
+                  className="w-[100px] bg-[var(--bg-panel)] border border-[var(--border)] rounded-sm px-1 py-0 text-[10px] text-[var(--text)] font-mono placeholder:text-[var(--text-ghost)] leading-[18px]"
+                  placeholder="0x…"
+                  value={traderAddrInput}
+                  onChange={(e) => setTraderAddrInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleTraderGo()}
+                />
+                <button
+                  onClick={handleTraderGo}
+                  className="px-1 py-0 border border-[var(--border)] rounded-sm text-[9px] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors leading-[18px]"
+                >
+                  GO
+                </button>
+              </div>
+            }
+          >
+            <TraderPanel
+              selectedWallet={traderPanelWallet}
+            />
+          </Panel>
+        );
+      }
+      case "sentiment":
+        return (
+          <Panel
+            key="sentiment"
+            panelId="sentiment"
+            title="Sentiment"
+            colSpan={colSpanFor("sentiment")}
+            onColSpanChange={(s) => setColSpan("sentiment", s)}
+            onColSpanReset={() => resetColSpan("sentiment")}
+            rowSpan={rowSpanFor("sentiment")}
+            onRowSpanChange={(s) => setRowSpan("sentiment", s)}
+            onRowSpanReset={() => resetRowSpan("sentiment")}
+            maxColSpan={maxColSpan}
+          >
+            <SentimentPanel />
+          </Panel>
+        );
+      case "chart":
+        return (
+          <Panel
+            key="chart"
+            panelId="chart"
+            title="Price Chart"
+            colSpan={colSpanFor("chart")}
+            onColSpanChange={(s) => setColSpan("chart", s)}
+            onColSpanReset={() => resetColSpan("chart")}
+            rowSpan={rowSpanFor("chart")}
+            onRowSpanChange={(s) => setRowSpan("chart", s)}
+            onRowSpanReset={() => resetRowSpan("chart")}
+            maxColSpan={maxColSpan}
+            headerRight={
+              selectedMarket ? (
+                <span className="text-[10px] font-mono truncate max-w-[200px] text-[var(--text-dim)]" title={selectedMarket.title}>
+                  {selectedMarket.title}
+                </span>
+              ) : undefined
+            }
+          >
+            <ChartPanel selectedMarket={selectedMarket} />
+          </Panel>
+        );
+      default:
+        return null;
+    }
+  }
 
   return (
     <div id="app-root">
@@ -554,289 +1025,32 @@ export default function Home() {
               onRegionChange={setRegion}
               isWatched={isWatched}
               onToggleWatch={toggleWatch}
+              newMarkets={newMarkets}
+              watchedIds={watchedIds}
+              whaleTrades={smartMoneyTrades}
             />
           </div>
-          {/* Horizontal resize handle between map and bottom panel */}
+          {/* Horizontal resize handle between map and bottom panels */}
           <ResizeHandle direction="horizontal" onResize={handleHorizontalResize} />
-          {/* Detail panel at bottom of map */}
-          <MapBottomDetail
-            selectedMarket={selectedMarket}
-            relatedMarkets={relatedMarkets}
-            onBack={() => { setSelectedMarket(null); try { sessionStorage.removeItem("pw:selectedMarket"); } catch {} }}
-            onSelectMarket={handleSelectMarketFromPanel}
-            onTagClick={(tag) => setMarketSearch(tag)}
-            height={bottomPanelHeight}
-            isWatched={selectedMarket ? isWatched(selectedMarket.id) : undefined}
-            onToggleWatch={selectedMarket ? () => toggleWatch(selectedMarket.id) : undefined}
-            onCreateAlert={selectedMarket ? () => {
-              setAlertPrefill({ marketId: selectedMarket.id, marketTitle: selectedMarket.title });
-              setAlertManagerOpen(true);
-            } : undefined}
-          />
+          {/* Bottom panels grid */}
+          {(bottomVisiblePanels.length > 0 || isDragging) && (
+            <div
+              className={`bottom-panels-grid${bottomVisiblePanels.length === 0 ? " bottom-panels-grid-empty" : ""}`}
+              ref={bottomPanelsRef}
+              style={{ height: bottomPanelHeight }}
+            >
+              {bottomVisiblePanels.map((key) => renderPanel(key))}
+            </div>
+          )}
         </div>
 
         {/* Vertical resize handle between map and panels */}
         <ResizeHandle direction="vertical" onResize={handleVerticalResize} />
 
-        {/* Panels grid — rendered in drag-reorderable order */}
+        {/* Right panels grid — rendered in drag-reorderable order */}
         {!isFullscreen && (
           <div className="panels-grid" ref={panelsRef}>
-            {panelOrder.filter((key) => panelVisibility[key as keyof PanelVisibility]).map((key) => {
-              switch (key) {
-                case "markets":
-                  return (
-                    <MarketsPanel
-                      key="markets"
-                      mapped={mapped}
-                      unmapped={unmapped}
-                      activeCategories={activeCategories}
-                      onFlyTo={handleFlyTo}
-                      onSelectMarket={handleSelectMarketFromPanel}
-                      loading={loading}
-                      externalSearch={marketSearch}
-                      isWatched={isWatched}
-                      onToggleWatch={toggleWatch}
-                      colSpan={colSpanFor("markets")}
-                      onColSpanChange={(s) => setColSpan("markets", s)}
-                      onColSpanReset={() => resetColSpan("markets")}
-                      rowSpan={rowSpanFor("markets")}
-                      onRowSpanChange={(s) => setRowSpan("markets", s)}
-                      onRowSpanReset={() => resetRowSpan("markets")}
-                    />
-                  );
-                case "country":
-                  return (
-                    <Panel
-                      key="country"
-                      panelId="country"
-                      title="Region"
-                      count={selectedCountry || "—"}
-                      colSpan={colSpanFor("country")}
-                      onColSpanChange={(s) => setColSpan("country", s)}
-                      onColSpanReset={() => resetColSpan("country")}
-                      rowSpan={rowSpanFor("country")}
-                      onRowSpanChange={(s) => setRowSpan("country", s)}
-                      onRowSpanReset={() => resetRowSpan("country")}
-                    >
-                      {selectedCountry ? (
-                        <CountryPanel
-                          countryName={selectedCountry}
-                          mapped={mapped}
-                          unmapped={unmapped}
-                          onSelectMarket={handleSelectMarketFromPanel}
-                          isWatched={isWatched}
-                          onToggleWatch={toggleWatch}
-                        />
-                      ) : (
-                        <div className="text-[12px] text-[#777] font-mono">
-                          click a region on the map to view related markets
-                        </div>
-                      )}
-                    </Panel>
-                  );
-                case "news":
-                  return (
-                    <Panel
-                      key="news"
-                      panelId="news"
-                      title="News"
-                      className="panel-news"
-                      colSpan={colSpanFor("news")}
-                      onColSpanChange={(s) => setColSpan("news", s)}
-                      onColSpanReset={() => resetColSpan("news")}
-                      rowSpan={rowSpanFor("news")}
-                      onRowSpanChange={(s) => setRowSpan("news", s)}
-                      onRowSpanReset={() => resetRowSpan("news")}
-                      headerRight={
-                        <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: selectedMarket ? "var(--green)" : "var(--text-muted)" }}>
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: selectedMarket ? "var(--green)" : "var(--text-ghost)" }} />
-                          {selectedMarket
-                            ? `${selectedMarket.title.slice(0, 50)}${selectedMarket.title.length > 50 ? "\u2026" : ""}`
-                            : "global feed"}
-                        </span>
-                      }
-                    >
-                      <NewsPanel selectedMarket={selectedMarket} />
-                    </Panel>
-                  );
-                case "live":
-                  return (
-                    <Panel
-                      key="live"
-                      panelId="live"
-                      title="Live Streams"
-                      className="panel-live"
-                      badge={<span className="panel-data-badge live">live</span>}
-                      colSpan={colSpanFor("live")}
-                      onColSpanChange={(s) => setColSpan("live", s)}
-                      onColSpanReset={() => resetColSpan("live")}
-                      rowSpan={rowSpanFor("live")}
-                      onRowSpanChange={(s) => setRowSpan("live", s)}
-                      onRowSpanReset={() => resetRowSpan("live")}
-                    >
-                      <LivePanel />
-                    </Panel>
-                  );
-                case "watchlist":
-                  return (
-                    <Panel
-                      key="watchlist"
-                      panelId="watchlist"
-                      title="Watchlist"
-                      colSpan={colSpanFor("watchlist")}
-                      onColSpanChange={(s) => setColSpan("watchlist", s)}
-                      onColSpanReset={() => resetColSpan("watchlist")}
-                      rowSpan={rowSpanFor("watchlist")}
-                      onRowSpanChange={(s) => setRowSpan("watchlist", s)}
-                      onRowSpanReset={() => resetRowSpan("watchlist")}
-                      headerRight={
-                        watchedCount > 0 ? (
-                          <span className="text-[10px] text-[var(--text-muted)] font-mono">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="1.5" className="inline -mt-px mr-0.5">
-                              <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
-                            </svg>
-                            {watchedCount} watched
-                          </span>
-                        ) : undefined
-                      }
-                    >
-                      <WatchlistPanel
-                        watchedIds={watchedIds}
-                        mapped={mapped}
-                        unmapped={unmapped}
-                        addedAt={addedAt}
-                        onSelectMarket={handleSelectMarketFromPanel}
-                        isWatched={isWatched}
-                        onToggleWatch={toggleWatch}
-                      />
-                    </Panel>
-                  );
-                case "leaderboard":
-                  return (
-                    <Panel
-                      key="leaderboard"
-                      panelId="leaderboard"
-                      title="Leaderboard"
-                      count={smartMoneyLeaderboard.length > 0 ? `${smartMoneyLeaderboard.length}` : undefined}
-                      colSpan={colSpanFor("leaderboard")}
-                      onColSpanChange={(s) => setColSpan("leaderboard", s)}
-                      onColSpanReset={() => resetColSpan("leaderboard")}
-                      rowSpan={rowSpanFor("leaderboard")}
-                      onRowSpanChange={(s) => setRowSpan("leaderboard", s)}
-                      onRowSpanReset={() => resetRowSpan("leaderboard")}
-                    >
-                      <LeaderboardPanel
-                        leaderboard={smartMoneyLeaderboard}
-                        onSelectWallet={(addr) => setSmartWalletFilter(addr)}
-                      />
-                    </Panel>
-                  );
-                case "smartMoney":
-                  return (
-                    <Panel
-                      key="smartMoney"
-                      panelId="smartMoney"
-                      title="Smart Trades"
-                      badge={
-                        smartMoneySmartTrades.length > 0 ? (
-                          <span className="panel-data-badge live">
-                            {smartMoneySmartTrades.length} smart
-                          </span>
-                        ) : undefined
-                      }
-                      colSpan={colSpanFor("smartMoney")}
-                      onColSpanChange={(s) => setColSpan("smartMoney", s)}
-                      onColSpanReset={() => resetColSpan("smartMoney")}
-                      rowSpan={rowSpanFor("smartMoney")}
-                      onRowSpanChange={(s) => setRowSpan("smartMoney", s)}
-                      onRowSpanReset={() => resetRowSpan("smartMoney")}
-                    >
-                      <SmartMoneyPanel
-                        smartTrades={smartMoneySmartTrades}
-                        walletFilter={smartWalletFilter}
-                        onClearFilter={() => setSmartWalletFilter(null)}
-                        onSelectMarket={(slug) => {
-                          const all = [...mapped, ...unmapped];
-                          const found = all.find(m => m.slug === slug);
-                          if (found) handleSelectMarketFromPanel(found);
-                        }}
-                      />
-                    </Panel>
-                  );
-                case "whaleTrades":
-                  return (
-                    <Panel
-                      key="whaleTrades"
-                      panelId="whaleTrades"
-                      title="Whale Trades"
-                      badge={
-                        smartMoneyTrades.length > 0 ? (
-                          <span className="panel-data-badge">
-                            {smartMoneyTrades.length}
-                          </span>
-                        ) : undefined
-                      }
-                      colSpan={colSpanFor("whaleTrades")}
-                      onColSpanChange={(s) => setColSpan("whaleTrades", s)}
-                      onColSpanReset={() => resetColSpan("whaleTrades")}
-                      rowSpan={rowSpanFor("whaleTrades")}
-                      onRowSpanChange={(s) => setRowSpan("whaleTrades", s)}
-                      onRowSpanReset={() => resetRowSpan("whaleTrades")}
-                    >
-                      <WhaleTradesPanel
-                        trades={smartMoneyTrades}
-                        onSelectMarket={(slug) => {
-                          const all = [...mapped, ...unmapped];
-                          const found = all.find(m => m.slug === slug);
-                          if (found) handleSelectMarketFromPanel(found);
-                        }}
-                      />
-                    </Panel>
-                  );
-                case "orderbook":
-                  return (
-                    <Panel
-                      key="orderbook"
-                      panelId="orderbook"
-                      title="Order Book"
-                      badge={selectedMarket && !selectedMarket.closed ? <span className="panel-data-badge live">live</span> : undefined}
-                      colSpan={colSpanFor("orderbook")}
-                      onColSpanChange={(s) => setColSpan("orderbook", s)}
-                      onColSpanReset={() => resetColSpan("orderbook")}
-                      rowSpan={rowSpanFor("orderbook")}
-                      onRowSpanChange={(s) => setRowSpan("orderbook", s)}
-                      onRowSpanReset={() => resetRowSpan("orderbook")}
-                      headerRight={
-                        selectedMarket ? (
-                          <span className="text-[10px] font-mono truncate max-w-[200px] text-[var(--text-dim)]" title={selectedMarket.title}>
-                            {selectedMarket.title}
-                          </span>
-                        ) : undefined
-                      }
-                    >
-                      <OrderBookPanel selectedMarket={selectedMarket} />
-                    </Panel>
-                  );
-                case "sentiment":
-                  return (
-                    <Panel
-                      key="sentiment"
-                      panelId="sentiment"
-                      title="Sentiment"
-                      colSpan={colSpanFor("sentiment")}
-                      onColSpanChange={(s) => setColSpan("sentiment", s)}
-                      onColSpanReset={() => resetColSpan("sentiment")}
-                      rowSpan={rowSpanFor("sentiment")}
-                      onRowSpanChange={(s) => setRowSpan("sentiment", s)}
-                      onRowSpanReset={() => resetRowSpan("sentiment")}
-                    >
-                      <SentimentPanel />
-                    </Panel>
-                  );
-                default:
-                  return null;
-              }
-            })}
+            {rightVisiblePanels.map((key) => renderPanel(key))}
           </div>
         )}
       </div>

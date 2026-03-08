@@ -98,26 +98,54 @@ async function getLiveTrades(smartAddresses: Set<string>): Promise<{
   return { whaleTrades, smartTrades };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const db = getDb();
+    const { searchParams } = new URL(request.url);
+    const period = searchParams.get("period") || "all";
 
-    // Leaderboard display: top 50 by rank
-    const topRows = db
+    // Read leaderboard from cache (all periods stored in DB: day/week/month/all)
+    const timePeriod = ["day", "week", "month", "all"].includes(period) ? period : "all";
+    const lbRows = db
       .prepare(
         `SELECT address, username, pnl, volume, rank, profile_image
-         FROM smart_wallets ORDER BY rank ASC LIMIT 50`
+         FROM leaderboard_cache WHERE time_period = ? ORDER BY rank ASC LIMIT 50`
       )
-      .all() as Array<Record<string, unknown>>;
+      .all(timePeriod) as Array<Record<string, unknown>>;
 
-    const leaderboard: SmartWallet[] = topRows.map((r) => ({
-      address: r.address as string,
-      username: (r.username as string) || null,
-      pnl: r.pnl as number,
-      volume: r.volume as number,
-      rank: r.rank as number,
-      profileImage: (r.profile_image as string) || null,
-    }));
+    let leaderboard: SmartWallet[];
+    if (lbRows.length > 0) {
+      leaderboard = lbRows.map((r) => ({
+        address: r.address as string,
+        username: (r.username as string) || null,
+        pnl: r.pnl as number,
+        volume: r.volume as number,
+        rank: r.rank as number,
+        profileImage: (r.profile_image as string) || null,
+      }));
+    } else {
+      // Fallback to smart_wallets if cache not yet populated
+      const topRows = db
+        .prepare(
+          `SELECT address, username, pnl, volume, rank, profile_image
+           FROM smart_wallets ORDER BY rank ASC LIMIT 50`
+        )
+        .all() as Array<Record<string, unknown>>;
+      leaderboard = topRows.map((r) => ({
+        address: r.address as string,
+        username: (r.username as string) || null,
+        pnl: r.pnl as number,
+        volume: r.volume as number,
+        rank: r.rank as number,
+        profileImage: (r.profile_image as string) || null,
+      }));
+    }
+
+    // Fast path: only leaderboard data needed (period toggle)
+    const leaderboardOnly = searchParams.get("leaderboardOnly") === "1";
+    if (leaderboardOnly) {
+      return NextResponse.json({ leaderboard });
+    }
 
     // Build smart wallet address set from ALL tracked wallets (PnL >= $100k)
     const allWalletRows = db

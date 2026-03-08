@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "better-sqlite3": "^12.6.2",
     "hls.js": "^1.6.15",
+    "lightweight-charts": "^5.1.0",
     "maplibre-gl": "^4.7.1",
     "next": "16.1.6",
     "react": "19.2.3",

@@ -3,10 +3,74 @@ import { fetchEventsFromAPI, processEvents } from "./polymarket";
 import type { ProcessedMarket, SmartMoneyFlow, WhaleTrade } from "@/types";
 import { computeImpactScores } from "./impact";
 import { detectAnomalies } from "./anomaly";
+import { aiGeocodeBatch, addJitter } from "./aiGeo";
+import { isAiConfigured } from "./ai";
+import { geolocate } from "./geo";
 
 const SYNC_INTERVAL = 30_000;
 
 let syncTimer: ReturnType<typeof setInterval> | null = null;
+let geocodeRunning = false;
+
+// --- Caches for readMarketsFromDb ---
+let resultCache: { data: { mapped: ProcessedMarket[]; unmapped: ProcessedMarket[] }; ts: number } | null = null;
+const RESULT_CACHE_TTL = 10_000; // 10s
+
+let anomalyCache: { data: Map<string, import("@/types").AnomalyInfo>; ts: number } | null = null;
+const ANOMALY_CACHE_TTL = 120_000; // 2 min
+
+let lastCleanup = Date.now(); // don't run cleanup on first sync
+const CLEANUP_INTERVAL = 3600_000; // 1 hour
+
+/** Fire-and-forget: geocode pending markets without blocking sync */
+function geocodePending(db: ReturnType<typeof getDb>) {
+  if (geocodeRunning) return;
+  const ungeo = db
+    .prepare(`SELECT id, title, description, location FROM events WHERE ai_geo_done = 0 LIMIT 25`)
+    .all() as Array<{ id: string; title: string; description: string | null; location: string | null }>;
+  if (ungeo.length === 0) return;
+
+  const updateGeo = db.prepare(`
+    UPDATE events SET lat = @lat, lng = @lng, location = @location,
+      geo_city = @city, geo_country = @country, ai_geo_done = 1
+    WHERE id = @id
+  `);
+  const markDone = db.prepare(`UPDATE events SET ai_geo_done = 1 WHERE id = ?`);
+
+  const writeResults = (resultMap: Map<string, { id: string; lat: number | null; lng: number | null; location: string | null; city: string | null; country: string | null; confidence: number }> | null) => {
+    try {
+      const txn = db.transaction(() => {
+        for (const market of ungeo) {
+          let result = resultMap?.get(market.id);
+          if (!result || (result.lat === null && result.lng === null)) {
+            const geo = geolocate(market.title, market.description ?? undefined);
+            if (geo) {
+              const [jLat, jLng] = addJitter(geo.coords[0], geo.coords[1], market.id);
+              result = { id: market.id, lat: jLat, lng: jLng, location: geo.location, city: null, country: null, confidence: 0.3 };
+            }
+          }
+          if (result && result.lat !== null && result.lng !== null) {
+            updateGeo.run({ id: market.id, lat: result.lat, lng: result.lng, location: result.location || market.location, city: result.city, country: result.country });
+          } else {
+            markDone.run(market.id);
+          }
+        }
+      });
+      txn();
+    } catch { /* DB busy — will retry next cycle */ }
+  };
+
+  if (isAiConfigured()) {
+    geocodeRunning = true;
+    aiGeocodeBatch(ungeo.map((r) => ({ id: r.id, title: r.title, description: r.description, currentLocation: r.location })))
+      .then((results) => writeResults(new Map(results.map((r) => [r.id, r]))))
+      .catch(() => writeResults(null))
+      .finally(() => { geocodeRunning = false; console.log(`[sync] Geocoded ${ungeo.length} markets`); });
+  } else {
+    writeResults(null);
+    console.log(`[sync] Geocoded ${ungeo.length} markets (regex)`);
+  }
+}
 
 export async function runSync(): Promise<{
   eventCount: number;
@@ -28,7 +92,10 @@ export async function runSync(): Promise<{
       ON CONFLICT(id) DO UPDATE SET
         market_id = @marketId, title = @title, slug = @slug, category = @category,
         volume = @volume, volume_24h = @volume24h, prob = @prob, change = @change,
-        recent_change = @recentChange, location = @location, lat = @lat, lng = @lng,
+        recent_change = @recentChange,
+        location = CASE WHEN events.ai_geo_done = 1 THEN events.location ELSE @location END,
+        lat = CASE WHEN events.ai_geo_done = 1 THEN events.lat ELSE @lat END,
+        lng = CASE WHEN events.ai_geo_done = 1 THEN events.lng ELSE @lng END,
         markets_json = @marketsJson, updated_at = @updatedAt,
         description = @description, resolution_source = @resolutionSource, end_date = @endDate,
         image = @image, liquidity = @liquidity, is_active = @isActive, is_closed = @isClosed,
@@ -97,11 +164,12 @@ export async function runSync(): Promise<{
     });
     txn();
 
-    // Mark stale resolved events as closed — these fell off both API feeds
+    // Mark stale events as closed — not in current API fetch means
+    // the event is no longer active on Polymarket (closed, resolved, or delisted)
     const fetchedIds = new Set(all.map((m) => m.id));
     const staleRows = db
       .prepare(
-        `SELECT id FROM events WHERE is_active = 1 AND is_closed = 0 AND prob >= 0.99`
+        `SELECT id FROM events WHERE is_closed = 0`
       )
       .all() as Array<{ id: string }>;
     const staleIds = staleRows.filter((r) => !fetchedIds.has(r.id));
@@ -116,18 +184,27 @@ export async function runSync(): Promise<{
       console.log(`[sync] Marked ${staleIds.length} stale resolved events as closed`);
     }
 
-    // Cleanup snapshots older than 30 days
-    db.prepare(
-      `DELETE FROM price_snapshots WHERE recorded_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days')`
-    ).run();
-    db.prepare(
-      `DELETE FROM market_snapshots WHERE recorded_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days')`
-    ).run();
+    // Cleanup snapshots older than 30 days — run once per hour to avoid blocking
+    if (Date.now() - lastCleanup > CLEANUP_INTERVAL) {
+      db.prepare(
+        `DELETE FROM price_snapshots WHERE recorded_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days')`
+      ).run();
+      db.prepare(
+        `DELETE FROM market_snapshots WHERE recorded_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days')`
+      ).run();
+      lastCleanup = Date.now();
+    }
 
     // Log sync
     db.prepare(
       `INSERT INTO sync_log (started_at, finished_at, event_count, status) VALUES (?, ?, ?, ?)`
     ).run(startedAt, new Date().toISOString(), all.length, "ok");
+
+    // Invalidate read cache so next request picks up fresh data
+    invalidateMarketCaches();
+
+    // Geocode new markets — fire-and-forget to avoid blocking sync
+    geocodePending(db);
 
     console.log(`[sync] OK — ${all.length} events (${mapped.length} mapped)`);
     return { eventCount: all.length, status: "ok" };
@@ -159,13 +236,47 @@ export function startSyncLoop() {
   }, SYNC_INTERVAL);
 }
 
+/** Invalidate caches after a sync so next request gets fresh data */
+function invalidateMarketCaches() {
+  resultCache = null;
+}
+
+/** Trim sub-market objects to only the fields used by the frontend */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function trimMarket(m: any): any {
+  return {
+    id: m.id,
+    question: m.question,
+    groupItemTitle: m.groupItemTitle,
+    clobTokenIds: m.clobTokenIds,
+    outcomePrices: m.outcomePrices,
+    outcomes: m.outcomes,
+    oneDayPriceChange: m.oneDayPriceChange,
+    active: m.active,
+    volume: m.volume,
+    volume_24hr: m.volume_24hr,
+    liquidity: m.liquidity,
+  };
+}
+
 export function readMarketsFromDb(): {
   mapped: ProcessedMarket[];
   unmapped: ProcessedMarket[];
 } {
+  // Return cached result if fresh
+  if (resultCache && Date.now() - resultCache.ts < RESULT_CACHE_TTL) {
+    return resultCache.data;
+  }
+
   const db = getDb();
   const rows = db
-    .prepare(`SELECT * FROM events ORDER BY volume_24h DESC`)
+    .prepare(
+      `SELECT id, market_id, title, slug, category, volume, volume_24h, prob, change,
+              recent_change, markets_json, location, lat, lng, created_at, description,
+              resolution_source, end_date, image, liquidity, is_active, is_closed,
+              comment_count, tags_json
+       FROM events WHERE is_closed = 0 ORDER BY volume_24h DESC`
+    )
     .all() as Array<Record<string, unknown>>;
 
   const mapped: ProcessedMarket[] = [];
@@ -174,7 +285,8 @@ export function readMarketsFromDb(): {
   for (const row of rows) {
     let markets = [];
     try {
-      markets = JSON.parse((row.markets_json as string) || "[]");
+      const raw = JSON.parse((row.markets_json as string) || "[]");
+      markets = Array.isArray(raw) ? raw.map(trimMarket) : [];
     } catch {
       // ignore
     }
@@ -210,7 +322,8 @@ export function readMarketsFromDb(): {
       image: (row.image as string) || null,
       liquidity: (row.liquidity as number) || 0,
       active: row.is_active !== 0,
-      closed: row.is_closed === 1 || ((row.prob as number) >= 0.99),
+      closed: row.is_closed === 1
+        || (markets.length > 0 && markets.every((mk: any) => mk.active === false)),
       commentCount: (row.comment_count as number) || 0,
       tags,
       impactScore: 0,
@@ -235,14 +348,19 @@ export function readMarketsFromDb(): {
     }
   }
 
-  // Detect anomalies — only for top 50 markets by volume to avoid slow queries
+  // Detect anomalies — use cache (2min TTL) to avoid slow 23M-row query
   try {
-    const top = [...allMarkets]
-      .sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))
-      .slice(0, 50);
-    const anomalies = detectAnomalies(db, top.map((m) => m.id));
+    if (!anomalyCache || Date.now() - anomalyCache.ts > ANOMALY_CACHE_TTL) {
+      const top = [...allMarkets]
+        .sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))
+        .slice(0, 50);
+      anomalyCache = {
+        data: detectAnomalies(db, top.map((m) => m.id)),
+        ts: Date.now(),
+      };
+    }
     for (const m of allMarkets) {
-      const a = anomalies.get(m.id);
+      const a = anomalyCache.data.get(m.id);
       if (a) m.anomaly = a;
     }
   } catch {
@@ -344,5 +462,8 @@ export function readMarketsFromDb(): {
     // smart money is non-critical
   }
 
-  return { mapped, unmapped };
+  // Cache the result
+  const data = { mapped, unmapped };
+  resultCache = { data, ts: Date.now() };
+  return data;
 }

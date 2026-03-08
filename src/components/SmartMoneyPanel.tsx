@@ -9,6 +9,7 @@ interface SmartMoneyPanelProps {
   walletFilter?: string | null;
   onClearFilter?: () => void;
   onSelectMarket?: (slug: string) => void;
+  onSelectWallet?: (address: string) => void;
 }
 
 function truncAddr(addr: string): string {
@@ -35,6 +36,7 @@ export default function SmartMoneyPanel({
   walletFilter,
   onClearFilter,
   onSelectMarket,
+  onSelectWallet,
 }: SmartMoneyPanelProps) {
   const filteredTrades = useMemo(() => {
     if (!walletFilter) return smartTrades;
@@ -92,9 +94,13 @@ export default function SmartMoneyPanel({
                   <span className="text-[10px] text-[var(--text-faint)] shrink-0 tabular-nums w-5 text-right">
                     {timeAgo(t.timestamp)}
                   </span>
-                  <span className="text-[10px] text-[var(--text-muted)] truncate w-16 shrink-0">
+                  <button
+                    onClick={() => onSelectWallet?.(t.wallet)}
+                    className="text-[10px] text-[var(--text-muted)] truncate w-16 shrink-0 text-left hover:text-[var(--text)] transition-colors"
+                    title={t.wallet}
+                  >
                     {t.username || truncAddr(t.wallet)}
-                  </span>
+                  </button>
                   <button
                     onClick={() => onSelectMarket?.(t.slug)}
                     className="text-[11px] text-[var(--text-secondary)] truncate flex-1 min-w-0 text-left hover:text-[var(--text)] transition-colors"

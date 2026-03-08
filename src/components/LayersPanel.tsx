@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Category } from "@/types";
-import { CATEGORY_COLORS } from "@/lib/categories";
+import { CATEGORY_COLORS, CATEGORY_SHAPES } from "@/lib/categories";
+import ShapeIcon from "./ShapeIcon";
 
 interface LayersPanelProps {
   activeCategories: Set<Category>;
@@ -11,7 +12,6 @@ interface LayersPanelProps {
 
 const CATEGORIES: Category[] = [
   "Politics",
-  "Geopolitics",
   "Crypto",
   "Sports",
   "Finance",
@@ -53,12 +53,11 @@ export default function LayersPanel({
                 className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-[#fff]/5 transition-colors text-[12px]"
                 onClick={() => onToggle(cat)}
               >
-                <span
-                  className="w-1.5 h-1.5 rounded-full shrink-0"
-                  style={{
-                    background: active ? CATEGORY_COLORS[cat] : "transparent",
-                    border: `1px solid ${active ? CATEGORY_COLORS[cat] : "#444"}`,
-                  }}
+                <ShapeIcon
+                  shape={CATEGORY_SHAPES[cat]}
+                  color={active ? CATEGORY_COLORS[cat] : "#444"}
+                  filled={active}
+                  size={10}
                 />
                 <span className={active ? "text-[#ccc]" : "text-[#777]"}>
                   {cat.toLowerCase()}

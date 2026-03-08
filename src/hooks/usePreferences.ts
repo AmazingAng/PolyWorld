@@ -14,6 +14,7 @@ export interface UserPreferences {
   region: string;
   autoRefresh: boolean;
   mapWidthPct: number;
+  bottomPanelOrder: string[];
 }
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -30,10 +31,13 @@ const DEFAULT_PREFERENCES: UserPreferences = {
     whaleTrades: true,
     orderbook: true,
     sentiment: true,
+    tweets: true,
+    trader: true,
+    chart: true,
   },
-  panelOrder: ["sentiment", "watchlist", "markets", "country", "news", "live", "leaderboard", "smartMoney", "whaleTrades", "orderbook"],
+  panelOrder: ["sentiment", "watchlist", "markets", "country", "news", "tweets", "live", "leaderboard", "trader", "smartMoney", "whaleTrades", "orderbook", "chart"],
   activeCategories: [
-    "Politics", "Geopolitics", "Crypto", "Sports",
+    "Politics", "Crypto", "Sports",
     "Finance", "Tech", "Culture", "Other",
   ],
   timeRange: "ALL",
@@ -41,6 +45,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   region: "global",
   autoRefresh: true,
   mapWidthPct: 58,
+  bottomPanelOrder: ["detail"],
 };
 
 export function usePreferences() {

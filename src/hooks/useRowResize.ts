@@ -2,7 +2,8 @@
 
 import { useRef, useEffect, useCallback } from "react";
 
-const ROW_DRAG_THRESHOLD = 60;
+const ROW_DRAG_THRESHOLD = 120; // px per span step — higher = less sensitive
+const DEAD_ZONE = 20; // px of movement before any resize starts
 
 /**
  * Hook for panel row-span resize via bottom-edge drag.
@@ -27,8 +28,14 @@ export function useRowResize(
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!dragging.current) return;
-      const delta = e.clientY - startY.current;
-      const spanDelta = Math.round(delta / ROW_DRAG_THRESHOLD);
+      const rawDelta = e.clientY - startY.current;
+      // Dead zone: ignore small movements
+      const delta = Math.abs(rawDelta) < DEAD_ZONE
+        ? 0
+        : rawDelta > 0
+          ? rawDelta - DEAD_ZONE
+          : rawDelta + DEAD_ZONE;
+      const spanDelta = Math.trunc(delta / ROW_DRAG_THRESHOLD);
       const newSpan = Math.max(1, Math.min(4, startSpan.current + spanDelta));
       if (newSpan !== lastApplied.current) {
         lastApplied.current = newSpan;

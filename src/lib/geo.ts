@@ -275,6 +275,15 @@ export function getParentCountry(location: string): string | null {
 // Short keys need case-sensitive whole-word matching
 const SHORT_KEYS = new Set(["us", "uk", "eu", "uae", "un"]);
 
+// Political/generic keywords that should only match as fallback
+// These map to DC/NY but are less specific than actual place names
+const FALLBACK_KEYS = new Set([
+  "republican", "democratic", "democrat", "congress", "senate",
+  "supreme court", "federal reserve", "fed", "elon musk",
+  "trump", "biden", "kamala", "vance",
+  "nba", "nfl", "mlb", "nhl", "super bowl", "world series", "march madness",
+]);
+
 // Sort by length DESC so longer (more specific) keys match first
 const geoKeys = Object.keys(GEO).sort((a, b) => b.length - a.length);
 
@@ -297,19 +306,31 @@ export function geolocate(
   // Only use title for geo matching (description often contains noise)
   const text = title || "";
 
-  // Phase 1: Match non-short keys (countries, leaders, cities) longest-first
+  let fallbackResult: GeoResult | null = null;
+
+  // Phase 1: Match non-short keys longest-first; defer political/generic keywords
   for (const key of geoKeys) {
     if (SHORT_KEYS.has(key)) continue;
-    if (getRegex(key).test(text)) {
-      const loc = key
-        .split(" ")
-        .map((w) => w[0].toUpperCase() + w.slice(1))
-        .join(" ");
-      return { coords: GEO[key], location: loc };
+    if (!getRegex(key).test(text)) continue;
+
+    const loc = key
+      .split(" ")
+      .map((w) => w[0].toUpperCase() + w.slice(1))
+      .join(" ");
+
+    if (FALLBACK_KEYS.has(key)) {
+      // Save first political/generic match as fallback, keep looking for real places
+      if (!fallbackResult) {
+        fallbackResult = { coords: GEO[key], location: loc };
+      }
+      continue;
     }
+
+    // Real geographic match — return immediately
+    return { coords: GEO[key], location: loc };
   }
 
-  // Phase 2: Fallback to short keys (US, UK, EU) only if nothing matched
+  // Phase 2: Fallback to short keys (US, UK, EU)
   if (/\bUS\b/.test(text) || /\bU\.S\./.test(text)) {
     return { coords: GEO["usa"], location: "United States" };
   }
@@ -323,5 +344,6 @@ export function geolocate(
     return { coords: GEO["emirates"], location: "UAE" };
   }
 
-  return null;
+  // Phase 3: Use political/generic keyword match if no real place found
+  return fallbackResult;
 }

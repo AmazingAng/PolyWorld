@@ -13,18 +13,19 @@ interface OrderBookPanelProps {
   selectedMarket: ProcessedMarket | null;
 }
 
-/** Extract Yes token ID from the primary sub-market */
-function getYesTokenId(market: ProcessedMarket): string | null {
-  const primary = market.markets.find(m => m.active !== false) || market.markets[0];
-  if (!primary) return null;
-  const raw = primary.clobTokenIds;
-  if (!raw) return null;
-  try {
-    const arr: string[] = Array.isArray(raw) ? raw : JSON.parse(raw);
-    return arr[0] || null;
-  } catch {
-    return null;
+/** Extract all Yes token IDs from active sub-markets (first token = Yes) */
+function getAllYesTokenIds(market: ProcessedMarket): string[] {
+  const ids: string[] = [];
+  for (const m of market.markets) {
+    if (m.active === false) continue;
+    const raw = m.clobTokenIds;
+    if (!raw) continue;
+    try {
+      const arr: string[] = Array.isArray(raw) ? raw : JSON.parse(raw);
+      if (arr[0]) ids.push(arr[0]);
+    } catch { /* skip */ }
   }
+  return ids;
 }
 
 export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) {
@@ -35,36 +36,51 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
   const scrollRef = useRef<HTMLDivElement>(null);
   const midRef = useRef<HTMLDivElement>(null);
 
-  const tokenId = useMemo(() => {
-    if (!selectedMarket || selectedMarket.closed) return null;
-    return getYesTokenId(selectedMarket);
+  const tokenIds = useMemo(() => {
+    if (!selectedMarket || selectedMarket.closed) return [];
+    return getAllYesTokenIds(selectedMarket);
   }, [selectedMarket]);
 
+  // Track which token ID is currently working
+  const activeTokenRef = useRef<string | null>(null);
+
   const fetchBook = useCallback(async () => {
-    if (!tokenId) return;
-    try {
-      const res = await fetch(`/api/orderbook?tokenId=${encodeURIComponent(tokenId)}`);
-      if (!res.ok) throw new Error(`${res.status}`);
-      const d = await res.json();
-      setData(d);
-      setError(null);
-    } catch {
-      setError("Failed to load orderbook");
+    if (tokenIds.length === 0) return;
+
+    // Try the known working token first, then fall back to others
+    const tryOrder = activeTokenRef.current
+      ? [activeTokenRef.current, ...tokenIds.filter(t => t !== activeTokenRef.current)]
+      : tokenIds;
+
+    for (const tid of tryOrder) {
+      try {
+        const res = await fetch(`/api/orderbook?tokenId=${encodeURIComponent(tid)}`);
+        if (!res.ok) continue;
+        const d = await res.json();
+        if (d.error) continue;
+        if (d.bids?.length > 0 || d.asks?.length > 0) {
+          activeTokenRef.current = tid;
+          setData(d);
+          setError(null);
+          return;
+        }
+      } catch { /* try next */ }
     }
-  }, [tokenId]);
+    setError("No orderbook available for this market");
+  }, [tokenIds]);
 
   useEffect(() => {
-    if (!tokenId) { setData(null); setError(null); return; }
+    if (tokenIds.length === 0) { setData(null); setError(null); activeTokenRef.current = null; return; }
     setLoading(true);
     setError(null);
     fetchBook().finally(() => setLoading(false));
-  }, [tokenId, fetchBook]);
+  }, [tokenIds, fetchBook]);
 
   useEffect(() => {
-    if (!tokenId) return;
+    if (tokenIds.length === 0) return;
     intervalRef.current = setInterval(fetchBook, 10_000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [tokenId, fetchBook]);
+  }, [tokenIds, fetchBook]);
 
   // Track whether we need to scroll-center on next data render
   const needsScrollCenter = useRef(true);
@@ -92,7 +108,7 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
     });
   }, [data]);
 
-  if (!selectedMarket || !tokenId) {
+  if (!selectedMarket || tokenIds.length === 0) {
     return (
       <div className="text-[11px] text-[var(--text-muted)] font-mono p-2">
         {selectedMarket?.closed

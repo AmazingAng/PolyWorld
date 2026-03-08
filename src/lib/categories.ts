@@ -1,10 +1,19 @@
 import { Category, PolymarketEvent } from "@/types";
 
+export const CATEGORY_SHAPES: Record<Category, string> = {
+  Politics:    "circle",
+  Crypto:      "diamond",
+  Sports:      "triangle",
+  Finance:     "pentagon",
+  Tech:        "square",
+  Culture:     "hexagon",
+  Other:       "circle",
+};
+
 export const CATEGORY_COLORS: Record<Category, string> = {
   Politics: "#79c0ff",
   Crypto: "#ffa657",
   Sports: "#7ee787",
-  Geopolitics: "#ff7b72",
   Tech: "#79dfc1",
   Culture: "#f778ba",
   Finance: "#d2a8ff",
@@ -31,8 +40,6 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     "political",
     "mayor",
     "speaker",
-  ],
-  Geopolitics: [
     "war",
     "invasion",
     "ceasefire",
@@ -150,7 +157,7 @@ export function detectCategory(event: PolymarketEvent): Category {
       if (name.includes("politic")) return "Politics";
       if (name.includes("crypto") || name.includes("bitcoin")) return "Crypto";
       if (name.includes("sport")) return "Sports";
-      if (name.includes("geopolitic")) return "Geopolitics";
+      if (name.includes("geopolitic")) return "Politics";
       if (name.includes("tech")) return "Tech";
       if (name.includes("culture") || name.includes("entertainment"))
         return "Culture";

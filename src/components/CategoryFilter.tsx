@@ -1,7 +1,8 @@
 "use client";
 
 import { Category } from "@/types";
-import { CATEGORY_COLORS } from "@/lib/categories";
+import { CATEGORY_COLORS, CATEGORY_SHAPES } from "@/lib/categories";
+import ShapeIcon from "./ShapeIcon";
 
 interface CategoryFilterProps {
   active: Set<Category>;
@@ -10,7 +11,6 @@ interface CategoryFilterProps {
 
 const categories: Category[] = [
   "Politics",
-  "Geopolitics",
   "Crypto",
   "Sports",
   "Finance",
@@ -37,9 +37,11 @@ export default function CategoryFilter({
                 : "text-[#8a8a8a] hover:text-[#8a8a8a]"
             }`}
           >
-            <span
-              className="inline-block w-1 h-1 rounded-full mr-1"
-              style={{ background: isActive ? CATEGORY_COLORS[cat] : "#333" }}
+            <ShapeIcon
+              shape={CATEGORY_SHAPES[cat]}
+              color={isActive ? CATEGORY_COLORS[cat] : "#333"}
+              filled={isActive}
+              size={8}
             />
             {cat.toLowerCase()}
           </button>

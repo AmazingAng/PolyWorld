@@ -6,5 +6,7 @@ export async function register() {
     startNewsSyncLoop();
     const { startSmartMoneySync } = await import("./lib/smartMoneySync");
     startSmartMoneySync();
+    const { startTweetsSyncLoop } = await import("./lib/tweetsSync");
+    startTweetsSyncLoop();
   }
 }

@@ -38,7 +38,6 @@ export interface PolymarketMarket {
 
 export type Category =
   | "Politics"
-  | "Geopolitics"
   | "Crypto"
   | "Sports"
   | "Finance"
@@ -109,6 +108,16 @@ export interface NewsSource {
   name: string;
   feedUrl: string;
   region: string;
+}
+
+export interface TweetItem {
+  id: string;           // SHA256(url).slice(0,32)
+  handle: string;       // @username
+  authorName: string;   // display name
+  text: string;         // tweet body
+  url: string;          // link to tweet
+  publishedAt: string;  // ISO date
+  relevanceScore?: number;
 }
 
 export interface SmartWallet {

@@ -5,7 +5,7 @@ import type { AlertConfig, AlertHistoryEntry } from "@/hooks/useAlerts";
 import type { ProcessedMarket, Category } from "@/types";
 
 const CATEGORIES: Category[] = [
-  "Politics", "Geopolitics", "Crypto", "Sports",
+  "Politics", "Crypto", "Sports",
   "Finance", "Tech", "Culture", "Other",
 ];
 

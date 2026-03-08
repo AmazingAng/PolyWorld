@@ -1,5 +1,6 @@
 import { getDb } from "./db";
 import { fetchLeaderboard, fetchFullLeaderboard, fetchMarketTrades } from "./smartMoney";
+import type { LeaderboardTimePeriod } from "./smartMoney";
 
 const SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const FULL_LEADERBOARD_INTERVAL = 60 * 60 * 1000; // 1 hour
@@ -50,6 +51,44 @@ export async function runFullLeaderboardSync(): Promise<void> {
   } catch (err) {
     console.error("[smartMoney] Full leaderboard sync error:", err);
   }
+}
+
+/**
+ * Sync leaderboard cache for all time periods (TODAY, WEEKLY, MONTHLY, ALL).
+ * Fetches top 50 from Polymarket API for each period and stores in leaderboard_cache.
+ */
+async function syncLeaderboardCache(): Promise<void> {
+  const db = getDb();
+  const periods: LeaderboardTimePeriod[] = ["day", "week", "month", "all"];
+
+  const upsert = db.prepare(`
+    INSERT INTO leaderboard_cache (time_period, rank, address, username, pnl, volume, profile_image, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    ON CONFLICT(time_period, rank) DO UPDATE SET
+      address = excluded.address,
+      username = excluded.username,
+      pnl = excluded.pnl,
+      volume = excluded.volume,
+      profile_image = excluded.profile_image,
+      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+  `);
+  const deletePeriod = db.prepare(`DELETE FROM leaderboard_cache WHERE time_period = ?`);
+
+  for (const period of periods) {
+    try {
+      const entries = await fetchLeaderboard(50, period);
+      if (entries.length === 0) continue;
+      db.transaction(() => {
+        deletePeriod.run(period);
+        for (const e of entries) {
+          upsert.run(period, e.rank, e.address, e.username || null, e.pnl, e.volume, e.profileImage || null);
+        }
+      })();
+    } catch (err) {
+      console.error(`[smartMoney] Leaderboard cache sync error for ${period}:`, err);
+    }
+  }
+  console.log(`[smartMoney] Leaderboard cache synced (${periods.join(", ")})`);
 }
 
 export async function runSmartMoneySync(): Promise<void> {
@@ -157,6 +196,9 @@ export async function runSmartMoneySync(): Promise<void> {
     db.prepare(
       `DELETE FROM whale_trades WHERE timestamp < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-7 days')`
     ).run();
+
+    // 5. Sync leaderboard cache for all time periods
+    await syncLeaderboardCache();
 
     console.log(
       `[smartMoney] Sync complete — ${leaderboard.length} wallets, ${totalTrades} trades (${smartTradeCount} smart)`

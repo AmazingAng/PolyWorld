@@ -1,9 +1,20 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({
+  baseURL: "https://api.skyapi.org",
+  apiKey: "REDACTED_API_KEY",
+});
+
+const fallbackClient = new Anthropic({
   baseURL: "https://api.minimaxi.com/anthropic",
   apiKey: "REDACTED_FALLBACK_API_KEY",
 });
+
+export { client, fallbackClient };
+
+export function isAiConfigured(): boolean {
+  return !!(client.baseURL && client.apiKey);
+}
 
 export interface MarketContext {
   title: string;
@@ -13,6 +24,15 @@ export interface MarketContext {
   volume24h: number;
   description: string | null;
   relatedTitles?: string[];
+  news?: Array<{ title: string; summary?: string | null }>;
+  smartMoney?: {
+    netFlow: "bullish" | "bearish" | "neutral";
+    smartBuys: number;
+    smartSells: number;
+    whaleBuys: number;
+    whaleSells: number;
+  };
+  priceHistory?: string;
 }
 
 export interface CountryContext {
@@ -32,21 +52,41 @@ export async function generateMarketSummary(ctx: MarketContext): Promise<string>
   const vol24hStr = formatVol(ctx.volume24h);
   const related = ctx.relatedTitles?.length ? ctx.relatedTitles.join("; ") : "none";
 
+  // Build optional enrichment sections
+  let enrichment = "";
+  if (ctx.news && ctx.news.length > 0) {
+    const headlines = ctx.news.slice(0, 5).map(n => `- ${n.title}${n.summary ? ` (${n.summary.slice(0, 80)})` : ""}`).join("\n");
+    enrichment += `\nRecent news:\n${headlines}`;
+  }
+  if (ctx.smartMoney) {
+    const sm = ctx.smartMoney;
+    enrichment += `\nSmart money: ${sm.netFlow} flow | ${sm.smartBuys} smart buys, ${sm.smartSells} smart sells | ${sm.whaleBuys} whale buys, ${sm.whaleSells} whale sells`;
+  }
+  if (ctx.priceHistory) {
+    enrichment += `\nPrice trend: ${ctx.priceHistory}`;
+  }
+
   const prompt = `You are a prediction market analyst. Summarize this market in 2-3 concise sentences.
 Market: ${ctx.title} | Prob: ${probStr} | 24h change: ${changeStr} | Volume: ${volStr} | 24h Vol: ${vol24hStr}
-Description: ${ctx.description || "N/A"} | Related: ${related}
-Focus on: what is predicted, current sentiment, notable movement. Be factual and concise.`;
+Description: ${ctx.description || "N/A"} | Related: ${related}${enrichment}
+Focus on: what is predicted, current sentiment, notable movement, and any relevant news or smart money signals. Be factual and concise.`;
 
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 200,
+    max_tokens: 250,
     messages: [{ role: "user", content: prompt }],
   });
 
-  const text = response.content
+  let text = response.content
     .filter((b) => b.type === "text")
     .map((b) => b.text)
     .join("");
+  // Strip prompt echo if the proxy/model wraps the response with the original message
+  const endMarker = "--- USER MESSAGE END ---";
+  const endIdx = text.lastIndexOf(endMarker);
+  if (endIdx !== -1) {
+    text = text.slice(endIdx + endMarker.length);
+  }
   return text.trim();
 }
 
@@ -70,10 +110,15 @@ Focus on: dominant themes, overall sentiment, notable movements. Be factual and 
     messages: [{ role: "user", content: prompt }],
   });
 
-  const text = response.content
+  let text = response.content
     .filter((b) => b.type === "text")
     .map((b) => b.text)
     .join("");
+  const endMarker = "--- USER MESSAGE END ---";
+  const endIdx = text.lastIndexOf(endMarker);
+  if (endIdx !== -1) {
+    text = text.slice(endIdx + endMarker.length);
+  }
   return text.trim();
 }
 

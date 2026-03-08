@@ -1,7 +1,12 @@
 "use client";
 
+import { useState, useRef, useCallback, useEffect } from "react";
 import type { SmartWallet } from "@/types";
 import { formatVolume } from "@/lib/format";
+
+export type LeaderboardPeriod = "day" | "week" | "month" | "all";
+
+const PAGE_SIZE = 20;
 
 interface LeaderboardPanelProps {
   leaderboard: SmartWallet[];
@@ -17,6 +22,33 @@ export default function LeaderboardPanel({
   leaderboard,
   onSelectWallet,
 }: LeaderboardPanelProps) {
+  const [visible, setVisible] = useState(PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Reset visible count when data changes (e.g. period switch)
+  useEffect(() => {
+    setVisible(PAGE_SIZE);
+  }, [leaderboard]);
+
+  // Intersection observer for infinite scroll
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const sentinelCallback = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (observerRef.current) observerRef.current.disconnect();
+      if (!node) return;
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) {
+            setVisible((v) => Math.min(v + PAGE_SIZE, leaderboard.length));
+          }
+        },
+        { threshold: 0.1 },
+      );
+      observerRef.current.observe(node);
+    },
+    [leaderboard.length],
+  );
+
   if (leaderboard.length === 0) {
     return (
       <div className="font-mono text-[12px] text-[var(--text-ghost)] py-4 text-center">
@@ -25,9 +57,12 @@ export default function LeaderboardPanel({
     );
   }
 
+  const shown = leaderboard.slice(0, visible);
+  const hasMore = visible < leaderboard.length;
+
   return (
     <div className="font-mono space-y-0.5">
-      {leaderboard.map((w) => (
+      {shown.map((w) => (
         <button
           key={w.address}
           onClick={() => onSelectWallet?.(w.address)}
@@ -49,8 +84,8 @@ export default function LeaderboardPanel({
             <span className="text-[11px] text-[var(--text-secondary)] truncate min-w-0 flex-1">
               {w.username || truncAddr(w.address)}
             </span>
-            <span className="text-[11px] text-[#22c55e] tabular-nums shrink-0">
-              {formatVolume(w.pnl)} PnL
+            <span className={`text-[11px] tabular-nums shrink-0 ${w.pnl >= 0 ? "text-[#22c55e]" : "text-[#ff4444]"}`}>
+              {w.pnl < 0 ? "-" : ""}{formatVolume(Math.abs(w.pnl))} PnL
             </span>
             <span className="text-[10px] text-[var(--text-faint)] tabular-nums shrink-0">
               {formatVolume(w.volume)}
@@ -58,6 +93,9 @@ export default function LeaderboardPanel({
           </div>
         </button>
       ))}
+      {hasMore && (
+        <div ref={sentinelCallback} className="h-4" />
+      )}
     </div>
   );
 }

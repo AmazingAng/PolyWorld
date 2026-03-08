@@ -139,7 +139,9 @@ export default function Sparkline({
   // Chart layout constants
   const showAxes = height >= 60;
   const leftPad = showAxes ? 36 : 2;
-  const rightPad = 6;
+  const hasMultiData = multiData.length > 0;
+  const hasSingleData = singleData.length >= 2;
+  const rightPad = showAxes ? (hasMultiData ? 65 : (hasSingleData ? 35 : 6)) : 6;
   const topPad = 6;
   const bottomPad = showAxes ? 18 : 6;
   const chartW = width - leftPad - rightPad;
@@ -394,6 +396,34 @@ export default function Sparkline({
         </g>
       ))}
 
+      {/* Multi-series labels at right edge */}
+      {hasMulti && showAxes && (() => {
+        const labelH = 11;
+        const maxLabels = 6;
+        const labels = processedMulti!.slice(0, maxLabels).map(s => {
+          const last = s.coords[s.coords.length - 1];
+          return { label: s.label, color: s.color, lastValue: s.lastValue, y: last?.y ?? 0, x: last?.x ?? 0 };
+        }).sort((a, b) => a.y - b.y);
+        // Spread overlapping labels
+        for (let i = 1; i < labels.length; i++) {
+          if (labels[i].y - labels[i - 1].y < labelH) {
+            labels[i].y = labels[i - 1].y + labelH;
+          }
+        }
+        // Clamp within chart area
+        for (const l of labels) {
+          l.y = Math.max(topPad + 4, Math.min(topPad + chartH - 2, l.y));
+        }
+        return labels.map((l, i) => {
+          const disp = l.label.length > 5 ? l.label.slice(0, 4) + "\u2026" : l.label;
+          return (
+            <text key={i} x={l.x + 5} y={l.y + 3.5} fill={l.color} fontSize="9" fontFamily="monospace" opacity="0.9">
+              {disp} {(l.lastValue * 100).toFixed(0)}%
+            </text>
+          );
+        });
+      })()}
+
       {/* ===== Single-series rendering ===== */}
       {hasSingle && !hasMulti && (() => {
         const { sampled, vMin, vRange } = processedSingle!;
@@ -404,30 +434,17 @@ export default function Sparkline({
         const pathPoints = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`);
         const wentUp = sampled[sampled.length - 1].v >= sampled[0].v;
         const color = wentUp ? "#22c55e" : "#ff4444";
-        const colorDim = wentUp ? "#22c55e40" : "#ff444440";
         const lastPt = coords[coords.length - 1];
-        const areaPath = `M${pathPoints[0]} ${pathPoints.slice(1).map(p => `L${p}`).join(" ")} L${coords[coords.length - 1].x.toFixed(1)},${(topPad + chartH).toFixed(1)} L${coords[0].x.toFixed(1)},${(topPad + chartH).toFixed(1)} Z`;
 
         return (
           <g>
-            <defs>
-              <linearGradient id={`grad-${uid}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-                <stop offset="80%" stopColor={color} stopOpacity="0.03" />
-                <stop offset="100%" stopColor={color} stopOpacity="0" />
-              </linearGradient>
-              <radialGradient id={`dot-${uid}`}>
-                <stop offset="0%" stopColor={color} stopOpacity="0.8" />
-                <stop offset="50%" stopColor={color} stopOpacity="0.2" />
-                <stop offset="100%" stopColor={color} stopOpacity="0" />
-              </radialGradient>
-            </defs>
-            <path d={areaPath} fill={`url(#grad-${uid})`} />
-            <polyline points={pathPoints.join(" ")} fill="none" stroke={colorDim} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" filter={`url(#glow-${uid})`} />
-            <polyline points={pathPoints.join(" ")} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx={lastPt.x} cy={lastPt.y} r="8" fill={`url(#dot-${uid})`} />
-            <circle cx={lastPt.x} cy={lastPt.y} r="2.5" fill={color} />
-            <circle cx={lastPt.x} cy={lastPt.y} r="2.5" fill="none" stroke="#0a0a0a" strokeWidth="0.8" />
+            <polyline points={pathPoints.join(" ")} fill="none" stroke={color} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx={lastPt.x} cy={lastPt.y} r="2" fill={color} />
+            {showAxes && (
+              <text x={lastPt.x + 5} y={lastPt.y + 3.5} fill={color} fontSize="9" fontFamily="monospace" fontWeight="bold">
+                {(sampled[sampled.length - 1].v * 100).toFixed(1)}%
+              </text>
+            )}
           </g>
         );
       })()}

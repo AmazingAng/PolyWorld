@@ -1,6 +1,5 @@
 import { PolymarketEvent, ProcessedMarket } from "@/types";
 import { detectCategory } from "./categories";
-import { geolocate } from "./geo";
 
 const API_BASE = "https://gamma-api.polymarket.com";
 
@@ -53,7 +52,7 @@ export async function fetchEventsFromAPI(): Promise<PolymarketEvent[]> {
 
   // Also fetch recently closed events (top 100 by volume) to update status
   try {
-    const closedUrl = `${API_BASE}/events?closed=true&limit=100&offset=0&order=volume24hr&ascending=false`;
+    const closedUrl = `${API_BASE}/events?closed=true&limit=200&offset=0&order=volume24hr&ascending=false`;
     const res = await fetch(closedUrl, { next: { revalidate: 60 } });
     if (res.ok) {
       const data = await res.json();
@@ -87,7 +86,6 @@ export function processEvents(events: PolymarketEvent[]): {
     if (vol < 500) continue;
 
     const category = detectCategory(event);
-    const geo = geolocate(event.title, event.description);
 
     const markets = event.markets || [];
 
@@ -156,15 +154,15 @@ export function processEvents(events: PolymarketEvent[]): {
       change,
       recentChange,
       markets,
-      location: geo?.location || null,
-      coords: geo?.coords || null,
+      location: null,
+      coords: null,
       description: event.description || null,
       resolutionSource: event.resolutionSource || null,
       endDate: event.endDate || null,
       image: event.image || null,
       liquidity: parseFloat(String(event.liquidity || 0)),
       active: event.active !== false,
-      closed: event.closed === true,
+      closed: event.closed === true || (markets.length > 0 && markets.every((mk) => mk.closed === true || mk.active === false)),
       commentCount: event.commentCount || 0,
       tags: tagLabels,
       createdAt: event.startDate || event.createdAt || null,
@@ -172,11 +170,7 @@ export function processEvents(events: PolymarketEvent[]): {
       impactLevel: "info",
     };
 
-    if (geo) {
-      mapped.push(item);
-    } else {
-      unmapped.push(item);
-    }
+    unmapped.push(item);
   }
 
   return { mapped, unmapped };

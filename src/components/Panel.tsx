@@ -19,6 +19,7 @@ interface PanelProps {
   rowSpan?: number;
   onRowSpanChange?: (span: number) => void;
   onRowSpanReset?: () => void;
+  maxColSpan?: number;
 }
 
 export default function Panel({
@@ -36,10 +37,11 @@ export default function Panel({
   rowSpan,
   onRowSpanChange,
   onRowSpanReset,
+  maxColSpan,
 }: PanelProps) {
   const [expanded, setExpanded] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
-  const { onMouseDown: onColMouseDown } = useColResize(colSpan ?? 1, onColSpanChange);
+  const { onMouseDown: onColMouseDown } = useColResize(colSpan ?? 1, onColSpanChange, maxColSpan);
   const { onMouseDown: onRowMouseDown } = useRowResize(rowSpan ?? 2, onRowSpanChange);
 
   // Escape key to close
@@ -53,8 +55,7 @@ export default function Panel({
   }, [expanded]);
 
   const spanStyle: React.CSSProperties = {};
-  if (colSpan === 2) spanStyle.gridColumn = "1 / -1";
-  else if (colSpan === 1) spanStyle.gridColumn = "span 1";
+  if (colSpan && colSpan > 1) spanStyle.gridColumn = `span ${colSpan}`;
   if (rowSpan && rowSpan !== 2) spanStyle.gridRow = `span ${rowSpan}`;
 
   return (

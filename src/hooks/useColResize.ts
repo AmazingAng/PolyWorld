@@ -2,15 +2,16 @@
 
 import { useRef, useEffect, useCallback } from "react";
 
-const COL_DRAG_THRESHOLD = 80;
+const FALLBACK_THRESHOLD = 200;
 
 /**
  * Shared hook for panel column-span resize via right-edge drag.
- * Uses refs to avoid stale closures and requestAnimationFrame for smooth updates.
+ * Dynamically measures the grid column width so drag feels 1:1 with cursor.
  */
 export function useColResize(
   colSpan: number,
-  onColSpanChange?: (span: number) => void
+  onColSpanChange?: (span: number) => void,
+  maxSpan = 2
 ) {
   const colSpanRef = useRef(colSpan);
   colSpanRef.current = colSpan;
@@ -23,13 +24,14 @@ export function useColResize(
   const startSpan = useRef(1);
   const rafId = useRef(0);
   const lastApplied = useRef(colSpan);
+  const colWidth = useRef(FALLBACK_THRESHOLD);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!dragging.current) return;
       const delta = e.clientX - startX.current;
-      const spanDelta = Math.round(delta / COL_DRAG_THRESHOLD);
-      const newSpan = Math.max(1, Math.min(2, startSpan.current + spanDelta));
+      const spanDelta = Math.round(delta / colWidth.current);
+      const newSpan = Math.max(1, Math.min(maxSpan, startSpan.current + spanDelta));
       if (newSpan !== lastApplied.current) {
         lastApplied.current = newSpan;
         cancelAnimationFrame(rafId.current);
@@ -45,7 +47,7 @@ export function useColResize(
       cancelAnimationFrame(rafId.current);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
-      document.body.classList.remove("resize-active");
+      document.body.classList.remove("resize-active", "resize-col");
     };
 
     document.addEventListener("mousemove", onMove);
@@ -61,13 +63,25 @@ export function useColResize(
     if (!onChangeRef.current) return;
     e.preventDefault();
     e.stopPropagation();
+
+    // Measure actual grid column width from the panel element
+    const handle = e.currentTarget as HTMLElement;
+    const panel = handle.closest("[data-panel]") as HTMLElement | null;
+    if (panel) {
+      const w = panel.getBoundingClientRect().width;
+      const span = colSpanRef.current || 1;
+      colWidth.current = Math.max(60, w / span);
+    } else {
+      colWidth.current = FALLBACK_THRESHOLD;
+    }
+
     dragging.current = true;
     startX.current = e.clientX;
     startSpan.current = colSpanRef.current;
     lastApplied.current = colSpanRef.current;
     document.body.style.cursor = "ew-resize";
     document.body.style.userSelect = "none";
-    document.body.classList.add("resize-active");
+    document.body.classList.add("resize-active", "resize-col");
   }, []);
 
   return { onMouseDown };

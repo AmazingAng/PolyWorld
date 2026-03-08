@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import type { TimeRange } from "./TimeRangeFilter";
 import { Category } from "@/types";
-import { CATEGORY_COLORS } from "@/lib/categories";
+import { CATEGORY_COLORS, CATEGORY_SHAPES } from "@/lib/categories";
+import ShapeIcon from "./ShapeIcon";
 import { REGIONAL_VIEWS } from "@/lib/regions";
 import type { ColorMode } from "./WorldMap";
 
 const TIME_OPTIONS: TimeRange[] = ["1h", "6h", "24h", "48h", "7d", "ALL"];
-const CATEGORIES: Category[] = ["Politics", "Geopolitics", "Crypto", "Sports", "Finance", "Tech", "Culture", "Other"];
+const CATEGORIES: Category[] = ["Politics", "Crypto", "Sports", "Finance", "Tech", "Culture", "Other"];
 
 interface MapToolbarProps {
   timeRange: TimeRange;
@@ -154,12 +155,11 @@ export default function MapToolbar({
                     className="flex items-center gap-2 py-0.5 px-1 cursor-pointer hover:bg-[#fff]/5 transition-colors text-[12px]"
                     onClick={() => onToggleCategory(cat)}
                   >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{
-                        background: active ? CATEGORY_COLORS[cat] : "transparent",
-                        border: `1px solid ${active ? CATEGORY_COLORS[cat] : "#444"}`,
-                      }}
+                    <ShapeIcon
+                      shape={CATEGORY_SHAPES[cat]}
+                      color={active ? CATEGORY_COLORS[cat] : "#444"}
+                      filled={active}
+                      size={10}
                     />
                     <span className={active ? "text-[#ccc]" : "text-[#777]"}>
                       {cat.toLowerCase()}
