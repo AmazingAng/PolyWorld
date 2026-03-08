@@ -127,6 +127,21 @@ export default function Home() {
   const { getRowSpan, setRowSpan, resetRowSpan } = usePanelRowSpans();
   const rowSpanFor = (id: string) => getRowSpan(id, 2);
 
+  // Pre-generate stable handler objects for all panels (avoids inline arrow functions in renderPanel)
+  const panelHandlers = useMemo(() => {
+    const ids = ["detail", "markets", "country", "news", "tweets", "live", "watchlist", "leaderboard", "smartMoney", "whaleTrades", "orderbook", "trader", "sentiment", "chart"];
+    const h: Record<string, { onColSpanChange: (s: number) => void; onColSpanReset: () => void; onRowSpanChange: (s: number) => void; onRowSpanReset: () => void }> = {};
+    for (const id of ids) {
+      h[id] = {
+        onColSpanChange: (s: number) => setColSpan(id, s),
+        onColSpanReset: () => resetColSpan(id),
+        onRowSpanChange: (s: number) => setRowSpan(id, s),
+        onRowSpanReset: () => resetRowSpan(id),
+      };
+    }
+    return h;
+  }, [setColSpan, resetColSpan, setRowSpan, resetRowSpan]);
+
   // Alerts
   const { alerts, history: alertHistory, unreadCount, addAlert, removeAlert, toggleAlert, evaluateAlerts, markRead, markAllRead, clearHistory } = useAlerts();
   const { sendNotification, requestPermission, permission: notifPermission } = useBrowserNotifications();
@@ -439,6 +454,35 @@ export default function Home() {
     [handleFlyTo]
   );
 
+  // Stable smart money callbacks
+  const handleLeaderboardSelectWallet = useCallback((addr: string) => {
+    const sm = useSmartMoneyStore.getState();
+    sm.setWalletFilter(addr);
+    sm.setTraderPanelWallet(addr);
+    const w = sm.leaderboard.find((e) => e.address === addr);
+    sm.setTraderWalletName(w?.username || null);
+  }, []);
+
+  const handleSmartMoneySelectWallet = useCallback((addr: string) => {
+    const sm = useSmartMoneyStore.getState();
+    sm.setTraderPanelWallet(addr);
+    const t = sm.smartTrades.find((e) => e.wallet === addr);
+    sm.setTraderWalletName(t?.username || null);
+  }, []);
+
+  const handleWhaleSelectWallet = useCallback((addr: string) => {
+    const sm = useSmartMoneyStore.getState();
+    sm.setTraderPanelWallet(addr);
+    const t = sm.trades.find((e) => e.wallet === addr);
+    sm.setTraderWalletName(t?.username || null);
+  }, []);
+
+  const handleSmartMoneySelectMarket = useCallback((slug: string) => {
+    const all = [...useMarketStore.getState().mapped, ...useMarketStore.getState().unmapped];
+    const found = all.find(m => m.slug === slug);
+    if (found) handleSelectMarketFromPanel(found);
+  }, [handleSelectMarketFromPanel]);
+
   function renderPanel(key: string) {
     const maxColSpan = bottomPanelSet.has(key) ? 3 : 2;
     switch (key) {
@@ -455,11 +499,8 @@ export default function Home() {
               </span>
             ) : undefined}
             colSpan={colSpanFor("detail")}
-            onColSpanChange={(s) => setColSpan("detail", s)}
-            onColSpanReset={() => resetColSpan("detail")}
+            {...panelHandlers["detail"]}
             rowSpan={rowSpanFor("detail")}
-            onRowSpanChange={(s) => setRowSpan("detail", s)}
-            onRowSpanReset={() => resetRowSpan("detail")}
             maxColSpan={maxColSpan}
             headerRight={selectedMarket ? (
               <div className="flex items-center gap-1">
@@ -522,11 +563,8 @@ export default function Home() {
             isWatched={isWatched}
             onToggleWatch={toggleWatch}
             colSpan={colSpanFor("markets")}
-            onColSpanChange={(s) => setColSpan("markets", s)}
-            onColSpanReset={() => resetColSpan("markets")}
+            {...panelHandlers["markets"]}
             rowSpan={rowSpanFor("markets")}
-            onRowSpanChange={(s) => setRowSpan("markets", s)}
-            onRowSpanReset={() => resetRowSpan("markets")}
             maxColSpan={maxColSpan}
           />
         );
@@ -538,11 +576,8 @@ export default function Home() {
             title="Region"
             count={selectedCountry || "\u2014"}
             colSpan={colSpanFor("country")}
-            onColSpanChange={(s) => setColSpan("country", s)}
-            onColSpanReset={() => resetColSpan("country")}
+            {...panelHandlers["country"]}
             rowSpan={rowSpanFor("country")}
-            onRowSpanChange={(s) => setRowSpan("country", s)}
-            onRowSpanReset={() => resetRowSpan("country")}
             maxColSpan={maxColSpan}
           >
             {selectedCountry ? (
@@ -569,11 +604,8 @@ export default function Home() {
             title="News"
             className="panel-news"
             colSpan={colSpanFor("news")}
-            onColSpanChange={(s) => setColSpan("news", s)}
-            onColSpanReset={() => resetColSpan("news")}
+            {...panelHandlers["news"]}
             rowSpan={rowSpanFor("news")}
-            onRowSpanChange={(s) => setRowSpan("news", s)}
-            onRowSpanReset={() => resetRowSpan("news")}
             maxColSpan={maxColSpan}
             headerRight={
               <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: selectedMarket ? "var(--green)" : "var(--text-muted)" }}>
@@ -595,11 +627,8 @@ export default function Home() {
             title="Tweets"
             className="panel-tweets"
             colSpan={colSpanFor("tweets")}
-            onColSpanChange={(s) => setColSpan("tweets", s)}
-            onColSpanReset={() => resetColSpan("tweets")}
+            {...panelHandlers["tweets"]}
             rowSpan={rowSpanFor("tweets")}
-            onRowSpanChange={(s) => setRowSpan("tweets", s)}
-            onRowSpanReset={() => resetRowSpan("tweets")}
             maxColSpan={maxColSpan}
             headerRight={
               <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: selectedMarket ? "var(--green)" : "var(--text-muted)" }}>
@@ -622,11 +651,8 @@ export default function Home() {
             className="panel-live"
             badge={<span className="panel-data-badge live">live</span>}
             colSpan={colSpanFor("live")}
-            onColSpanChange={(s) => setColSpan("live", s)}
-            onColSpanReset={() => resetColSpan("live")}
+            {...panelHandlers["live"]}
             rowSpan={rowSpanFor("live")}
-            onRowSpanChange={(s) => setRowSpan("live", s)}
-            onRowSpanReset={() => resetRowSpan("live")}
             maxColSpan={maxColSpan}
           >
             <LivePanel />
@@ -639,11 +665,8 @@ export default function Home() {
             panelId="watchlist"
             title="Watchlist"
             colSpan={colSpanFor("watchlist")}
-            onColSpanChange={(s) => setColSpan("watchlist", s)}
-            onColSpanReset={() => resetColSpan("watchlist")}
+            {...panelHandlers["watchlist"]}
             rowSpan={rowSpanFor("watchlist")}
-            onRowSpanChange={(s) => setRowSpan("watchlist", s)}
-            onRowSpanReset={() => resetRowSpan("watchlist")}
             maxColSpan={maxColSpan}
             headerRight={
               watchedCount > 0 ? (
@@ -675,11 +698,8 @@ export default function Home() {
             title="Leaderboard"
             count={smartMoneyLeaderboard.length > 0 ? `${smartMoneyLeaderboard.length}` : undefined}
             colSpan={colSpanFor("leaderboard")}
-            onColSpanChange={(s) => setColSpan("leaderboard", s)}
-            onColSpanReset={() => resetColSpan("leaderboard")}
+            {...panelHandlers["leaderboard"]}
             rowSpan={rowSpanFor("leaderboard")}
-            onRowSpanChange={(s) => setRowSpan("leaderboard", s)}
-            onRowSpanReset={() => resetRowSpan("leaderboard")}
             maxColSpan={maxColSpan}
             headerRight={
               <div className="flex gap-0.5">
@@ -708,13 +728,7 @@ export default function Home() {
           >
             <LeaderboardPanel
               leaderboard={smartMoneyLeaderboard}
-              onSelectWallet={(addr) => {
-                const sm = useSmartMoneyStore.getState();
-                sm.setWalletFilter(addr);
-                sm.setTraderPanelWallet(addr);
-                const w = smartMoneyLeaderboard.find((e) => e.address === addr);
-                sm.setTraderWalletName(w?.username || null);
-              }}
+              onSelectWallet={handleLeaderboardSelectWallet}
             />
           </Panel>
         );
@@ -732,28 +746,16 @@ export default function Home() {
               ) : undefined
             }
             colSpan={colSpanFor("smartMoney")}
-            onColSpanChange={(s) => setColSpan("smartMoney", s)}
-            onColSpanReset={() => resetColSpan("smartMoney")}
+            {...panelHandlers["smartMoney"]}
             rowSpan={rowSpanFor("smartMoney")}
-            onRowSpanChange={(s) => setRowSpan("smartMoney", s)}
-            onRowSpanReset={() => resetRowSpan("smartMoney")}
             maxColSpan={maxColSpan}
           >
             <SmartMoneyPanel
               smartTrades={smartMoneySmartTrades}
               walletFilter={smartWalletFilter}
               onClearFilter={() => useSmartMoneyStore.getState().setWalletFilter(null)}
-              onSelectWallet={(addr) => {
-                const sm = useSmartMoneyStore.getState();
-                sm.setTraderPanelWallet(addr);
-                const t = smartMoneySmartTrades.find((e) => e.wallet === addr);
-                sm.setTraderWalletName(t?.username || null);
-              }}
-              onSelectMarket={(slug) => {
-                const all = [...mapped, ...unmapped];
-                const found = all.find(m => m.slug === slug);
-                if (found) handleSelectMarketFromPanel(found);
-              }}
+              onSelectWallet={handleSmartMoneySelectWallet}
+              onSelectMarket={handleSmartMoneySelectMarket}
             />
           </Panel>
         );
@@ -771,26 +773,14 @@ export default function Home() {
               ) : undefined
             }
             colSpan={colSpanFor("whaleTrades")}
-            onColSpanChange={(s) => setColSpan("whaleTrades", s)}
-            onColSpanReset={() => resetColSpan("whaleTrades")}
+            {...panelHandlers["whaleTrades"]}
             rowSpan={rowSpanFor("whaleTrades")}
-            onRowSpanChange={(s) => setRowSpan("whaleTrades", s)}
-            onRowSpanReset={() => resetRowSpan("whaleTrades")}
             maxColSpan={maxColSpan}
           >
             <WhaleTradesPanel
               trades={smartMoneyTrades}
-              onSelectWallet={(addr) => {
-                const sm = useSmartMoneyStore.getState();
-                sm.setTraderPanelWallet(addr);
-                const t = smartMoneyTrades.find((e) => e.wallet === addr);
-                sm.setTraderWalletName(t?.username || null);
-              }}
-              onSelectMarket={(slug) => {
-                const all = [...mapped, ...unmapped];
-                const found = all.find(m => m.slug === slug);
-                if (found) handleSelectMarketFromPanel(found);
-              }}
+              onSelectWallet={handleWhaleSelectWallet}
+              onSelectMarket={handleSmartMoneySelectMarket}
             />
           </Panel>
         );
@@ -802,11 +792,8 @@ export default function Home() {
             title="Order Book"
             badge={selectedMarket && !selectedMarket.closed ? <span className="panel-data-badge live">live</span> : undefined}
             colSpan={colSpanFor("orderbook")}
-            onColSpanChange={(s) => setColSpan("orderbook", s)}
-            onColSpanReset={() => resetColSpan("orderbook")}
+            {...panelHandlers["orderbook"]}
             rowSpan={rowSpanFor("orderbook")}
-            onRowSpanChange={(s) => setRowSpan("orderbook", s)}
-            onRowSpanReset={() => resetRowSpan("orderbook")}
             maxColSpan={maxColSpan}
             headerRight={
               selectedMarket ? (
@@ -835,11 +822,8 @@ export default function Home() {
             panelId="trader"
             title="Trader"
             colSpan={colSpanFor("trader")}
-            onColSpanChange={(s) => setColSpan("trader", s)}
-            onColSpanReset={() => resetColSpan("trader")}
+            {...panelHandlers["trader"]}
             rowSpan={rowSpanFor("trader")}
-            onRowSpanChange={(s) => setRowSpan("trader", s)}
-            onRowSpanReset={() => resetRowSpan("trader")}
             maxColSpan={maxColSpan}
             headerRight={
               <div className="flex items-center gap-1">
@@ -886,11 +870,8 @@ export default function Home() {
             panelId="sentiment"
             title="Sentiment"
             colSpan={colSpanFor("sentiment")}
-            onColSpanChange={(s) => setColSpan("sentiment", s)}
-            onColSpanReset={() => resetColSpan("sentiment")}
+            {...panelHandlers["sentiment"]}
             rowSpan={rowSpanFor("sentiment")}
-            onRowSpanChange={(s) => setRowSpan("sentiment", s)}
-            onRowSpanReset={() => resetRowSpan("sentiment")}
             maxColSpan={maxColSpan}
           >
             <SentimentPanel />
@@ -903,11 +884,8 @@ export default function Home() {
             panelId="chart"
             title="Price Chart"
             colSpan={colSpanFor("chart")}
-            onColSpanChange={(s) => setColSpan("chart", s)}
-            onColSpanReset={() => resetColSpan("chart")}
+            {...panelHandlers["chart"]}
             rowSpan={rowSpanFor("chart")}
-            onRowSpanChange={(s) => setRowSpan("chart", s)}
-            onRowSpanReset={() => resetRowSpan("chart")}
             maxColSpan={maxColSpan}
             headerRight={
               selectedMarket ? (
