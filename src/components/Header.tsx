@@ -17,6 +17,8 @@ interface HeaderProps {
   watchedCount?: number;
   alertUnreadCount?: number;
   whaleTradeCount?: number;
+  autoRefresh?: boolean;
+  refreshError?: boolean;
   // Alert manager props
   alertManagerOpen?: boolean;
   onOpenAlertManager?: () => void;
@@ -85,11 +87,23 @@ export default function Header({
   onCloseAlertManager,
   alertProps,
   whaleTradeCount = 0,
+  autoRefresh = false,
+  refreshError = false,
 }: HeaderProps) {
   const syncInfo = lastSyncTime ? getRelativeTime(lastSyncTime) : null;
   const bellRef = useRef<HTMLButtonElement>(null);
   const [mounted, setMounted] = useState(false);
+  const [progressKey, setProgressKey] = useState(0);
   useEffect(() => setMounted(true), []);
+
+  // Reset progress bar animation each time loading finishes (= data refreshed)
+  const prevLoading = useRef(loading);
+  useEffect(() => {
+    if (prevLoading.current && !loading) {
+      setProgressKey((k) => k + 1);
+    }
+    prevLoading.current = loading;
+  }, [loading]);
 
   return (
     <header className="h-[48px] bg-[var(--bg)] border-b border-[var(--border-subtle)] flex items-center pl-4 pr-3 z-50 shrink-0 font-mono relative">
@@ -187,6 +201,11 @@ export default function Header({
           {dataMode}
         </span>
 
+        {/* Refresh error indicator */}
+        {refreshError && (
+          <span className="w-2 h-2 rounded-full bg-[#f97316] animate-pulse" title="Refresh failed" />
+        )}
+
         {/* Sync time / stale warning */}
         {syncInfo ? (
           <span
@@ -231,6 +250,16 @@ export default function Header({
           onClose={onCloseAlertManager}
           {...alertProps}
         />
+      )}
+
+      {/* Refresh progress bar */}
+      {autoRefresh && (
+        <div className="absolute bottom-0 left-0 right-0 h-[2px] overflow-hidden">
+          <div
+            key={progressKey}
+            className={loading ? "header-progress-pulse" : "header-progress-bar"}
+          />
+        </div>
       )}
     </header>
   );

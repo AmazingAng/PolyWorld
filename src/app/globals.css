@@ -1889,3 +1889,28 @@ body.resize-active .map-container {
 .ob-scroll::-webkit-scrollbar-track { background: transparent; }
 .ob-scroll::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
 .ob-scroll::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+
+/* === Header Progress Bar === */
+.header-progress-bar {
+  height: 100%;
+  background: var(--green);
+  opacity: 0.6;
+  animation: header-progress 45s linear forwards;
+}
+
+.header-progress-pulse {
+  height: 100%;
+  background: var(--green);
+  opacity: 0.8;
+  animation: header-pulse 1s ease-in-out infinite;
+}
+
+@keyframes header-progress {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+@keyframes header-pulse {
+  0%, 100% { width: 30%; opacity: 0.4; }
+  50% { width: 100%; opacity: 0.8; }
+}

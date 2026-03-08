@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { ProcessedMarket, Category } from "@/types";
 import { processEvents, getSampleData } from "@/lib/polymarket";
@@ -65,6 +65,7 @@ const TIME_MAX_AGE: Record<string, number> = {
 
 export default function Home() {
   const { prefs, updatePref, hydrated: prefsReady } = usePreferences();
+  const [refreshError, setRefreshError] = useState(false);
 
   // ─── Market Store ───
   const mapped = useMarketStore((s) => s.mapped);
@@ -226,6 +227,7 @@ export default function Home() {
         setMapped(m);
         setUnmapped(u);
         setDataMode("live");
+        setRefreshError(false);
         if (data.lastSync) setLastSyncTime(data.lastSync);
 
         const sigs = m.filter(
@@ -256,6 +258,7 @@ export default function Home() {
         throw new Error("No events in DB");
       }
     } catch {
+      setRefreshError(true);
       const sample = getSampleData();
       const { mapped: m, unmapped: u } = processEvents(sample);
       setMapped(m);
@@ -936,6 +939,8 @@ export default function Home() {
         watchedCount={watchedCount}
         whaleTradeCount={smartMoneyTrades.length}
         alertUnreadCount={unreadCount}
+        autoRefresh={autoRefresh}
+        refreshError={refreshError}
         alertManagerOpen={alertManagerOpen}
         onOpenAlertManager={() => useUIStore.getState().setAlertManagerOpen((v) => !v)}
         onCloseAlertManager={() => { const ui = useUIStore.getState(); ui.setAlertManagerOpen(false); ui.setAlertPrefill(undefined); }}
