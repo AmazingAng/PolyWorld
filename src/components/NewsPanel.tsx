@@ -175,10 +175,12 @@ function NewsPopover({
 export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
   const [items, setItems] = useState<ExtendedNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const [hoveredItem, setHoveredItem] = useState<ExtendedNewsItem | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryCount = useRef(0);
 
   const showPopover = useCallback((item: ExtendedNewsItem, rect: DOMRect) => {
     if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null; }
@@ -202,12 +204,19 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
     try {
       const params = selectedMarket ? `?marketId=${selectedMarket.id}` : "";
       const res = await fetch(`/api/news${params}`);
-      if (res.ok) {
-        const data = await res.json();
-        setItems(data);
-      }
+      if (!res.ok) throw new Error("fetch failed");
+      const data = await res.json();
+      setItems(data);
+      setError(null);
+      retryCount.current = 0;
     } catch {
-      // silently fail
+      if (retryCount.current < 3) {
+        const delay = 2000 * Math.pow(2, retryCount.current);
+        retryCount.current++;
+        setTimeout(fetchNews, delay);
+      } else {
+        setError("加载失败");
+      }
     } finally {
       setLoading(false);
     }
@@ -274,8 +283,15 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
         </div>
       )}
 
+      {/* Error state */}
+      {error && !loading && (
+        <div className="text-[11px] text-[var(--red)] font-mono py-2 text-center">
+          {error} <button onClick={() => { retryCount.current = 0; setLoading(true); fetchNews(); }} className="ml-2 underline">retry</button>
+        </div>
+      )}
+
       {/* Empty state */}
-      {!loading && filteredItems.length === 0 && (
+      {!loading && !error && filteredItems.length === 0 && (
         <div className="text-[12px] text-[var(--text-muted)] font-mono py-4 text-center">
           {selectedMarket
             ? "no related news found for this market"

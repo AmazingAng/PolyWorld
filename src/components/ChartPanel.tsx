@@ -139,9 +139,11 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
   const [showMA, setShowMA] = useState(true);
   const [showMACD, setShowMACD] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [crosshairData, setCrosshairData] = useState<CrosshairData | null>(null);
   const [chartData, setChartData] = useState<ChartData | null>(null);
   const [useUTC, setUseUTC] = useState(true);
+  const retryCount = useRef(0);
 
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const macdContainerRef = useRef<HTMLDivElement>(null);
@@ -190,7 +192,7 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
               value: d.prob,
             }))),
           }));
-          if (!cancelled) setChartData({ key: cacheKey, multi, bars: [] });
+          if (!cancelled) { setChartData({ key: cacheKey, multi, bars: [] }); setError(null); retryCount.current = 0; }
         } else {
           const res = await fetch(baseUrl);
           const rows: SnapshotRow[] = await res.json();
@@ -212,10 +214,19 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
             }
           }
           const bars = Array.from(ohlcMap.values()).sort((a, b) => a.time - b.time);
-          if (!cancelled) setChartData({ key: cacheKey, multi: null, bars });
+          if (!cancelled) { setChartData({ key: cacheKey, multi: null, bars }); setError(null); retryCount.current = 0; }
         }
       } catch (err) {
         console.error("[ChartPanel] fetch error:", err);
+        if (!cancelled) {
+          if (retryCount.current < 3) {
+            const delay = 2000 * Math.pow(2, retryCount.current);
+            retryCount.current++;
+            setTimeout(() => { if (!cancelled) setChartData((prev) => ({ ...prev!, key: "" })); }, delay);
+          } else {
+            setError("加载失败");
+          }
+        }
       }
       if (!cancelled) setLoading(false);
     })();
@@ -558,6 +569,13 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: "#0d0d0d99" }}>
             <span className="inline-block w-4 h-4 border border-[#555] border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+        {error && !loading && (
+          <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: "#0d0d0d99" }}>
+            <div className="text-[11px] text-[var(--red)] font-mono text-center">
+              {error} <button onClick={() => { retryCount.current = 0; setChartData(null); }} className="ml-2 underline">retry</button>
+            </div>
           </div>
         )}
         <div ref={chartContainerRef} style={{ position: "absolute", inset: 0 }} />

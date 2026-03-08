@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { SentimentIndex } from "@/types";
 
 function scoreColor(v: number): string {
@@ -160,15 +160,25 @@ function SubScoreBar({ name, value }: { name: string; value: number }) {
 export default function SentimentPanel() {
   const [data, setData] = useState<SentimentIndex | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const retryCount = useRef(0);
 
   const fetchSentiment = useCallback(async () => {
     try {
       const res = await fetch("/api/sentiment");
-      if (!res.ok) return;
+      if (!res.ok) throw new Error("fetch failed");
       const json: SentimentIndex = await res.json();
       setData(json);
+      setError(null);
+      retryCount.current = 0;
     } catch {
-      // non-critical
+      if (retryCount.current < 3) {
+        const delay = 2000 * Math.pow(2, retryCount.current);
+        retryCount.current++;
+        setTimeout(fetchSentiment, delay);
+      } else {
+        setError("加载失败");
+      }
     } finally {
       setLoading(false);
     }
@@ -184,6 +194,14 @@ export default function SentimentPanel() {
     return (
       <div style={{ padding: 12, fontFamily: "monospace", fontSize: 11, color: "var(--text-muted)" }}>
         loading sentiment…
+      </div>
+    );
+  }
+
+  if (error && !data) {
+    return (
+      <div className="text-[11px] text-[var(--red)] font-mono py-2 text-center">
+        {error} <button onClick={() => { retryCount.current = 0; setLoading(true); fetchSentiment(); }} className="ml-2 underline">retry</button>
       </div>
     );
   }

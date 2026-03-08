@@ -33,6 +33,7 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const retryCount = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const midRef = useRef<HTMLDivElement>(null);
 
@@ -62,11 +63,18 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
           activeTokenRef.current = tid;
           setData(d);
           setError(null);
+          retryCount.current = 0;
           return;
         }
       } catch { /* try next */ }
     }
-    setError("No orderbook available for this market");
+    if (retryCount.current < 3) {
+      const delay = 2000 * Math.pow(2, retryCount.current);
+      retryCount.current++;
+      setTimeout(fetchBook, delay);
+    } else {
+      setError("加载失败");
+    }
   }, [tokenIds]);
 
   useEffect(() => {
@@ -128,7 +136,11 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
   }
 
   if (error && !data) {
-    return <div className="text-[10px] text-[var(--text-faint)] py-4 text-center">{error}</div>;
+    return (
+      <div className="text-[11px] text-[var(--red)] font-mono py-2 text-center">
+        {error} <button onClick={() => { retryCount.current = 0; setLoading(true); setError(null); fetchBook().finally(() => setLoading(false)); }} className="ml-2 underline">retry</button>
+      </div>
+    );
   }
 
   if (!data) return null;
