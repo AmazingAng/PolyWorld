@@ -16,9 +16,9 @@
   --text: #f0f0f0;
   --text-secondary: #d4d4d4;
   --text-dim: #a0a0a0;
-  --text-muted: #8a8a8a;
-  --text-faint: #777;
-  --text-ghost: #666;
+  --text-muted: #999;
+  --text-faint: #888;
+  --text-ghost: #777;
 
   /* Overlays */
   --overlay-subtle: rgba(255, 255, 255, 0.03);
