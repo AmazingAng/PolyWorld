@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, memo } from "react";
 import { ProcessedMarket, Category } from "@/types";
 import MarketCard from "./MarketCard";
 import { useColResize } from "@/hooks/useColResize";
@@ -28,7 +28,7 @@ interface MarketsPanelProps {
 type SortTab = "default" | "impact";
 const NEW_THRESHOLD_MS = 6 * 60 * 60 * 1000;
 
-export default function MarketsPanel({
+function MarketsPanelInner({
   mapped,
   unmapped,
   activeCategories,
@@ -345,6 +345,19 @@ export default function MarketsPanel({
     </div>
   );
 }
+
+export default memo(MarketsPanelInner, (prev, next) => {
+  if (prev.mapped !== next.mapped) return false;
+  if (prev.unmapped !== next.unmapped) return false;
+  if (prev.activeCategories !== next.activeCategories) return false;
+  if (prev.loading !== next.loading) return false;
+  if (prev.externalSearch !== next.externalSearch) return false;
+  if (prev.colSpan !== next.colSpan) return false;
+  if (prev.rowSpan !== next.rowSpan) return false;
+  if (prev.maxColSpan !== next.maxColSpan) return false;
+  if (prev.isWatched !== next.isWatched) return false;
+  return true;
+});
 
 function SectionLabel({ title }: { title: string }) {
   return (

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readTweetsFromDb } from "@/lib/tweetsSync";
+import { apiError } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,6 @@ export async function GET(request: Request) {
     const items = readTweetsFromDb(marketId);
     return NextResponse.json(items);
   } catch (err) {
-    console.error("[api/tweets] error:", err);
-    return NextResponse.json([], { status: 500 });
+    return apiError("tweets", "Failed to read tweets", 500, err);
   }
 }

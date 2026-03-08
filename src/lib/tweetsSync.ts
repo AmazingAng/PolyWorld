@@ -23,7 +23,16 @@ const STOP_WORDS = new Set([
   "if", "each", "get", "got", "go", "been", "being", "make", "made",
   "very", "much", "many", "any", "own", "such", "like", "even", "still",
   "between", "through", "during", "before", "under", "against", "both",
+  "market", "markets", "price", "prices", "win", "winner", "won",
+  "will", "year", "day", "time", "first", "last", "next", "end",
+  "top", "best", "back", "take", "come", "world", "hit", "set",
+  "per", "report", "reports", "according", "people", "says",
+  "could", "may", "might", "week", "month", "state", "states",
+  "news", "update", "latest", "today", "yesterday", "number",
 ]);
+
+const MIN_KEYWORD_LENGTH = 4;
+const MAX_MATCHES_PER_ITEM = 20;
 
 function makeId(url: string): string {
   return crypto.createHash("sha256").update(url).digest("hex").slice(0, 32);
@@ -102,9 +111,17 @@ export async function runTweetsSync(): Promise<{ items: number; matches: number 
   return { items: totalItems, matches: totalMatches };
 }
 
+function extractKeywords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= MIN_KEYWORD_LENGTH && !STOP_WORDS.has(w));
+}
+
 function runKeywordMatching(db: ReturnType<typeof getDb>): number {
   const markets = db.prepare(`
-    SELECT id, title, tags_json, location FROM events WHERE is_active = 1
+    SELECT id, title, tags_json, location FROM events WHERE is_active = 1 AND is_closed = 0
   `).all() as Array<{ id: string; title: string; tags_json: string; location: string | null }>;
 
   if (markets.length === 0) return 0;
@@ -114,17 +131,15 @@ function runKeywordMatching(db: ReturnType<typeof getDb>): number {
       try { return JSON.parse(m.tags_json || "[]"); } catch { return []; }
     })();
     const raw = [m.title, ...tags, m.location || ""].join(" ");
-    const words = raw
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, " ")
-      .split(/\s+/)
-      .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
-    return { id: m.id, keywords: [...new Set(words)] };
+    const keywords = [...new Set(extractKeywords(raw))];
+    return { id: m.id, keywords };
   });
 
+  // Only match tweets that haven't been matched yet (incremental)
   const tweetItems = db.prepare(`
     SELECT id, text, handle FROM tweet_items
     WHERE published_at > datetime('now', '-3 days')
+      AND id NOT IN (SELECT DISTINCT tweet_id FROM tweet_market_matches)
   `).all() as Array<{ id: string; text: string; handle: string }>;
 
   if (tweetItems.length === 0) return 0;
@@ -139,22 +154,26 @@ function runKeywordMatching(db: ReturnType<typeof getDb>): number {
   let matches = 0;
   const matchTx = db.transaction(() => {
     for (const tweet of tweetItems) {
-      const tweetText = tweet.text
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ");
-      const tweetWords = tweetText.split(/\s+/).filter((w) => w.length > 2);
-      const tweetWordSet = new Set(tweetWords);
+      const tweetWordSet = new Set(extractKeywords(tweet.text));
 
+      const scored: { marketId: string; score: number }[] = [];
       for (const market of marketKeywords) {
-        if (market.keywords.length === 0) continue;
+        if (market.keywords.length < 2) continue;
         const hits = market.keywords.filter((kw) => tweetWordSet.has(kw));
         const matchRate = hits.length / market.keywords.length;
 
-        if (hits.length >= 2 && matchRate >= 0.15) {
-          const score = Math.min(1, matchRate * 2);
-          upsertMatch.run(tweet.id, market.id, Math.round(score * 100) / 100);
-          matches++;
+        if (hits.length >= 3 && matchRate >= 0.25) {
+          scored.push({
+            marketId: market.id,
+            score: Math.min(1, matchRate * 2),
+          });
         }
+      }
+
+      scored.sort((a, b) => b.score - a.score);
+      for (const m of scored.slice(0, MAX_MATCHES_PER_ITEM)) {
+        upsertMatch.run(tweet.id, m.marketId, Math.round(m.score * 100) / 100);
+        matches++;
       }
     }
   });

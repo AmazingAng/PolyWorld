@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-const DRAG_THRESHOLD = 6;
+const DRAG_THRESHOLD = 8;
 
 interface PanelDragGrid {
   ref: React.RefObject<HTMLElement | null>;
@@ -10,7 +10,7 @@ interface PanelDragGrid {
 
 /**
  * Multi-container drag-to-reorder panels with cross-grid transfer.
- * Uses DOM class manipulation during drag (no React re-renders) for smooth performance.
+ * Uses elementFromPoint + ghost preview for accurate hit detection.
  * Supports mouse + touch.
  */
 export function usePanelDrag(config: {
@@ -32,6 +32,7 @@ export function usePanelDrag(config: {
     const containers = grids.map((g) => g.ref.current).filter(Boolean) as HTMLElement[];
     if (containers.length === 0) return;
 
+    let startX = 0;
     let startY = 0;
     let active = false;
     let sourcePanel: HTMLElement | null = null;
@@ -39,6 +40,7 @@ export function usePanelDrag(config: {
     let lastIndicatorPanel: HTMLElement | null = null;
     let lastIndicatorSide: string | null = null;
     let lastTargetContainerIdx = -1;
+    let ghost: HTMLElement | null = null;
 
     function getContainers(): HTMLElement[] {
       return configRef.current.grids
@@ -72,44 +74,120 @@ export function usePanelDrag(config: {
         lastIndicatorPanel = null;
         lastIndicatorSide = null;
       }
-      // Clear empty-container highlight
       const ctrs = getContainers();
       for (const c of ctrs) {
         c.classList.remove("panel-drop-target");
       }
     }
 
-    function computeDropTarget(clientY: number): {
+    // --- Ghost preview ---
+    function createGhost(panel: HTMLElement) {
+      ghost = document.createElement("div");
+      ghost.className = "panel-drag-ghost";
+
+      // Extract just the panel title text
+      const titleEl = panel.querySelector(".panel-title");
+      const title = titleEl?.textContent || panel.getAttribute("data-panel") || "";
+      ghost.textContent = title;
+
+      document.body.appendChild(ghost);
+    }
+
+    function moveGhost(clientX: number, clientY: number) {
+      if (!ghost) return;
+      ghost.style.left = clientX + 14 + "px";
+      ghost.style.top = clientY - 14 + "px";
+    }
+
+    function removeGhost() {
+      if (ghost) {
+        ghost.remove();
+        ghost = null;
+      }
+    }
+
+    // --- Drop target via elementFromPoint ---
+    function computeDropTarget(clientX: number, clientY: number): {
       containerIdx: number;
       panel: HTMLElement | null;
       above: boolean;
     } | null {
+      if (!sourcePanel) return null;
+
+      // Temporarily hide source + ghost so elementFromPoint sees through
+      const prevSrc = sourcePanel.style.visibility;
+      sourcePanel.style.visibility = "hidden";
+      if (ghost) ghost.style.display = "none";
+
+      const el = document.elementFromPoint(clientX, clientY);
+
+      sourcePanel.style.visibility = prevSrc;
+      if (ghost) ghost.style.display = "";
+
+      if (!el) return null;
+
       const ctrs = getContainers();
+      let targetPanel: HTMLElement | null = null;
+      let targetContainerIdx = -1;
 
-      for (let ci = 0; ci < ctrs.length; ci++) {
-        const rect = ctrs[ci].getBoundingClientRect();
-        if (clientY < rect.top || clientY > rect.bottom) continue;
-
-        const panels = getPanelElements(ctrs[ci]).filter((p) => p !== sourcePanel);
-        if (panels.length === 0) {
-          // Empty container — insert at position 0
-          return { containerIdx: ci, panel: null, above: true };
-        }
-
-        for (let i = 0; i < panels.length; i++) {
-          const pr = panels[i].getBoundingClientRect();
-          const midY = pr.top + pr.height / 2;
-          if (clientY < midY) {
-            return { containerIdx: ci, panel: panels[i], above: true };
+      // Check if cursor is over a panel
+      const panelEl = el.closest("[data-panel]") as HTMLElement | null;
+      if (panelEl && panelEl !== sourcePanel) {
+        targetPanel = panelEl;
+        for (let i = 0; i < ctrs.length; i++) {
+          if (ctrs[i].contains(panelEl)) {
+            targetContainerIdx = i;
+            break;
           }
         }
-        // Below all — drop after last
-        return { containerIdx: ci, panel: panels[panels.length - 1], above: false };
       }
-      return null;
+
+      // Check if cursor is over a container (but not on a panel)
+      if (targetContainerIdx === -1) {
+        for (let i = 0; i < ctrs.length; i++) {
+          const rect = ctrs[i].getBoundingClientRect();
+          if (
+            clientX >= rect.left && clientX <= rect.right &&
+            clientY >= rect.top && clientY <= rect.bottom
+          ) {
+            targetContainerIdx = i;
+            break;
+          }
+        }
+      }
+
+      if (targetContainerIdx === -1) return null;
+
+      if (!targetPanel) {
+        return { containerIdx: targetContainerIdx, panel: null, above: true };
+      }
+
+      // Row-aware midpoint: same row → horizontal, different row → vertical
+      const targetRect = targetPanel.getBoundingClientRect();
+      const midY = targetRect.top + targetRect.height / 2;
+      const above = clientY < midY;
+
+      return { containerIdx: targetContainerIdx, panel: targetPanel, above };
     }
 
-    function beginDrag(clientY: number, target: HTMLElement) {
+    function applyIndicators(clientX: number, clientY: number) {
+      clearIndicators();
+      const target = computeDropTarget(clientX, clientY);
+      if (target) {
+        lastTargetContainerIdx = target.containerIdx;
+        if (target.panel) {
+          const cls = target.above ? "panel-drop-above" : "panel-drop-below";
+          target.panel.classList.add(cls);
+          lastIndicatorPanel = target.panel;
+          lastIndicatorSide = cls;
+        } else {
+          const ctrs = getContainers();
+          ctrs[target.containerIdx].classList.add("panel-drop-target");
+        }
+      }
+    }
+
+    function beginDrag(clientX: number, clientY: number, target: HTMLElement) {
       if (target.closest("button, input, select, textarea, .panel-content")) return;
       if (!target.closest(".panel-header, .drag-handle")) return;
 
@@ -120,6 +198,7 @@ export function usePanelDrag(config: {
       if (!sourcePanel) return;
 
       sourceContainerIdx = cIdx;
+      startX = clientX;
       startY = clientY;
       active = false;
 
@@ -129,34 +208,26 @@ export function usePanelDrag(config: {
       document.addEventListener("touchend", onTouchEnd);
     }
 
-    function moveDrag(clientY: number) {
+    function moveDrag(clientX: number, clientY: number) {
       if (!sourcePanel) return;
 
       if (!active) {
-        if (Math.abs(clientY - startY) < DRAG_THRESHOLD) return;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+        if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
         active = true;
         sourcePanel.classList.add("panel-dragging");
+        createGhost(sourcePanel);
         document.body.style.userSelect = "none";
         document.body.style.cursor = "grabbing";
         document.body.classList.add("panel-drag-active");
         configRef.current.onDragStateChange?.(true);
       }
 
-      clearIndicators();
-      const target = computeDropTarget(clientY);
-      if (target) {
-        lastTargetContainerIdx = target.containerIdx;
-        if (target.panel) {
-          const cls = target.above ? "panel-drop-above" : "panel-drop-below";
-          target.panel.classList.add(cls);
-          lastIndicatorPanel = target.panel;
-          lastIndicatorSide = cls;
-        } else {
-          // Empty container highlight
-          const ctrs = getContainers();
-          ctrs[target.containerIdx].classList.add("panel-drop-target");
-        }
-      }
+      // Ghost follows cursor directly (no rAF for responsiveness)
+      moveGhost(clientX, clientY);
+      // Indicators computed synchronously
+      applyIndicators(clientX, clientY);
     }
 
     function endDrag() {
@@ -202,10 +273,8 @@ export function usePanelDrag(config: {
           const fromGrid = cfg.grids[sourceContainerIdx];
           const toGrid = cfg.grids[lastTargetContainerIdx];
 
-          // Remove from source
           const newFromOrder = fromGrid.panelOrder.filter((id) => id !== sourceId);
 
-          // Insert into target
           const newToOrder = [...toGrid.panelOrder];
           if (lastIndicatorPanel) {
             const targetId = lastIndicatorPanel.getAttribute("data-panel")!;
@@ -215,7 +284,6 @@ export function usePanelDrag(config: {
             else if (!insertBefore) toIdx++;
             newToOrder.splice(toIdx, 0, sourceId);
           } else {
-            // Empty container — insert at position 0
             newToOrder.push(sourceId);
           }
 
@@ -232,6 +300,7 @@ export function usePanelDrag(config: {
       // Cleanup
       if (sourcePanel) sourcePanel.classList.remove("panel-dragging");
       clearIndicators();
+      removeGhost();
       sourcePanel = null;
       active = false;
       sourceContainerIdx = -1;
@@ -241,20 +310,22 @@ export function usePanelDrag(config: {
 
     function onMouseDown(e: MouseEvent) {
       if (e.button !== 0) return;
-      beginDrag(e.clientY, e.target as HTMLElement);
+      beginDrag(e.clientX, e.clientY, e.target as HTMLElement);
     }
     function onMouseMove(e: MouseEvent) {
-      moveDrag(e.clientY);
+      moveDrag(e.clientX, e.clientY);
     }
     function onMouseUp() {
       endDrag();
     }
     function onTouchStart(e: TouchEvent) {
-      beginDrag(e.touches[0].clientY, e.target as HTMLElement);
+      const t = e.touches[0];
+      beginDrag(t.clientX, t.clientY, e.target as HTMLElement);
     }
     function onTouchMove(e: TouchEvent) {
       e.preventDefault();
-      moveDrag(e.touches[0].clientY);
+      const t = e.touches[0];
+      moveDrag(t.clientX, t.clientY);
     }
     function onTouchEnd() {
       endDrag();
@@ -274,6 +345,7 @@ export function usePanelDrag(config: {
       document.removeEventListener("mouseup", onMouseUp);
       document.removeEventListener("touchmove", onTouchMove);
       document.removeEventListener("touchend", onTouchEnd);
+      removeGhost();
     };
   }, []);
 }

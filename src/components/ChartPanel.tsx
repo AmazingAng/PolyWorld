@@ -1,19 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import type { ProcessedMarket } from "@/types";
-
-const SERIES_COLORS = [
-  "#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7",
-  "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#6366f1",
-  "#14b8a6", "#e879f9",
-];
-
-const MA_COLORS = {
-  ma5: "#f5d94e",
-  ma10: "#e77ef0",
-  ma20: "#4fc3f7",
-};
+import { SERIES_COLORS, MA_COLORS } from "@/lib/chartConstants";
 
 type TimeRange = "1h" | "24h" | "7d" | "30d";
 type ChartMode = "candle" | "line";
@@ -144,7 +133,7 @@ function getLightweightCharts() {
   return lcModulePromise;
 }
 
-export default function ChartPanel({ selectedMarket, lineOnly = false }: ChartPanelProps) {
+function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
   const [chartMode, setChartMode] = useState<ChartMode>("candle");
   const [showMA, setShowMA] = useState(true);
@@ -583,3 +572,10 @@ export default function ChartPanel({ selectedMarket, lineOnly = false }: ChartPa
     </div>
   );
 }
+
+export default memo(ChartPanelInner, (prev, next) => {
+  if (prev.lineOnly !== next.lineOnly) return false;
+  if (prev.selectedMarket?.id !== next.selectedMarket?.id) return false;
+  if (prev.selectedMarket?.prob !== next.selectedMarket?.prob) return false;
+  return true;
+});

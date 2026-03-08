@@ -4,9 +4,13 @@ export interface PolymarketEvent {
   slug: string;
   description?: string;
   markets: PolymarketMarket[];
+  /** Primary volume field — use this first */
   volume?: number;
+  /** @deprecated Alias for volume — some API versions use this */
   volume_num?: number;
+  /** @deprecated Use volume24hr instead (snake_case variant) */
   volume_24hr?: number;
+  /** 24-hour volume — normalized in processEvents() */
   volume24hr?: number;
   liquidity?: number;
   tags?: Array<{ id?: number; label?: string; name?: string; slug?: string }>;

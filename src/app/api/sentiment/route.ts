@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import type { SentimentIndex, SentimentSubScore } from "@/types";
+import { SingleCache } from "@/lib/apiCache";
+import { apiError } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
 
-// 30s in-memory cache
-let cached: { data: SentimentIndex; fetchedAt: number } | null = null;
-const CACHE_TTL = 30_000;
+// 5-minute cache — sentiment changes slowly, no need to recompute often
+const sentimentCache = new SingleCache<SentimentIndex>(300_000);
+// Track background computation to avoid duplicate work
+let bgComputeInProgress = false;
 
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
@@ -51,9 +54,18 @@ function computeSentiment(): SentimentIndex {
     .get() as { total: number | null } | undefined;
   const currentVol = currentVolRow?.total || 0;
 
+  // Use 3-day window with sampled rows to avoid scanning millions of rows.
+  // Sample every ~100th row by using rowid modulo for a representative average.
   const histVolRow = db
     .prepare(
-      `SELECT AVG(daily) as avg FROM (SELECT DATE(recorded_at) d, SUM(volume_24h) daily FROM price_snapshots WHERE recorded_at > datetime('now','-7 days') AND recorded_at < datetime('now','-1 day') GROUP BY d)`
+      `SELECT AVG(daily) as avg FROM (
+         SELECT DATE(recorded_at) d, SUM(volume_24h) * 100 as daily
+         FROM price_snapshots
+         WHERE recorded_at > datetime('now','-4 days')
+           AND recorded_at < datetime('now','-1 day')
+           AND rowid % 100 = 0
+         GROUP BY d
+       )`
     )
     .get() as { avg: number | null } | undefined;
   const histVol = histVolRow?.avg || 0;
@@ -127,26 +139,39 @@ function computeSentiment(): SentimentIndex {
   };
 }
 
+const NEUTRAL_FALLBACK: SentimentIndex = {
+  score: 50,
+  label: "Neutral",
+  subScores: [],
+  activeMarkets: 0,
+  updatedAt: new Date().toISOString(),
+};
+
 export async function GET() {
   try {
-    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL) {
-      return NextResponse.json(cached.data);
+    const cached = sentimentCache.get();
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
-    const data = computeSentiment();
-    cached = { data, fetchedAt: Date.now() };
-    return NextResponse.json(data);
+    // Cold start: return neutral immediately, compute in background
+    if (!bgComputeInProgress) {
+      bgComputeInProgress = true;
+      setTimeout(() => {
+        try {
+          const data = computeSentiment();
+          sentimentCache.set(data);
+        } catch (err) {
+          console.error("[api/sentiment] Background compute error:", err);
+        } finally {
+          bgComputeInProgress = false;
+        }
+      }, 0);
+    }
+
+    return NextResponse.json(NEUTRAL_FALLBACK);
   } catch (err) {
     console.error("[api/sentiment] Error:", err);
-    return NextResponse.json(
-      {
-        score: 50,
-        label: "Neutral",
-        subScores: [],
-        activeMarkets: 0,
-        updatedAt: new Date().toISOString(),
-      },
-      { status: 500 }
-    );
+    return NextResponse.json(NEUTRAL_FALLBACK);
   }
 }

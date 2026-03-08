@@ -24,12 +24,7 @@ interface SparklineProps {
   multiSeries?: boolean;
 }
 
-// Distinct colors for up to ~12 series lines
-const SERIES_COLORS = [
-  "#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7",
-  "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#6366f1",
-  "#14b8a6", "#e879f9",
-];
+import { SERIES_COLORS } from "@/lib/chartConstants";
 
 /** Largest-Triangle-Three-Buckets downsampling */
 function lttb(data: { t: number; v: number }[], target: number): { t: number; v: number }[] {

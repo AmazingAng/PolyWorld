@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useEffect, useCallback, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { ProcessedMarket, Category, SmartWallet, WhaleTrade } from "@/types";
+import { ProcessedMarket, Category } from "@/types";
 import { processEvents, getSampleData } from "@/lib/polymarket";
 import Header from "@/components/Header";
 import Panel from "@/components/Panel";
@@ -14,12 +14,11 @@ import NewsPanel from "@/components/NewsPanel";
 import SettingsModal from "@/components/SettingsModal";
 import type { PanelVisibility } from "@/components/SettingsModal";
 import ToastContainer from "@/components/Toast";
-import type { TimeRange } from "@/components/TimeRangeFilter";
 import { usePanelDrag } from "@/hooks/usePanelDrag";
 import ResizeHandle from "@/components/ResizeHandle";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useWatchlist } from "@/hooks/useWatchlist";
-import { useAlerts, AlertConfig } from "@/hooks/useAlerts";
+import { useAlerts } from "@/hooks/useAlerts";
 import { useBrowserNotifications } from "@/hooks/useBrowserNotifications";
 import WatchlistPanel from "@/components/WatchlistPanel";
 import SmartMoneyPanel from "@/components/SmartMoneyPanel";
@@ -32,6 +31,9 @@ import TweetsPanel from "@/components/TweetsPanel";
 import TraderPanel from "@/components/TraderPanel";
 import { usePanelColSpans } from "@/hooks/usePanelColSpans";
 import { usePanelRowSpans } from "@/hooks/usePanelRowSpans";
+import { useMarketStore } from "@/stores/marketStore";
+import { useSmartMoneyStore } from "@/stores/smartMoneyStore";
+import { useUIStore } from "@/stores/uiStore";
 
 const WorldMap = dynamic(() => import("@/components/WorldMap"), {
   ssr: false,
@@ -51,64 +53,74 @@ const DEFAULT_COL_SPANS: Record<string, number> = {
   markets: 2, country: 2, news: 2, tweets: 1, live: 2, watchlist: 2, detail: 2, leaderboard: 1, trader: 2, smartMoney: 1, whaleTrades: 1, orderbook: 1, sentiment: 1, chart: 2,
 };
 
-const TIME_THRESHOLDS: Record<TimeRange, number> = {
-  "1h": 50000,
-  "6h": 20000,
-  "24h": 1000,
-  "48h": 500,
-  "7d": 0,
+// Time range → max age in milliseconds (0 = no filter)
+const TIME_MAX_AGE: Record<string, number> = {
+  "1h": 60 * 60 * 1000,
+  "6h": 6 * 60 * 60 * 1000,
+  "24h": 24 * 60 * 60 * 1000,
+  "48h": 48 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
   ALL: 0,
 };
 
 export default function Home() {
   const { prefs, updatePref, hydrated: prefsReady } = usePreferences();
 
-  const [mapped, setMapped] = useState<ProcessedMarket[]>([]);
-  const [unmapped, setUnmapped] = useState<ProcessedMarket[]>([]);
-  const [activeCategories, setActiveCategories] = useState<Set<Category>>(
-    () => new Set(["Politics", "Crypto", "Sports", "Finance", "Tech", "Culture", "Other"] as Category[])
-  );
-  const [loading, setLoading] = useState(true);
-  const [lastRefresh, setLastRefresh] = useState<string | null>(null);
-  const [dataMode, setDataMode] = useState<"live" | "proxy" | "sample">(
-    "live"
-  );
-  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-  const [flyToTarget, setFlyToTarget] = useState<{
-    coords: [number, number];
-    marketId: string;
-  } | null>(null);
-  const [signals, setSignals] = useState<ProcessedMarket[]>([]);
-  const [newMarkets, setNewMarkets] = useState<ProcessedMarket[]>([]);
-  const [timeRange, setTimeRange] = useState<TimeRange>("ALL");
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [selectedMarket, setSelectedMarket] = useState<ProcessedMarket | null>(null);
-  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [smartMoneyLeaderboard, setSmartMoneyLeaderboard] = useState<SmartWallet[]>([]);
-  const [leaderboardPeriod, setLeaderboardPeriod] = useState<LeaderboardPeriod>("all");
-  const lbCacheRef = useRef<Record<string, SmartWallet[]>>({});
-  const [smartMoneyTrades, setSmartMoneyTrades] = useState<WhaleTrade[]>([]);
-  const [smartMoneySmartTrades, setSmartMoneySmartTrades] = useState<WhaleTrade[]>([]);
-  const [smartMoneyLastSync, setSmartMoneyLastSync] = useState<string | null>(null);
-  const [smartWalletFilter, setSmartWalletFilter] = useState<string | null>(null);
-  const [traderPanelWallet, setTraderPanelWallet] = useState<string | null>(null);
-  const [traderWalletName, setTraderWalletName] = useState<string | null>(null);
-  const [traderAddrInput, setTraderAddrInput] = useState("");
-  const [panelVisibility, setPanelVisibility] = useState<PanelVisibility>(
-    { markets: true, detail: true, country: true, news: true, live: true, watchlist: true, leaderboard: true, smartMoney: true, whaleTrades: true, orderbook: true, sentiment: true, tweets: true, trader: true, chart: true }
-  );
-  const [panelOrder, setPanelOrder] = useState<string[]>(
-    ["sentiment", "watchlist", "markets", "country", "news", "tweets", "live", "leaderboard", "trader", "smartMoney", "whaleTrades", "orderbook", "chart"]
-  );
+  // ─── Market Store ───
+  const mapped = useMarketStore((s) => s.mapped);
+  const unmapped = useMarketStore((s) => s.unmapped);
+  const loading = useMarketStore((s) => s.loading);
+  const dataMode = useMarketStore((s) => s.dataMode);
+  const lastRefresh = useMarketStore((s) => s.lastRefresh);
+  const lastSyncTime = useMarketStore((s) => s.lastSyncTime);
+  const signals = useMarketStore((s) => s.signals);
+  const newMarkets = useMarketStore((s) => s.newMarkets);
+  const selectedMarket = useMarketStore((s) => s.selectedMarket);
+  const selectedCountry = useMarketStore((s) => s.selectedCountry);
+  const flyToTarget = useMarketStore((s) => s.flyToTarget);
+
+  // ─── Smart Money Store ───
+  const smartMoneyLeaderboard = useSmartMoneyStore((s) => s.leaderboard);
+  const leaderboardPeriod = useSmartMoneyStore((s) => s.leaderboardPeriod);
+  const smartMoneyTrades = useSmartMoneyStore((s) => s.trades);
+  const smartMoneySmartTrades = useSmartMoneyStore((s) => s.smartTrades);
+  const traderPanelWallet = useSmartMoneyStore((s) => s.traderPanelWallet);
+  const traderWalletName = useSmartMoneyStore((s) => s.traderWalletName);
+  const traderAddrInput = useSmartMoneyStore((s) => s.traderAddrInput);
+  const smartWalletFilter = useSmartMoneyStore((s) => s.walletFilter);
+
+  // ─── UI Store ───
+  const isFullscreen = useUIStore((s) => s.isFullscreen);
+  const settingsOpen = useUIStore((s) => s.settingsOpen);
+  const alertManagerOpen = useUIStore((s) => s.alertManagerOpen);
+  const isDragging = useUIStore((s) => s.isDragging);
+  const mapWidthPct = useUIStore((s) => s.mapWidthPct);
+  const bottomPanelHeight = useUIStore((s) => s.bottomPanelHeight);
+  const marketSearch = useUIStore((s) => s.marketSearch);
+  const region = useUIStore((s) => s.region);
+  const colorMode = useUIStore((s) => s.colorMode);
+  const autoRefresh = useUIStore((s) => s.autoRefresh);
+  const timeRange = useUIStore((s) => s.timeRange);
+  const activeCategories = useUIStore((s) => s.activeCategories);
+  const panelVisibility = useUIStore((s) => s.panelVisibility);
+  const panelOrder = useUIStore((s) => s.panelOrder);
+  const bottomPanelOrder = useUIStore((s) => s.bottomPanelOrder);
+  const alertPrefill = useUIStore((s) => s.alertPrefill);
+
+  // Stable action selectors — Zustand actions never change identity
+  const setIsDragging = useUIStore((s) => s.setIsDragging);
+  const setTimeRange = useUIStore((s) => s.setTimeRange);
+  const toggleCategory = useUIStore((s) => s.toggleCategory);
+  const toggleFullscreen = useUIStore((s) => s.toggleFullscreen);
+  const setColorMode = useUIStore((s) => s.setColorMode);
+  const setRegion = useUIStore((s) => s.setRegion);
+  const togglePanelVisibility = useUIStore((s) => s.togglePanelVisibility);
+
   const panelsRef = useRef<HTMLDivElement>(null);
-  const [bottomPanelOrder, setBottomPanelOrder] = useState<string[]>(["detail"]);
-  const [isDragging, setIsDragging] = useState(false);
   const bottomPanelsRef = useRef<HTMLDivElement>(null);
 
   // Watchlist
-  const { watchedIds, isWatched, toggleWatch, removeWatch, count: watchedCount, addedAt } = useWatchlist();
+  const { watchedIds, isWatched, toggleWatch, count: watchedCount, addedAt } = useWatchlist();
   const { getColSpan, setColSpan, resetColSpan } = usePanelColSpans();
   const colSpanFor = (id: string) => getColSpan(id, DEFAULT_COL_SPANS[id] ?? 1);
   const { getRowSpan, setRowSpan, resetRowSpan } = usePanelRowSpans();
@@ -117,55 +129,41 @@ export default function Home() {
   // Alerts
   const { alerts, history: alertHistory, unreadCount, addAlert, removeAlert, toggleAlert, evaluateAlerts, markRead, markAllRead, clearHistory } = useAlerts();
   const { sendNotification, requestPermission, permission: notifPermission } = useBrowserNotifications();
-  const [alertManagerOpen, setAlertManagerOpen] = useState(false);
-  const [alertPrefill, setAlertPrefill] = useState<{ marketId?: string; marketTitle?: string } | undefined>(undefined);
 
-  // Hydrate local state from prefs once localStorage has actually loaded
+  // Hydrate stores from prefs once localStorage has loaded
   const prefsHydrated = useRef(false);
   useEffect(() => {
     if (!prefsReady || prefsHydrated.current) return;
     prefsHydrated.current = true;
-    setActiveCategories(new Set(prefs.activeCategories as Category[]));
-    setTimeRange(prefs.timeRange as TimeRange);
-    setAutoRefresh(prefs.autoRefresh);
-    setMapWidthPct(prefs.mapWidthPct);
-    setRegion(prefs.region);
-    setColorMode(prefs.colorMode);
-    const defaults: PanelVisibility = { markets: true, detail: true, country: true, news: true, live: true, watchlist: true, leaderboard: true, smartMoney: true, whaleTrades: true, orderbook: true, sentiment: true, tweets: true, trader: true, chart: true };
-    setPanelVisibility({ ...defaults, ...prefs.panelVisibility });
-    let po = prefs.panelOrder;
-    if (!po.includes("sentiment")) po = ["sentiment", ...po];
-    if (!po.includes("watchlist")) po = ["watchlist", ...po];
-    if (!po.includes("smartMoney")) po = [...po, "smartMoney"];
-    if (!po.includes("leaderboard")) po = [...po, "leaderboard"];
-    if (!po.includes("whaleTrades")) po = [...po, "whaleTrades"];
-    if (!po.includes("orderbook")) po = [...po, "orderbook"];
-    if (!po.includes("tweets")) po = [...po, "tweets"];
-    if (!po.includes("trader")) po = [...po, "trader"];
-    if (!po.includes("chart")) po = [...po, "chart"];
-    // Hydrate bottom panel order (migration for existing users)
-    let bpo = prefs.bottomPanelOrder;
-    if (!bpo || !Array.isArray(bpo)) bpo = ["detail"];
-    po = po.filter((id) => !bpo.includes(id)); // no dupes across grids
-    setPanelOrder(po);
-    setBottomPanelOrder(bpo);
+    useUIStore.getState().hydrateFromPrefs(prefs);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefsReady]);
 
-  // Sync preferences back to localStorage — only after hydration is complete
-  useEffect(() => { if (prefsHydrated.current) updatePref("activeCategories", Array.from(activeCategories)); }, [activeCategories, updatePref]);
-  useEffect(() => { if (prefsHydrated.current) updatePref("timeRange", timeRange); }, [timeRange, updatePref]);
-  useEffect(() => { if (prefsHydrated.current) updatePref("autoRefresh", autoRefresh); }, [autoRefresh, updatePref]);
-  useEffect(() => { if (prefsHydrated.current) updatePref("panelVisibility", panelVisibility); }, [panelVisibility, updatePref]);
-  useEffect(() => { if (prefsHydrated.current) updatePref("panelOrder", panelOrder); }, [panelOrder, updatePref]);
-  useEffect(() => { if (prefsHydrated.current) updatePref("bottomPanelOrder", bottomPanelOrder); }, [bottomPanelOrder, updatePref]);
+  // Sync all preferences back to localStorage in a single debounced effect
+  const prefSyncTimer = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (!prefsHydrated.current) return;
+    if (prefSyncTimer.current) clearTimeout(prefSyncTimer.current);
+    prefSyncTimer.current = setTimeout(() => {
+      updatePref("activeCategories", Array.from(activeCategories));
+      updatePref("timeRange", timeRange);
+      updatePref("autoRefresh", autoRefresh);
+      updatePref("panelVisibility", panelVisibility);
+      updatePref("panelOrder", panelOrder);
+      updatePref("bottomPanelOrder", bottomPanelOrder);
+      updatePref("mapWidthPct", mapWidthPct);
+      updatePref("colorMode", colorMode);
+      updatePref("region", region);
+    }, 300);
+    return () => { if (prefSyncTimer.current) clearTimeout(prefSyncTimer.current); };
+  }, [activeCategories, timeRange, autoRefresh, panelVisibility, panelOrder, bottomPanelOrder, mapWidthPct, colorMode, region, updatePref]);
 
   const handlePanelReorder = useCallback((newOrder: string[]) => {
-    setPanelOrder(newOrder);
+    useUIStore.getState().setPanelOrder(newOrder);
   }, []);
 
   const handleBottomReorder = useCallback((newOrder: string[]) => {
-    setBottomPanelOrder(newOrder);
+    useUIStore.getState().setBottomPanelOrder(newOrder);
   }, []);
 
   const handlePanelTransfer = useCallback((
@@ -175,7 +173,7 @@ export default function Home() {
     newFrom: string[],
     newTo: string[]
   ) => {
-    // grids: [0] = bottom, [1] = right
+    const { setBottomPanelOrder, setPanelOrder } = useUIStore.getState();
     const setters = [setBottomPanelOrder, setPanelOrder];
     setters[fromIdx](newFrom);
     setters[toIdx](newTo);
@@ -190,30 +188,19 @@ export default function Home() {
     onDragStateChange: setIsDragging,
   });
 
-  // Resize state: left/right split (percentage of viewport) and top/bottom split (px)
-  const [mapWidthPct, setMapWidthPct] = useState(60);
-  const [bottomPanelHeight, setBottomPanelHeight] = useState(360);
-  const [marketSearch, setMarketSearch] = useState<string | undefined>(undefined);
-  const [region, setRegion] = useState<string>("global");
-  const [colorMode, setColorMode] = useState<"category" | "impact">("category");
-
-  // Sync remaining preferences
-  useEffect(() => { updatePref("mapWidthPct", mapWidthPct); }, [mapWidthPct, updatePref]);
-  useEffect(() => { updatePref("colorMode", colorMode); }, [colorMode, updatePref]);
-  useEffect(() => { updatePref("region", region); }, [region, updatePref]);
   const mainRef = useRef<HTMLDivElement>(null);
   const mapSectionRef = useRef<HTMLDivElement>(null);
 
   const handleHorizontalResize = useCallback((delta: number) => {
     const sectionH = mapSectionRef.current?.getBoundingClientRect().height;
     if (!sectionH) return;
-    setBottomPanelHeight((prev) => Math.max(120, Math.min(sectionH - 120, prev - delta)));
+    useUIStore.getState().setBottomPanelHeight((prev) => Math.max(120, Math.min(sectionH - 120, prev - delta)));
   }, []);
 
   const handleVerticalResize = useCallback((delta: number) => {
     const totalW = mainRef.current?.getBoundingClientRect().width;
     if (!totalW) return;
-    setMapWidthPct((prev) => Math.max(30, Math.min(80, prev + (delta / totalW) * 100)));
+    useUIStore.getState().setMapWidthPct((prev) => Math.max(30, Math.min(80, prev + (delta / totalW) * 100)));
   }, []);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -222,10 +209,12 @@ export default function Home() {
   const seenSignalIds = useRef<Set<string>>(new Set());
   const seenMarketIds = useRef<Set<string>>(new Set());
   const isFirstLoad = useRef(true);
+  const lbCacheRef = useRef<Record<string, import("@/types").SmartWallet[]>>({});
 
   const fetchData = useCallback(async () => {
+    const { setMapped, setUnmapped, setLoading, setDataMode, setLastSyncTime, setSignals, setNewMarkets, setLastRefresh } = useMarketStore.getState();
     setLoading(true);
-    setNewMarkets([]); // Clear stale new markets from previous refresh
+    setNewMarkets([]);
     try {
       const res = await fetch("/api/markets");
       if (!res.ok) throw new Error("API error");
@@ -280,23 +269,24 @@ export default function Home() {
 
   const fetchSmartMoney = useCallback(async (period?: LeaderboardPeriod, leaderboardOnly?: boolean) => {
     try {
-      const p = period ?? leaderboardPeriod;
+      const sm = useSmartMoneyStore.getState();
+      const p = period ?? sm.leaderboardPeriod;
       const params = `period=${p}${leaderboardOnly ? "&leaderboardOnly=1" : ""}`;
       const res = await fetch(`/api/smart-money?${params}`);
       if (!res.ok) return;
       const data = await res.json();
       const lb = data.leaderboard || [];
       lbCacheRef.current[p] = lb;
-      setSmartMoneyLeaderboard(lb);
+      sm.setLeaderboard(lb);
       if (!leaderboardOnly) {
-        setSmartMoneyTrades(data.recentTrades || []);
-        setSmartMoneySmartTrades(data.smartTrades || []);
-        setSmartMoneyLastSync(data.lastSync || null);
+        sm.setTrades(data.recentTrades || []);
+        sm.setSmartTrades(data.smartTrades || []);
+        sm.setLastSync(data.lastSync || null);
       }
     } catch {
       // non-critical
     }
-  }, [leaderboardPeriod]);
+  }, []);
 
   // Pre-fetch all leaderboard periods into cache on startup
   const lbPrefetchedRef = useRef(false);
@@ -327,10 +317,10 @@ export default function Home() {
       if (cachedMarketId) {
         const all = [...mapped, ...unmapped];
         const found = all.find(m => m.id === cachedMarketId);
-        if (found) setSelectedMarket(found);
+        if (found) useMarketStore.getState().selectMarket(found);
       }
       const cachedCountry = sessionStorage.getItem("pw:selectedCountry");
-      if (cachedCountry) setSelectedCountry(cachedCountry);
+      if (cachedCountry) useMarketStore.getState().selectCountry(cachedCountry);
     } catch {}
   }, [mapped, unmapped]);
 
@@ -344,7 +334,7 @@ export default function Home() {
     };
   }, [fetchData, autoRefresh]);
 
-  // Independent 30s polling for smart money (matches server-side cache TTL)
+  // Independent 30s polling for smart money
   useEffect(() => {
     if (smartMoneyTimerRef.current) clearInterval(smartMoneyTimerRef.current);
     if (autoRefresh) {
@@ -360,19 +350,10 @@ export default function Home() {
   useEffect(() => {
     if (mapped.length === 0 && unmapped.length === 0) return;
     if (!alertEvalRef.current) {
-      // Skip first load — need two data points to detect crossings
       alertEvalRef.current = true;
-      // Initialize prevProbs
       evaluateAlerts([...mapped, ...unmapped], new Set());
       return;
     }
-    const newIds = new Set<string>();
-    for (const m of [...mapped, ...unmapped]) {
-      if (!seenMarketIds.current.has(m.id)) {
-        // Note: seenMarketIds is already updated in fetchData, but newMarkets state has the fresh ones
-      }
-    }
-    // Use newMarkets state for new market detection
     const freshIds = new Set(newMarkets.map((m) => m.id));
     const triggered = evaluateAlerts([...mapped, ...unmapped], freshIds);
     for (const t of triggered) {
@@ -381,56 +362,27 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapped, unmapped]);
 
-  const handleToggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen().catch(() => {});
-      setIsFullscreen(false);
-    }
-  }, []);
-
   useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    const handler = () => useUIStore.getState().setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", handler);
     return () => document.removeEventListener("fullscreenchange", handler);
-  }, []);
-
-  const handleToggleCategory = useCallback((cat: Category) => {
-    setActiveCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(cat)) next.delete(cat);
-      else next.add(cat);
-      return next;
-    });
   }, []);
 
   const handleFlyTo = useCallback(
     (coords: [number, number], marketId: string) => {
       if (flyToTimer.current) clearTimeout(flyToTimer.current);
-      setFlyToTarget({ coords, marketId });
-      flyToTimer.current = setTimeout(() => setFlyToTarget(null), 3000);
+      useMarketStore.getState().setFlyToTarget({ coords, marketId });
+      flyToTimer.current = setTimeout(() => useMarketStore.getState().setFlyToTarget(null), 3000);
     },
     []
   );
 
   const handleMarketClick = useCallback((market: ProcessedMarket) => {
-    setSelectedMarket(market);
-    try { sessionStorage.setItem("pw:selectedMarket", market.id); } catch {}
+    useMarketStore.getState().selectMarket(market);
   }, []);
 
   const handleCountryClick = useCallback((countryName: string) => {
-    setSelectedCountry(countryName);
-    try { sessionStorage.setItem("pw:selectedCountry", countryName); } catch {}
-  }, []);
-
-  const handleToggleAutoRefresh = useCallback(() => {
-    setAutoRefresh((prev) => !prev);
-  }, []);
-
-  const handleTogglePanelVisibility = useCallback((panel: string) => {
-    setPanelVisibility((prev) => ({ ...prev, [panel]: !prev[panel as keyof PanelVisibility] }));
+    useMarketStore.getState().selectCountry(countryName);
   }, []);
 
   // Derived panel locations
@@ -459,26 +411,25 @@ export default function Home() {
       .slice(0, 5);
   }, [selectedMarket, mapped, unmapped]);
 
-  // Filter out closed/ended markets
   const isEnded = useCallback((m: ProcessedMarket) =>
     m.closed || (m.endDate != null && new Date(m.endDate).getTime() < Date.now()), []);
 
   const timeFiltered = useMemo(() => {
     const active = mapped.filter((m) => !isEnded(m));
-    const threshold = TIME_THRESHOLDS[timeRange];
-    if (threshold === 0) return active;
-    return active.filter((m) => (m.volume24h || 0) >= threshold);
+    const maxAge = TIME_MAX_AGE[timeRange];
+    if (maxAge === 0) return active;
+    const cutoff = Date.now() - maxAge;
+    return active.filter((m) => m.createdAt && new Date(m.createdAt).getTime() >= cutoff);
   }, [mapped, timeRange, isEnded]);
   const activeMapped = useMemo(() => mapped.filter((m) => !isEnded(m)), [mapped, isEnded]);
   const activeUnmapped = useMemo(() => unmapped.filter((m) => !isEnded(m)), [unmapped, isEnded]);
 
   const handleSelectMarketFromPanel = useCallback(
     (market: ProcessedMarket) => {
-      setSelectedMarket(market);
-      try { sessionStorage.setItem("pw:selectedMarket", market.id); } catch {}
+      const mkt = useMarketStore.getState();
+      mkt.selectMarket(market);
       if (market.location) {
-        setSelectedCountry(market.location);
-        try { sessionStorage.setItem("pw:selectedCountry", market.location); } catch {}
+        mkt.selectCountry(market.location);
       }
       if (market.coords) handleFlyTo(market.coords, market.id);
     },
@@ -495,7 +446,7 @@ export default function Home() {
             panelId="detail"
             title="Market Detail"
             badge={selectedMarket ? (
-              <span className="panel-data-badge live" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }} onClick={() => { setSelectedMarket(null); try { sessionStorage.removeItem("pw:selectedMarket"); } catch {} }} title="Unselect market">
+              <span className="panel-data-badge live" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }} onClick={() => useMarketStore.getState().selectMarket(null)} title="Unselect market">
                 selected
                 <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 4l8 8M12 4l-8 8" /></svg>
               </span>
@@ -524,8 +475,9 @@ export default function Home() {
                 </button>
                 <button
                   onClick={() => {
-                    setAlertPrefill({ marketId: selectedMarket.id, marketTitle: selectedMarket.title });
-                    setAlertManagerOpen(true);
+                    const ui = useUIStore.getState();
+                    ui.setAlertPrefill({ marketId: selectedMarket.id, marketTitle: selectedMarket.title });
+                    ui.setAlertManagerOpen(true);
                   }}
                   className="p-1 rounded-sm text-[var(--text-dim)] hover:text-[var(--text)] transition-colors"
                   title="Create alert"
@@ -542,9 +494,9 @@ export default function Home() {
               <MarketDetailPanel
                 market={selectedMarket}
                 relatedMarkets={relatedMarkets}
-                onBack={() => { setSelectedMarket(null); try { sessionStorage.removeItem("pw:selectedMarket"); } catch {} }}
+                onBack={() => useMarketStore.getState().selectMarket(null)}
                 onSelectMarket={handleSelectMarketFromPanel}
-                onTagClick={(tag) => setMarketSearch(tag)}
+                onTagClick={(tag) => useUIStore.getState().setMarketSearch(tag)}
               />
             ) : (
               <div className="text-[12px] text-[var(--text-muted)] font-mono">
@@ -581,7 +533,7 @@ export default function Home() {
             key="country"
             panelId="country"
             title="Region"
-            count={selectedCountry || "—"}
+            count={selectedCountry || "\u2014"}
             colSpan={colSpanFor("country")}
             onColSpanChange={(s) => setColSpan("country", s)}
             onColSpanReset={() => resetColSpan("country")}
@@ -732,9 +684,10 @@ export default function Home() {
                   <button
                     key={p}
                     onClick={() => {
-                      setLeaderboardPeriod(p);
+                      const sm = useSmartMoneyStore.getState();
+                      sm.setLeaderboardPeriod(p);
                       const cached = lbCacheRef.current[p];
-                      if (cached) setSmartMoneyLeaderboard(cached);
+                      if (cached) sm.setLeaderboard(cached);
                       else fetchSmartMoney(p, true);
                     }}
                     className="px-1.5 py-0 text-[9px] rounded transition-colors leading-[18px]"
@@ -753,10 +706,11 @@ export default function Home() {
             <LeaderboardPanel
               leaderboard={smartMoneyLeaderboard}
               onSelectWallet={(addr) => {
-                setSmartWalletFilter(addr);
-                setTraderPanelWallet(addr);
+                const sm = useSmartMoneyStore.getState();
+                sm.setWalletFilter(addr);
+                sm.setTraderPanelWallet(addr);
                 const w = smartMoneyLeaderboard.find((e) => e.address === addr);
-                setTraderWalletName(w?.username || null);
+                sm.setTraderWalletName(w?.username || null);
               }}
             />
           </Panel>
@@ -785,11 +739,12 @@ export default function Home() {
             <SmartMoneyPanel
               smartTrades={smartMoneySmartTrades}
               walletFilter={smartWalletFilter}
-              onClearFilter={() => setSmartWalletFilter(null)}
+              onClearFilter={() => useSmartMoneyStore.getState().setWalletFilter(null)}
               onSelectWallet={(addr) => {
-                setTraderPanelWallet(addr);
+                const sm = useSmartMoneyStore.getState();
+                sm.setTraderPanelWallet(addr);
                 const t = smartMoneySmartTrades.find((e) => e.wallet === addr);
-                setTraderWalletName(t?.username || null);
+                sm.setTraderWalletName(t?.username || null);
               }}
               onSelectMarket={(slug) => {
                 const all = [...mapped, ...unmapped];
@@ -823,9 +778,10 @@ export default function Home() {
             <WhaleTradesPanel
               trades={smartMoneyTrades}
               onSelectWallet={(addr) => {
-                setTraderPanelWallet(addr);
+                const sm = useSmartMoneyStore.getState();
+                sm.setTraderPanelWallet(addr);
                 const t = smartMoneyTrades.find((e) => e.wallet === addr);
-                setTraderWalletName(t?.username || null);
+                sm.setTraderWalletName(t?.username || null);
               }}
               onSelectMarket={(slug) => {
                 const all = [...mapped, ...unmapped];
@@ -864,9 +820,10 @@ export default function Home() {
         const handleTraderGo = () => {
           const addr = traderAddrInput.trim();
           if (/^0x[a-fA-F0-9]{40}$/i.test(addr)) {
-            setTraderPanelWallet(addr);
-            setTraderWalletName(null);
-            setTraderAddrInput("");
+            const sm = useSmartMoneyStore.getState();
+            sm.setTraderPanelWallet(addr);
+            sm.setTraderWalletName(null);
+            sm.setTraderAddrInput("");
           }
         };
         return (
@@ -886,10 +843,10 @@ export default function Home() {
                 {traderPanelWallet ? (
                   <>
                     <span className="text-[10px] font-mono text-[var(--text-dim)]" title={traderPanelWallet}>
-                      {traderWalletName || `${traderPanelWallet.slice(0, 6)}…${traderPanelWallet.slice(-4)}`}
+                      {traderWalletName || `${traderPanelWallet.slice(0, 6)}\u2026${traderPanelWallet.slice(-4)}`}
                     </span>
                     <button
-                      onClick={() => { setTraderPanelWallet(null); setTraderWalletName(null); }}
+                      onClick={() => { const sm = useSmartMoneyStore.getState(); sm.setTraderPanelWallet(null); sm.setTraderWalletName(null); }}
                       className="text-[10px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors"
                       title="Clear"
                     >
@@ -899,9 +856,9 @@ export default function Home() {
                 ) : null}
                 <input
                   className="w-[100px] bg-[var(--bg-panel)] border border-[var(--border)] rounded-sm px-1 py-0 text-[10px] text-[var(--text)] font-mono placeholder:text-[var(--text-ghost)] leading-[18px]"
-                  placeholder="0x…"
+                  placeholder="0x\u2026"
                   value={traderAddrInput}
-                  onChange={(e) => setTraderAddrInput(e.target.value)}
+                  onChange={(e) => useSmartMoneyStore.getState().setTraderAddrInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleTraderGo()}
                 />
                 <button
@@ -975,13 +932,13 @@ export default function Home() {
         marketCount={mapped.length}
         globalCount={unmapped.length}
         lastSyncTime={lastSyncTime}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => useUIStore.getState().setSettingsOpen(true)}
         watchedCount={watchedCount}
         whaleTradeCount={smartMoneyTrades.length}
         alertUnreadCount={unreadCount}
         alertManagerOpen={alertManagerOpen}
-        onOpenAlertManager={() => setAlertManagerOpen((v) => !v)}
-        onCloseAlertManager={() => { setAlertManagerOpen(false); setAlertPrefill(undefined); }}
+        onOpenAlertManager={() => useUIStore.getState().setAlertManagerOpen((v) => !v)}
+        onCloseAlertManager={() => { const ui = useUIStore.getState(); ui.setAlertManagerOpen(false); ui.setAlertPrefill(undefined); }}
         alertProps={{
           alerts,
           history: alertHistory,
@@ -1012,8 +969,8 @@ export default function Home() {
               flyToTarget={flyToTarget}
               timeRange={timeRange}
               onTimeRangeChange={setTimeRange}
-              onToggleCategory={handleToggleCategory}
-              onToggleFullscreen={handleToggleFullscreen}
+              onToggleCategory={toggleCategory}
+              onToggleFullscreen={toggleFullscreen}
               isFullscreen={isFullscreen}
               onMarketClick={handleMarketClick}
               onCountryClick={handleCountryClick}
@@ -1026,7 +983,6 @@ export default function Home() {
               isWatched={isWatched}
               onToggleWatch={toggleWatch}
               newMarkets={newMarkets}
-              watchedIds={watchedIds}
               whaleTrades={smartMoneyTrades}
             />
           </div>
@@ -1047,7 +1003,7 @@ export default function Home() {
         {/* Vertical resize handle between map and panels */}
         <ResizeHandle direction="vertical" onResize={handleVerticalResize} />
 
-        {/* Right panels grid — rendered in drag-reorderable order */}
+        {/* Right panels grid */}
         {!isFullscreen && (
           <div className="panels-grid" ref={panelsRef}>
             {rightVisiblePanels.map((key) => renderPanel(key))}
@@ -1058,15 +1014,15 @@ export default function Home() {
       {settingsOpen && (
         <SettingsModal
           open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => useUIStore.getState().setSettingsOpen(false)}
           activeCategories={activeCategories}
-          onToggleCategory={handleToggleCategory}
+          onToggleCategory={toggleCategory}
           timeRange={timeRange}
           onTimeRangeChange={setTimeRange}
           autoRefresh={autoRefresh}
-          onToggleAutoRefresh={handleToggleAutoRefresh}
+          onToggleAutoRefresh={() => useUIStore.getState().setAutoRefresh((prev) => !prev)}
           panelVisibility={panelVisibility}
-          onTogglePanelVisibility={handleTogglePanelVisibility}
+          onTogglePanelVisibility={togglePanelVisibility}
           dataMode={dataMode}
           lastSyncTime={lastSyncTime}
           marketCount={mapped.length}
@@ -1075,7 +1031,7 @@ export default function Home() {
       )}
 
 
-      <ToastContainer signals={signals} newMarkets={newMarkets} mapWidthPct={mapWidthPct} onSelectMarket={handleSelectMarketFromPanel} />
+      <ToastContainer signals={signals} newMarkets={newMarkets} onSelectMarket={handleSelectMarketFromPanel} />
     </div>
   );
 }

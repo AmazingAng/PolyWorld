@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readMarketsFromDb } from "@/lib/sync";
 import { getDb } from "@/lib/db";
+import { apiError } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,6 @@ export async function GET() {
 
     return NextResponse.json({ mapped, unmapped, lastSync });
   } catch (err) {
-    console.error("[api/markets] Error reading from DB:", err);
-    return NextResponse.json({ mapped: [], unmapped: [], lastSync: null }, { status: 500 });
+    return apiError("markets", "Error reading from DB", 500, err);
   }
 }

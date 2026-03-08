@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ApiCache } from "@/lib/apiCache";
+import { apiError } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
 
 const CLOB_BASE = "https://clob.polymarket.com";
 
-// ── Server-side memory cache (10s TTL) ──
-interface BookCache {
-  data: Record<string, unknown>;
-  fetchedAt: number;
-}
-const CACHE_TTL = 10_000;
-const bookCache = new Map<string, BookCache>();
+const bookCache = new ApiCache<Record<string, unknown>>(10_000, 200);
 
 export async function GET(request: NextRequest) {
   const tokenId = request.nextUrl.searchParams.get("tokenId");
@@ -19,10 +15,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "tokenId required" }, { status: 400 });
   }
 
-  // Check cache
   const cached = bookCache.get(tokenId);
-  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL) {
-    return NextResponse.json(cached.data);
+  if (cached) {
+    return NextResponse.json(cached);
   }
 
   try {
@@ -31,10 +26,9 @@ export async function GET(request: NextRequest) {
     });
 
     if (!res.ok) {
-      return NextResponse.json(
-        { error: `CLOB API error: ${res.status}` },
-        { status: 502 },
-      );
+      // Return 200 with empty data so the browser doesn't log a red 502 error.
+      // The OrderBook component will try the next token ID.
+      return NextResponse.json({ bids: [], asks: [], error: `CLOB ${res.status}` });
     }
 
     const raw = await res.json();
@@ -87,23 +81,10 @@ export async function GET(request: NextRequest) {
       tickSize,
     };
 
-    // Update cache
-    bookCache.set(tokenId, { data, fetchedAt: Date.now() });
-
-    // Prune stale entries
-    if (bookCache.size > 200) {
-      const now = Date.now();
-      for (const [k, v] of bookCache) {
-        if (now - v.fetchedAt > 60_000) bookCache.delete(k);
-      }
-    }
+    bookCache.set(tokenId, data);
 
     return NextResponse.json(data);
   } catch (err) {
-    console.error("[api/orderbook] Error:", err);
-    return NextResponse.json(
-      { error: "Failed to fetch orderbook" },
-      { status: 500 },
-    );
+    return apiError("orderbook", "Failed to fetch orderbook", 500, err);
   }
 }

@@ -7,7 +7,6 @@ import { formatChange } from "@/lib/format";
 interface ToastProps {
   signals: ProcessedMarket[];
   newMarkets: ProcessedMarket[];
-  mapWidthPct?: number;
   onSelectMarket?: (market: ProcessedMarket) => void;
 }
 
@@ -19,7 +18,7 @@ interface ToastItem {
   batchCount?: number;
 }
 
-export default function ToastContainer({ signals, newMarkets, mapWidthPct = 55, onSelectMarket }: ToastProps) {
+export default function ToastContainer({ signals, newMarkets, onSelectMarket }: ToastProps) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   useEffect(() => {
@@ -68,11 +67,10 @@ export default function ToastContainer({ signals, newMarkets, mapWidthPct = 55, 
     const timer = setTimeout(() => {
       setToasts((prev) =>
         prev.filter((t) => {
-          const ttl = t.type === "new" || t.type === "batch" ? 15000 : 10000;
-          return Date.now() - t.timestamp < ttl;
+          return Date.now() - t.timestamp < 5000;
         })
       );
-    }, 10000);
+    }, 5000);
     return () => clearTimeout(timer);
   }, [toasts]);
 
@@ -85,8 +83,7 @@ export default function ToastContainer({ signals, newMarkets, mapWidthPct = 55, 
 
   return (
     <div
-      className="fixed top-[50px] z-[2000] flex flex-col gap-1 pointer-events-none max-md:right-auto max-md:left-1/2 max-md:-translate-x-1/2"
-      style={{ right: `calc(${100 - mapWidthPct}% + 16px)` }}
+      className="fixed top-[50px] right-4 z-[2000] flex flex-col gap-1 pointer-events-none"
     >
       {toasts.map((toast) => {
         if (toast.type === "batch") {

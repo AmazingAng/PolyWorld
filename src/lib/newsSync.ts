@@ -20,7 +20,17 @@ const STOP_WORDS = new Set([
   "if", "each", "get", "got", "go", "been", "being", "make", "made",
   "very", "much", "many", "any", "own", "such", "like", "even", "still",
   "between", "through", "during", "before", "under", "against", "both",
+  // High-frequency words that cause false matches across domains
+  "market", "markets", "price", "prices", "win", "winner", "won",
+  "will", "year", "day", "time", "first", "last", "next", "end",
+  "top", "best", "back", "take", "come", "world", "hit", "set",
+  "per", "report", "reports", "according", "people", "says",
+  "could", "may", "might", "week", "month", "state", "states",
+  "news", "update", "latest", "today", "yesterday", "number",
 ]);
+
+const MIN_KEYWORD_LENGTH = 4; // skip 3-letter words like "war", "oil", "gas" — too generic
+const MAX_MATCHES_PER_ITEM = 20; // limit matches per news/tweet to prevent explosion
 
 function makeId(url: string): string {
   return crypto.createHash("sha256").update(url).digest("hex").slice(0, 32);
@@ -96,9 +106,17 @@ export async function runNewsSync(): Promise<{ items: number; matches: number }>
   return { items: totalItems, matches: totalMatches };
 }
 
+function extractKeywords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= MIN_KEYWORD_LENGTH && !STOP_WORDS.has(w));
+}
+
 function runKeywordMatching(db: ReturnType<typeof getDb>): number {
   const markets = db.prepare(`
-    SELECT id, title, tags_json, location FROM events WHERE is_active = 1
+    SELECT id, title, tags_json, location FROM events WHERE is_active = 1 AND is_closed = 0
   `).all() as Array<{ id: string; title: string; tags_json: string; location: string | null }>;
 
   if (markets.length === 0) return 0;
@@ -109,19 +127,15 @@ function runKeywordMatching(db: ReturnType<typeof getDb>): number {
       try { return JSON.parse(m.tags_json || "[]"); } catch { return []; }
     })();
     const raw = [m.title, ...tags, m.location || ""].join(" ");
-    const words = raw
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, " ")
-      .split(/\s+/)
-      .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
-    // Deduplicate
-    return { id: m.id, keywords: [...new Set(words)] };
+    const keywords = [...new Set(extractKeywords(raw))];
+    return { id: m.id, keywords };
   });
 
-  // Get recent news (3 days)
+  // Only match news items that haven't been matched yet (incremental)
   const newsItems = db.prepare(`
     SELECT id, title, summary, categories_json FROM news_items
     WHERE published_at > datetime('now', '-3 days')
+      AND id NOT IN (SELECT DISTINCT news_id FROM news_market_matches)
   `).all() as Array<{ id: string; title: string; summary: string | null; categories_json: string }>;
 
   if (newsItems.length === 0) return 0;
@@ -139,23 +153,29 @@ function runKeywordMatching(db: ReturnType<typeof getDb>): number {
       const categories: string[] = (() => {
         try { return JSON.parse(news.categories_json || "[]"); } catch { return []; }
       })();
-      const newsText = [news.title, news.summary || "", ...categories]
-        .join(" ")
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ");
-      const newsWords = newsText.split(/\s+/).filter((w) => w.length > 2);
-      const newsWordSet = new Set(newsWords);
+      const newsText = [news.title, news.summary || "", ...categories].join(" ");
+      const newsWordSet = new Set(extractKeywords(newsText));
 
+      // Score all markets, keep top N
+      const scored: { marketId: string; score: number }[] = [];
       for (const market of marketKeywords) {
-        if (market.keywords.length === 0) continue;
+        if (market.keywords.length < 2) continue; // skip markets with too few keywords
         const hits = market.keywords.filter((kw) => newsWordSet.has(kw));
         const matchRate = hits.length / market.keywords.length;
 
-        if (hits.length >= 2 && matchRate >= 0.15) {
-          const score = Math.min(1, matchRate * 2);
-          upsertMatch.run(news.id, market.id, Math.round(score * 100) / 100);
-          matches++;
+        if (hits.length >= 3 && matchRate >= 0.25) {
+          scored.push({
+            marketId: market.id,
+            score: Math.min(1, matchRate * 2),
+          });
         }
+      }
+
+      // Keep only top matches per news item
+      scored.sort((a, b) => b.score - a.score);
+      for (const m of scored.slice(0, MAX_MATCHES_PER_ITEM)) {
+        upsertMatch.run(news.id, m.marketId, Math.round(m.score * 100) / 100);
+        matches++;
       }
     }
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState, lazy, Suspense } from "react";
+import { useEffect, useRef, useCallback, useState, lazy, Suspense, memo } from "react";
 import { createPortal } from "react-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -10,6 +10,7 @@ import { IMPACT_COLORS } from "@/lib/impact";
 import type { ImpactLevel } from "@/types";
 import { formatVolume, formatPct, formatChange } from "@/lib/format";
 import { REGIONAL_VIEWS } from "@/lib/regions";
+import { topojsonFeature } from "@/lib/topojson";
 import type { TimeRange } from "./TimeRangeFilter";
 import MapToolbar from "./MapToolbar";
 
@@ -42,7 +43,6 @@ interface WorldMapProps {
   isWatched?: (id: string) => boolean;
   onToggleWatch?: (id: string) => void;
   newMarkets?: ProcessedMarket[];
-  watchedIds?: Set<string>;
   whaleTrades?: WhaleTrade[];
 }
 
@@ -52,7 +52,7 @@ interface WorldMapProps {
 // Tier 2 (zoom 4–6): Country-level — each country is its own bubble
 // Tier 3 (zoom > 6): Individual bubbles (offsetColocated only)
 
-const ZOOM_TIER_THRESHOLDS = [2];
+const ZOOM_TIER_THRESHOLDS = [1.5];
 
 const CONTINENT_MAP: Record<string, string> = {
   "United States": "Americas", Canada: "Americas", Mexico: "Americas",
@@ -193,7 +193,14 @@ function offsetColocated(markets: ProcessedMarket[]): ProcessedMarket[] {
   return result;
 }
 
-export default function WorldMap({
+function setsEqual<T>(a?: Set<T>, b?: Set<T>): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
+function WorldMapInner({
   markets,
   activeCategories,
   flyToTarget,
@@ -213,20 +220,19 @@ export default function WorldMap({
   isWatched,
   onToggleWatch,
   newMarkets,
-  watchedIds,
   whaleTrades,
 }: WorldMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [currentTier, setCurrentTier] = useState(0);
+  const [currentTier, setCurrentTier] = useState(() => zoomToTier(1.5));
   const marketsLookup = useRef<Map<string, ProcessedMarket>>(new Map());
   const countryLayersAdded = useRef(false);
   const pulseRef = useRef<number>(0);
-  const pinMarkerRef = useRef<maplibregl.Marker | null>(null);
+
   const newMarketAnimRef = useRef<Map<string, { startTime: number; lng: number; lat: number }>>(new Map());
-  const starMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+
   const tradeFlashesRef = useRef<{ key: string; lng: number; lat: number; startTime: number; side: "BUY" | "SELL"; isSmart: boolean }[]>([]);
   const seenTradeKeysRef = useRef<Set<string>>(new Set());
   const prevMarketIdsRef = useRef<Map<string, { lng: number; lat: number; color: string }>>(new Map());
@@ -257,7 +263,7 @@ export default function WorldMap({
       container: mapContainer.current,
       style: DARK_STYLE,
       center: [10, 25],
-      zoom: 1.8,
+      zoom: 1.5,
       minZoom: 1.2,
       maxZoom: 10,
       attributionControl: false,
@@ -478,9 +484,6 @@ export default function WorldMap({
     return () => {
       cancelAnimationFrame(pulseRef.current);
       reducedMotionCleanup.current?.();
-      if (pinMarkerRef.current) pinMarkerRef.current.remove();
-      for (const m of starMarkersRef.current.values()) m.remove();
-      starMarkersRef.current.clear();
       map.remove();
       mapRef.current = null;
       countryLayersAdded.current = false;
@@ -490,16 +493,18 @@ export default function WorldMap({
 
   // Generate SDF shape icons for category-shaped markers
   function generateShapeIcons(map: maplibregl.Map) {
-    const size = 32;
+    // 64px canvas with pixelRatio:2 → 32 logical px, crisp on retina
+    const size = 64;
     const cx = size / 2;
     const cy = size / 2;
+    const R = 28; // shape radius (2× of previous 14)
 
     const shapes: Record<string, (ctx: CanvasRenderingContext2D) => void> = {
       circle: (ctx) => {
-        ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+        ctx.arc(cx, cy, R, 0, Math.PI * 2);
       },
       star: (ctx) => {
-        const outerR = 14, innerR = 6, points = 5;
+        const outerR = R, innerR = 12, points = 5;
         for (let i = 0; i < points * 2; i++) {
           const r = i % 2 === 0 ? outerR : innerR;
           const angle = (Math.PI / 2) * -1 + (Math.PI / points) * i;
@@ -509,24 +514,23 @@ export default function WorldMap({
         ctx.closePath();
       },
       diamond: (ctx) => {
-        ctx.moveTo(cx, cy - 14);
-        ctx.lineTo(cx + 11, cy);
-        ctx.lineTo(cx, cy + 14);
-        ctx.lineTo(cx - 11, cy);
+        ctx.moveTo(cx, cy - R);
+        ctx.lineTo(cx + 22, cy);
+        ctx.lineTo(cx, cy + R);
+        ctx.lineTo(cx - 22, cy);
         ctx.closePath();
       },
       triangle: (ctx) => {
-        const r = 14;
-        ctx.moveTo(cx, cy - r);
-        ctx.lineTo(cx + r * Math.cos(Math.PI / 6), cy + r * Math.sin(Math.PI / 6));
-        ctx.lineTo(cx - r * Math.cos(Math.PI / 6), cy + r * Math.sin(Math.PI / 6));
+        ctx.moveTo(cx, cy - R);
+        ctx.lineTo(cx + R * Math.cos(Math.PI / 6), cy + R * Math.sin(Math.PI / 6));
+        ctx.lineTo(cx - R * Math.cos(Math.PI / 6), cy + R * Math.sin(Math.PI / 6));
         ctx.closePath();
       },
       hexagon: (ctx) => {
         for (let i = 0; i < 6; i++) {
           const angle = (Math.PI / 3) * i - Math.PI / 6;
           const method = i === 0 ? "moveTo" : "lineTo";
-          ctx[method](cx + 14 * Math.cos(angle), cy + 14 * Math.sin(angle));
+          ctx[method](cx + R * Math.cos(angle), cy + R * Math.sin(angle));
         }
         ctx.closePath();
       },
@@ -534,12 +538,12 @@ export default function WorldMap({
         for (let i = 0; i < 5; i++) {
           const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
           const method = i === 0 ? "moveTo" : "lineTo";
-          ctx[method](cx + 14 * Math.cos(angle), cy + 14 * Math.sin(angle));
+          ctx[method](cx + R * Math.cos(angle), cy + R * Math.sin(angle));
         }
         ctx.closePath();
       },
       square: (ctx) => {
-        const r = 2, s = 12;
+        const r = 4, s = 24;
         ctx.moveTo(cx - s + r, cy - s);
         ctx.lineTo(cx + s - r, cy - s);
         ctx.arcTo(cx + s, cy - s, cx + s, cy - s + r, r);
@@ -553,17 +557,37 @@ export default function WorldMap({
       },
     };
 
-    for (const [name, draw] of Object.entries(shapes)) {
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d")!;
-      ctx.beginPath();
-      draw(ctx);
-      ctx.fillStyle = "white";
-      ctx.fill();
-      const imageData = ctx.getImageData(0, 0, size, size);
-      map.addImage(`shape-${name}`, imageData, { sdf: true });
+    // Pre-generate colored icons for every color × shape combo (non-SDF)
+    const allColors = [
+      ...Object.values(CATEGORY_COLORS),
+      ...Object.values(IMPACT_COLORS),
+    ];
+    const uniqueColors = [...new Set(allColors)];
+
+    for (const [shapeName, draw] of Object.entries(shapes)) {
+      for (const color of uniqueColors) {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d")!;
+
+        // Colored fill
+        ctx.beginPath();
+        draw(ctx);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.85;
+        ctx.fill();
+
+        // Dark outline on top — visible against the colored fill
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.stroke();
+
+        const imageData = ctx.getImageData(0, 0, size, size);
+        const key = `icon-${color.replace("#", "")}-${shapeName}`;
+        map.addImage(key, imageData, { sdf: false, pixelRatio: 2 });
+      }
     }
   }
 
@@ -647,37 +671,18 @@ export default function WorldMap({
 
     // --- INDIVIDUAL MARKER LAYERS ---
 
-    // Shape stroke — dark outline (same shape, slightly larger)
-    add({
-      id: "unclustered-stroke",
-      type: "symbol",
-      source: "markets",
-      filter: ["!", ["has", "point_count"]],
-      layout: {
-        "icon-image": ["concat", "shape-", ["get", "shape"]],
-        "icon-size": [
-          "interpolate", ["linear"], ["zoom"],
-          1.5, ["+", ["*", ["get", "radius"], 0.05],  0.012],
-          4,   ["+", ["*", ["get", "radius"], 0.065], 0.012],
-          8,   ["+", ["*", ["get", "radius"], 0.08],  0.012],
-        ],
-        "icon-allow-overlap": true,
-        "icon-ignore-placement": true,
-      },
-      paint: {
-        "icon-color": "#000000",
-        "icon-opacity": 0.7,
-      },
-    });
-
-    // Core shape — category-shaped SDF icons
+    // Core shape — pre-colored icons with baked-in outlines (non-SDF)
     add({
       id: "unclustered-point",
       type: "symbol",
       source: "markets",
       filter: ["!", ["has", "point_count"]],
       layout: {
-        "icon-image": ["concat", "shape-", ["get", "shape"]],
+        "icon-image": [
+          "concat", "icon-",
+          ["slice", ["get", "color"], 1],  // strip '#' from hex
+          "-", ["get", "shape"],
+        ],
         "icon-size": [
           "interpolate", ["linear"], ["zoom"],
           1.5, ["*", ["get", "radius"], 0.05],
@@ -686,10 +691,11 @@ export default function WorldMap({
         ],
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
+        "symbol-z-order": "source",
+        "symbol-sort-key": ["*", ["get", "radius"], -1],  // larger markets on top
       },
       paint: {
-        "icon-color": ["get", "color"],
-        "icon-opacity": 0.85,
+        "icon-opacity": 1,
       },
     });
 
@@ -1370,32 +1376,6 @@ export default function WorldMap({
     });
   }, [flyToTarget]);
 
-  // Selected market pin marker
-  useEffect(() => {
-    if (!mapReady || !mapRef.current) return;
-
-    // Remove existing pin
-    if (pinMarkerRef.current) {
-      pinMarkerRef.current.remove();
-      pinMarkerRef.current = null;
-    }
-
-    if (!selectedMarketId) return;
-
-    const market = markets.find((m) => m.id === selectedMarketId);
-    if (!market?.coords) return;
-
-    const el = document.createElement("div");
-    el.className = "selected-pin-marker";
-    el.textContent = "📍";
-
-    const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
-      .setLngLat([market.coords[1], market.coords[0]])
-      .addTo(mapRef.current);
-
-    pinMarkerRef.current = marker;
-  }, [selectedMarketId, markets, mapReady]);
-
   // Feature 2: Track new market appearance animations
   useEffect(() => {
     if (!newMarkets || newMarkets.length === 0) return;
@@ -1413,44 +1393,6 @@ export default function WorldMap({
       });
     }
   }, [newMarkets]);
-
-  // Feature 3: Sync watchlist star markers
-  useEffect(() => {
-    if (!mapReady || !mapRef.current) return;
-    const map = mapRef.current;
-    const currentStars = starMarkersRef.current;
-    const activeIds = new Set<string>();
-
-    if (watchedIds) {
-      for (const id of watchedIds) {
-        // Use offset-adjusted coords from marketsLookup (populated by GeoJSON update effect)
-        const market = marketsLookup.current.get(id) || markets.find((m) => m.id === id);
-        if (!market?.coords) continue;
-        activeIds.add(id);
-        const lngLat: [number, number] = [market.coords[1], market.coords[0]];
-        if (currentStars.has(id)) {
-          // Update position (may change due to offsetColocated recalculation)
-          currentStars.get(id)!.setLngLat(lngLat);
-        } else {
-          const el = document.createElement("div");
-          el.className = "watchlist-star-marker";
-          el.textContent = "\u2B50";
-          const marker = new maplibregl.Marker({ element: el, offset: [0, -14] })
-            .setLngLat(lngLat)
-            .addTo(map);
-          currentStars.set(id, marker);
-        }
-      }
-    }
-
-    // Remove markers for unwatched markets
-    for (const [id, marker] of currentStars) {
-      if (!activeIds.has(id)) {
-        marker.remove();
-        currentStars.delete(id);
-      }
-    }
-  }, [watchedIds, markets, mapReady, currentTier]);
 
   // Feature 4: Track whale trade flash animations
   useEffect(() => {
@@ -1548,187 +1490,19 @@ function escapeHtml(text: string): string {
   return div.innerHTML;
 }
 
-// Minimal TopoJSON → GeoJSON converter (for world-atlas topology)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function topojsonFeature(topology: any, object: any) {
-  const arcs = topology.arcs;
-  const transform = topology.transform;
 
-  function decodeArc(arcIndex: number): [number, number][] {
-    const arc = arcs[arcIndex < 0 ? ~arcIndex : arcIndex];
-    const coords: [number, number][] = [];
-    let x = 0,
-      y = 0;
-    for (const point of arc) {
-      x += point[0];
-      y += point[1];
-      coords.push([
-        transform ? x * transform.scale[0] + transform.translate[0] : x,
-        transform ? y * transform.scale[1] + transform.translate[1] : y,
-      ]);
-    }
-    if (arcIndex < 0) coords.reverse();
-    return coords;
-  }
-
-  function decodeRing(indices: number[]): [number, number][] {
-    const ring: [number, number][] = [];
-    for (const idx of indices) {
-      const arc = decodeArc(idx);
-      for (let i = ring.length > 0 ? 1 : 0; i < arc.length; i++) {
-        ring.push(arc[i]);
-      }
-    }
-    return ring;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function geometry(obj: any): any {
-    if (obj.type === "GeometryCollection") {
-      return { type: "GeometryCollection", geometries: obj.geometries.map(geometry) };
-    }
-    if (obj.type === "Polygon") {
-      return { type: "Polygon", coordinates: obj.arcs.map(decodeRing) };
-    }
-    if (obj.type === "MultiPolygon") {
-      return {
-        type: "MultiPolygon",
-        coordinates: obj.arcs.map((polygon: number[][]) => polygon.map(decodeRing)),
-      };
-    }
-    return obj;
-  }
-
-  const features = object.geometries.map(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (geom: any) => ({
-      type: "Feature",
-      properties: geom.properties || { name: geom.id },
-      geometry: geometry(geom),
-    })
-  );
-
-  // Post-process: split cross-antimeridian polygons
-  return {
-    type: "FeatureCollection" as const,
-    features: features.flatMap(fixAntimeridianFeature),
-  };
-}
-
-// Split features whose polygon rings cross the antimeridian (±180° longitude).
-// Without this, countries like Russia render horizontal lines spanning the map.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function fixAntimeridianFeature(feature: any): any[] {
-  const geom = feature.geometry;
-  if (geom.type === "Polygon") {
-    const split = splitPolygonRings(geom.coordinates);
-    if (split.length === 1) return [feature];
-    return split.map((coords) => ({
-      ...feature,
-      geometry: { type: "Polygon", coordinates: coords },
-    }));
-  }
-  if (geom.type === "MultiPolygon") {
-    const allPolygons: [number, number][][][] = [];
-    for (const poly of geom.coordinates) {
-      const split = splitPolygonRings(poly);
-      allPolygons.push(...split);
-    }
-    return [
-      {
-        ...feature,
-        geometry: { type: "MultiPolygon", coordinates: allPolygons },
-      },
-    ];
-  }
-  return [feature];
-}
-
-// Check if a ring actually spans the antimeridian (has points in both >160 and <-160).
-// This prevents false positives for countries like Australia that are near but don't cross.
-function ringsSpanAntimeridian(rings: [number, number][][]): boolean {
-  const outer = rings[0];
-  if (!outer) return false;
-  let hasEast = false, hasWest = false;
-  for (const [lng] of outer) {
-    if (lng > 160) hasEast = true;
-    if (lng < -160) hasWest = true;
-    if (hasEast && hasWest) return true;
-  }
-  return false;
-}
-
-// Split polygon rings that cross the antimeridian into separate east/west polygons.
-// Uses segment-walking to preserve vertex ordering (unlike simple bucketing).
-function splitPolygonRings(
-  rings: [number, number][][]
-): [number, number][][][] {
-  const outer = rings[0];
-  if (!outer || outer.length < 4) return [rings];
-  if (!ringsSpanAntimeridian(rings)) return [rings];
-
-  // Detect actual crossing edges
-  let crosses = false;
-  for (let i = 1; i < outer.length; i++) {
-    if (Math.abs(outer[i][0] - outer[i - 1][0]) > 180) {
-      crosses = true;
-      break;
-    }
-  }
-  if (!crosses) return [rings];
-
-  // Walk the ring sequentially, building ordered segments per side
-  const eastSegments: [number, number][][] = [];
-  const westSegments: [number, number][][] = [];
-
-  let currentSide: "east" | "west" = outer[0][0] >= 0 ? "east" : "west";
-  let currentSegment: [number, number][] = [outer[0]];
-
-  for (let i = 1; i < outer.length; i++) {
-    const prev = outer[i - 1];
-    const curr = outer[i];
-
-    if (Math.abs(curr[0] - prev[0]) > 180) {
-      // Crossing detected — interpolate the latitude at ±180°
-      const sign = prev[0] > 0 ? 1 : -1;
-      const currAdj = curr[0] + sign * 360;
-      const denominator = currAdj - prev[0];
-      // When both points are at/near ±180° (e.g. Antarctica closing edge),
-      // denominator ≈ 0 → use average latitude to avoid NaN
-      const crossLat = Math.abs(denominator) < 0.01
-        ? (prev[1] + curr[1]) / 2
-        : prev[1] + ((sign * 180 - prev[0]) / denominator) * (curr[1] - prev[1]);
-
-      // Close current segment at the boundary
-      currentSegment.push([sign * 180, crossLat]);
-      if (currentSide === "east") eastSegments.push(currentSegment);
-      else westSegments.push(currentSegment);
-
-      // Start new segment on the other side
-      currentSide = currentSide === "east" ? "west" : "east";
-      currentSegment = [[-sign * 180, crossLat], curr];
-    } else {
-      currentSegment.push(curr);
-    }
-  }
-
-  // Close the final segment
-  if (currentSegment.length > 0) {
-    if (currentSide === "east") eastSegments.push(currentSegment);
-    else westSegments.push(currentSegment);
-  }
-
-  // Merge segments per side into closed rings
-  const result: [number, number][][][] = [];
-  for (const segments of [eastSegments, westSegments]) {
-    if (segments.length === 0) continue;
-    const ring = segments.flat();
-    if (ring.length >= 3) {
-      const first = ring[0], last = ring[ring.length - 1];
-      if (first[0] !== last[0] || first[1] !== last[1]) ring.push(ring[0]);
-      result.push([ring]);
-    }
-  }
-
-  return result.length > 0 ? result : [rings];
-}
+export default memo(WorldMapInner, (prev, next) => {
+  if (prev.markets !== next.markets) return false;
+  if (!setsEqual(prev.activeCategories, next.activeCategories)) return false;
+  if (prev.flyToTarget !== next.flyToTarget) return false;
+  if (prev.timeRange !== next.timeRange) return false;
+  if (prev.isFullscreen !== next.isFullscreen) return false;
+  if (prev.selectedCountry !== next.selectedCountry) return false;
+  if (prev.selectedMarketId !== next.selectedMarketId) return false;
+  if (prev.colorMode !== next.colorMode) return false;
+  if (prev.region !== next.region) return false;
+  if (prev.newMarkets !== next.newMarkets) return false;
+  if (prev.whaleTrades !== next.whaleTrades) return false;
+  if (prev.isWatched !== next.isWatched) return false;
+  return true;
+});

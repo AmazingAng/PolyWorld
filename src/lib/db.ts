@@ -58,7 +58,6 @@ function initSchema(db: Database.Database) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_snapshots_event_time ON price_snapshots(event_id, recorded_at);
-    CREATE INDEX IF NOT EXISTS idx_snapshots_recorded_at ON price_snapshots(recorded_at);
 
     CREATE TABLE IF NOT EXISTS market_snapshots (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,8 +69,6 @@ function initSchema(db: Database.Database) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_market_snapshots_event_time ON market_snapshots(event_id, recorded_at);
-    CREATE INDEX IF NOT EXISTS idx_market_snapshots_market_time ON market_snapshots(market_id, recorded_at);
-    CREATE INDEX IF NOT EXISTS idx_market_snapshots_recorded_at ON market_snapshots(recorded_at);
 
     CREATE TABLE IF NOT EXISTS sync_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

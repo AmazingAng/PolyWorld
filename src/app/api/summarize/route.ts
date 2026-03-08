@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { generateMarketSummary, generateCountrySummary } from "@/lib/ai";
 import type { MarketContext, CountryContext } from "@/lib/ai";
+import { apiError } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
 
@@ -61,8 +62,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ summary, cached: false });
   } catch (err) {
-    console.error("[api/summarize] Error:", err);
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiError("summarize", err instanceof Error ? err.message : "Unknown error", 500, err);
   }
 }

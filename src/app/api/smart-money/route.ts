@@ -2,17 +2,13 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { fetchMarketTrades } from "@/lib/smartMoney";
 import type { SmartWallet, WhaleTrade } from "@/types";
+import { SingleCache } from "@/lib/apiCache";
+import { apiError } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
 
-// ── Server-side memory cache (30s TTL) ──
-interface TradeCache {
-  whaleTrades: WhaleTrade[];
-  smartTrades: WhaleTrade[];
-  fetchedAt: number;
-}
-const CACHE_TTL = 30_000; // 30s
-let tradeCache: TradeCache | null = null;
+const tradeCache = new SingleCache<{ whaleTrades: WhaleTrade[]; smartTrades: WhaleTrade[] }>(30_000);
+let bgFetchInProgress = false;
 
 function mapApiTrade(
   t: Awaited<ReturnType<typeof fetchMarketTrades>>[number],
@@ -36,41 +32,30 @@ function mapApiTrade(
   };
 }
 
-async function getLiveTrades(smartAddresses: Set<string>): Promise<{
-  whaleTrades: WhaleTrade[];
-  smartTrades: WhaleTrade[];
-}> {
-  // Return cached if fresh
-  if (tradeCache && Date.now() - tradeCache.fetchedAt < CACHE_TTL) {
-    return { whaleTrades: tradeCache.whaleTrades, smartTrades: tradeCache.smartTrades };
-  }
-
-  // Fetch both thresholds in parallel
-  const [whaleRaw, smartRaw] = await Promise.all([
-    fetchMarketTrades("", 5000),
-    fetchMarketTrades("", 1000),
-  ]);
-
-  const whaleTrades = whaleRaw.map((t) => mapApiTrade(t, smartAddresses));
-
-  // Smart trades: from the $1000+ pool, only keep smart wallet trades
-  // Also merge any smart wallet trades from the whale pool that aren't duplicated
-  const smartTradeMap = new Map<string, WhaleTrade>();
-  for (const t of smartRaw) {
-    if (!smartAddresses.has(t.wallet.toLowerCase())) continue;
-    const key = `${t.wallet}-${t.conditionId}-${t.timestamp}`;
-    if (!smartTradeMap.has(key)) {
-      smartTradeMap.set(key, mapApiTrade(t, smartAddresses));
-    }
-  }
-  const smartTrades = Array.from(smartTradeMap.values())
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-  // Update cache
-  tradeCache = { whaleTrades, smartTrades, fetchedAt: Date.now() };
-
-  // Persist all trades to DB for historical record
+/** Fetch live trades from Polymarket API and persist to DB + cache */
+async function fetchAndCacheLiveTrades(smartAddresses: Set<string>): Promise<void> {
   try {
+    const [whaleRaw, smartRaw] = await Promise.all([
+      fetchMarketTrades("", 5000),
+      fetchMarketTrades("", 1000),
+    ]);
+
+    const whaleTrades = whaleRaw.map((t) => mapApiTrade(t, smartAddresses));
+
+    const smartTradeMap = new Map<string, WhaleTrade>();
+    for (const t of smartRaw) {
+      if (!smartAddresses.has(t.wallet.toLowerCase())) continue;
+      const key = `${t.wallet}-${t.conditionId}-${t.timestamp}`;
+      if (!smartTradeMap.has(key)) {
+        smartTradeMap.set(key, mapApiTrade(t, smartAddresses));
+      }
+    }
+    const smartTrades = Array.from(smartTradeMap.values())
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    tradeCache.set({ whaleTrades, smartTrades });
+
+    // Persist to DB
     const db = getDb();
     const insert = db.prepare(`
       INSERT OR IGNORE INTO whale_trades
@@ -92,10 +77,54 @@ async function getLiveTrades(smartAddresses: Set<string>): Promise<{
       }
     })();
   } catch (e) {
-    console.error("[api/smart-money] DB persist error:", e);
+    console.error("[api/smart-money] Background fetch error:", e);
+  } finally {
+    bgFetchInProgress = false;
+  }
+}
+
+/** Read trades from DB (fast, no external API) */
+function readTradesFromDb(
+  db: ReturnType<typeof getDb>,
+  usernameMap: Map<string, string>,
+): { whaleTrades: WhaleTrade[]; smartTrades: WhaleTrade[] } {
+  const dbRows = db
+    .prepare(
+      `SELECT wallet, condition_id, event_id, side, size, price, usdc_size, outcome, title, slug, timestamp, is_smart_wallet
+       FROM whale_trades
+       WHERE timestamp > datetime('now', '-24 hours')
+       ORDER BY timestamp DESC
+       LIMIT 200`
+    )
+    .all() as Array<Record<string, unknown>>;
+
+  const whaleTrades: WhaleTrade[] = [];
+  const smartTrades: WhaleTrade[] = [];
+
+  for (const r of dbRows) {
+    const t: WhaleTrade = {
+      wallet: r.wallet as string,
+      username: usernameMap.get((r.wallet as string).toLowerCase()) || undefined,
+      conditionId: r.condition_id as string,
+      eventId: (r.event_id as string) || null,
+      side: r.side as "BUY" | "SELL",
+      size: r.size as number,
+      price: r.price as number,
+      usdcSize: r.usdc_size as number,
+      outcome: r.outcome as string,
+      title: r.title as string,
+      slug: r.slug as string,
+      timestamp: r.timestamp as string,
+      isSmartWallet: (r.is_smart_wallet as number) === 1,
+    };
+    if (t.usdcSize >= 5000) whaleTrades.push(t);
+    if (t.isSmartWallet) smartTrades.push(t);
   }
 
-  return { whaleTrades, smartTrades };
+  return {
+    whaleTrades: whaleTrades.slice(0, 100),
+    smartTrades: smartTrades.slice(0, 100),
+  };
 }
 
 export async function GET(request: Request) {
@@ -155,9 +184,6 @@ export async function GET(request: Request) {
       allWalletRows.map((r) => r.address.toLowerCase())
     );
 
-    // Fetch live trades from Polymarket API (30s cache)
-    const { whaleTrades: liveWhale, smartTrades: liveSmart } = await getLiveTrades(smartAddresses);
-
     // Build wallet→username lookup from smart_wallets
     const usernameMap = new Map<string, string>();
     const usernameRows = db
@@ -165,55 +191,44 @@ export async function GET(request: Request) {
       .all() as Array<{ address: string; username: string }>;
     for (const r of usernameRows) usernameMap.set(r.address.toLowerCase(), r.username);
 
-    // Read historical trades from DB (last 24h) and merge with live
-    const dbRows = db
-      .prepare(
-        `SELECT wallet, condition_id, event_id, side, size, price, usdc_size, outcome, title, slug, timestamp, is_smart_wallet
-         FROM whale_trades
-         WHERE timestamp > datetime('now', '-24 hours')
-         ORDER BY timestamp DESC
-         LIMIT 200`
-      )
-      .all() as Array<Record<string, unknown>>;
+    // Use cached live trades if available, otherwise read from DB (fast)
+    const cached = tradeCache.get();
+    let whaleTrades: WhaleTrade[];
+    let smartTrades: WhaleTrade[];
 
-    const dbTrades: WhaleTrade[] = dbRows.map((r) => ({
-      wallet: r.wallet as string,
-      username: usernameMap.get((r.wallet as string).toLowerCase()) || undefined,
-      conditionId: r.condition_id as string,
-      eventId: (r.event_id as string) || null,
-      side: r.side as "BUY" | "SELL",
-      size: r.size as number,
-      price: r.price as number,
-      usdcSize: r.usdc_size as number,
-      outcome: r.outcome as string,
-      title: r.title as string,
-      slug: r.slug as string,
-      timestamp: r.timestamp as string,
-      isSmartWallet: (r.is_smart_wallet as number) === 1,
-    }));
+    if (cached) {
+      // Merge cached live trades with DB history
+      const dbResult = readTradesFromDb(db, usernameMap);
+      const whaleMap = new Map<string, WhaleTrade>();
+      for (const t of cached.whaleTrades) whaleMap.set(`${t.wallet}-${t.conditionId}-${t.timestamp}`, t);
+      for (const t of dbResult.whaleTrades) {
+        const key = `${t.wallet}-${t.conditionId}-${t.timestamp}`;
+        if (!whaleMap.has(key)) whaleMap.set(key, t);
+      }
+      whaleTrades = Array.from(whaleMap.values())
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 100);
 
-    // Merge: live trades take priority (have username), then fill with DB history
-    const whaleMap = new Map<string, WhaleTrade>();
-    for (const t of liveWhale) whaleMap.set(`${t.wallet}-${t.conditionId}-${t.timestamp}`, t);
-    for (const t of dbTrades) {
-      if ((t.usdcSize || 0) < 5000) continue;
-      const key = `${t.wallet}-${t.conditionId}-${t.timestamp}`;
-      if (!whaleMap.has(key)) whaleMap.set(key, t);
+      const smartMap = new Map<string, WhaleTrade>();
+      for (const t of cached.smartTrades) smartMap.set(`${t.wallet}-${t.conditionId}-${t.timestamp}`, t);
+      for (const t of dbResult.smartTrades) {
+        const key = `${t.wallet}-${t.conditionId}-${t.timestamp}`;
+        if (!smartMap.has(key)) smartMap.set(key, t);
+      }
+      smartTrades = Array.from(smartMap.values())
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 100);
+    } else {
+      // Cold start: return DB data immediately, fetch live in background
+      const dbResult = readTradesFromDb(db, usernameMap);
+      whaleTrades = dbResult.whaleTrades;
+      smartTrades = dbResult.smartTrades;
+
+      if (!bgFetchInProgress) {
+        bgFetchInProgress = true;
+        fetchAndCacheLiveTrades(smartAddresses);
+      }
     }
-    const whaleTrades = Array.from(whaleMap.values())
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 100);
-
-    const smartMap = new Map<string, WhaleTrade>();
-    for (const t of liveSmart) smartMap.set(`${t.wallet}-${t.conditionId}-${t.timestamp}`, t);
-    for (const t of dbTrades) {
-      if (!t.isSmartWallet) continue;
-      const key = `${t.wallet}-${t.conditionId}-${t.timestamp}`;
-      if (!smartMap.has(key)) smartMap.set(key, t);
-    }
-    const smartTrades = Array.from(smartMap.values())
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 100);
 
     // Last leaderboard sync time
     const walletMeta = db
@@ -227,10 +242,6 @@ export async function GET(request: Request) {
       lastSync: walletMeta?.last_sync || null,
     });
   } catch (err) {
-    console.error("[api/smart-money] Error:", err);
-    return NextResponse.json(
-      { leaderboard: [], recentTrades: [], smartTrades: [], lastSync: null },
-      { status: 500 }
-    );
+    return apiError("smart-money", "Failed to fetch smart money data", 500, err);
   }
 }

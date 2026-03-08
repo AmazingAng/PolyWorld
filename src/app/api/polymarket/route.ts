@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/apiError";
 
 const API_BASE = "https://gamma-api.polymarket.com";
 
@@ -15,10 +16,7 @@ export async function GET(request: Request) {
     });
 
     if (!res.ok) {
-      return NextResponse.json(
-        { error: "Failed to fetch from Polymarket" },
-        { status: res.status }
-      );
+      return apiError("polymarket", "Failed to fetch from Polymarket", res.status);
     }
 
     const data = await res.json();
@@ -27,10 +25,7 @@ export async function GET(request: Request) {
         "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
       },
     });
-  } catch {
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    return apiError("polymarket", "Internal server error", 500, err);
   }
 }

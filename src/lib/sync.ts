@@ -1,6 +1,6 @@
 import { getDb } from "./db";
 import { fetchEventsFromAPI, processEvents } from "./polymarket";
-import type { ProcessedMarket, SmartMoneyFlow, WhaleTrade } from "@/types";
+import type { ProcessedMarket, PolymarketMarket, SmartMoneyFlow, WhaleTrade } from "@/types";
 import { computeImpactScores } from "./impact";
 import { detectAnomalies } from "./anomaly";
 import { aiGeocodeBatch, addJitter } from "./aiGeo";
@@ -21,6 +21,9 @@ const ANOMALY_CACHE_TTL = 120_000; // 2 min
 
 let lastCleanup = Date.now(); // don't run cleanup on first sync
 const CLEANUP_INTERVAL = 3600_000; // 1 hour
+
+let lastSnapshotWrite = 0;
+const SNAPSHOT_WRITE_INTERVAL = 300_000; // 5 min — sentiment/anomaly don't need higher frequency
 
 /** Fire-and-forget: geocode pending markets without blocking sync */
 function geocodePending(db: ReturnType<typeof getDb>) {
@@ -102,15 +105,10 @@ export async function runSync(): Promise<{
         comment_count = @commentCount, tags_json = @tagsJson
     `);
 
-    const insertSnapshot = db.prepare(`
-      INSERT INTO price_snapshots (event_id, prob, volume_24h, change)
-      VALUES (?, ?, ?, ?)
-    `);
-
-    const insertMarketSnapshot = db.prepare(`
-      INSERT INTO market_snapshots (event_id, market_id, label, prob)
-      VALUES (?, ?, ?, ?)
-    `);
+    const writeSnapshots = Date.now() - lastSnapshotWrite >= SNAPSHOT_WRITE_INTERVAL;
+    const insertSnapshot = writeSnapshots
+      ? db.prepare(`INSERT INTO price_snapshots (event_id, prob, volume_24h, change) VALUES (?, ?, ?, ?)`)
+      : null;
 
     const now = new Date().toISOString();
 
@@ -143,54 +141,46 @@ export async function runSync(): Promise<{
           tagsJson: JSON.stringify(m.tags || []),
         });
 
-        insertSnapshot.run(m.id, m.prob, m.volume24h, m.change);
-
-        // Per-sub-market snapshots for multi-option charts
-        for (const sub of m.markets || []) {
-          if (sub.active === false) continue;
-          let yesPrice: number | null = null;
-          try {
-            const raw = sub.outcomePrices
-              ? Array.isArray(sub.outcomePrices) ? sub.outcomePrices : JSON.parse(sub.outcomePrices as string)
-              : null;
-            if (raw) yesPrice = parseFloat(raw[0]);
-          } catch { /* skip */ }
-          if (yesPrice != null && !isNaN(yesPrice)) {
-            const label = sub.groupItemTitle || sub.question || sub.id;
-            insertMarketSnapshot.run(m.id, sub.id, label, yesPrice);
-          }
-        }
+        insertSnapshot?.run(m.id, m.prob, m.volume24h, m.change);
       }
     });
+    if (writeSnapshots) lastSnapshotWrite = Date.now();
     txn();
 
     // Mark stale events as closed — not in current API fetch means
     // the event is no longer active on Polymarket (closed, resolved, or delisted)
+    // Safety: skip if API returned too few results (likely API error/timeout)
     const fetchedIds = new Set(all.map((m) => m.id));
-    const staleRows = db
-      .prepare(
-        `SELECT id FROM events WHERE is_closed = 0`
-      )
-      .all() as Array<{ id: string }>;
-    const staleIds = staleRows.filter((r) => !fetchedIds.has(r.id));
-    if (staleIds.length > 0) {
-      const markClosed = db.prepare(
-        `UPDATE events SET is_closed = 1 WHERE id = ?`
-      );
-      const closeTxn = db.transaction(() => {
-        for (const r of staleIds) markClosed.run(r.id);
-      });
-      closeTxn();
-      console.log(`[sync] Marked ${staleIds.length} stale resolved events as closed`);
+    const openCount = (db.prepare(`SELECT COUNT(*) as c FROM events WHERE is_closed = 0`).get() as { c: number }).c;
+    if (openCount > 0 && fetchedIds.size >= openCount * 0.5) {
+      const staleRows = db
+        .prepare(
+          `SELECT id FROM events WHERE is_closed = 0`
+        )
+        .all() as Array<{ id: string }>;
+      const staleIds = staleRows.filter((r) => !fetchedIds.has(r.id));
+      if (staleIds.length > 0) {
+        const markClosed = db.prepare(
+          `UPDATE events SET is_closed = 1 WHERE id = ?`
+        );
+        const closeTxn = db.transaction(() => {
+          for (const r of staleIds) markClosed.run(r.id);
+        });
+        closeTxn();
+        console.log(`[sync] Marked ${staleIds.length} stale resolved events as closed`);
+      }
+    } else if (fetchedIds.size < openCount * 0.5) {
+      console.warn(`[sync] Skipped stale marking: API returned only ${fetchedIds.size} events vs ${openCount} open in DB (need ≥50%) — likely API issue`);
     }
 
-    // Cleanup snapshots older than 30 days — run once per hour to avoid blocking
+    // Cleanup — run once per hour
     if (Date.now() - lastCleanup > CLEANUP_INTERVAL) {
       db.prepare(
         `DELETE FROM price_snapshots WHERE recorded_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days')`
       ).run();
+      // Remove snapshots for closed events — they'll never change
       db.prepare(
-        `DELETE FROM market_snapshots WHERE recorded_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days')`
+        `DELETE FROM price_snapshots WHERE event_id IN (SELECT id FROM events WHERE is_closed = 1)`
       ).run();
       lastCleanup = Date.now();
     }
@@ -241,9 +231,23 @@ function invalidateMarketCaches() {
   resultCache = null;
 }
 
+/** Fields kept by trimMarket for the frontend */
+interface TrimmedMarket {
+  id: string;
+  question?: string;
+  groupItemTitle?: string;
+  clobTokenIds?: string[] | string;
+  outcomePrices?: string[] | string;
+  outcomes?: string[];
+  oneDayPriceChange?: number;
+  active?: boolean;
+  volume?: number;
+  volume_24hr?: number;
+  liquidity?: number;
+}
+
 /** Trim sub-market objects to only the fields used by the frontend */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function trimMarket(m: any): any {
+function trimMarket(m: PolymarketMarket): TrimmedMarket {
   return {
     id: m.id,
     question: m.question,
@@ -283,19 +287,19 @@ export function readMarketsFromDb(): {
   const unmapped: ProcessedMarket[] = [];
 
   for (const row of rows) {
-    let markets = [];
+    let markets: TrimmedMarket[] = [];
     try {
       const raw = JSON.parse((row.markets_json as string) || "[]");
       markets = Array.isArray(raw) ? raw.map(trimMarket) : [];
     } catch {
-      // ignore
+      // Malformed JSON in DB — use empty array
     }
 
     let tags: string[] = [];
     try {
       tags = JSON.parse((row.tags_json as string) || "[]");
     } catch {
-      // ignore
+      // Malformed tags JSON — use empty array
     }
 
     const item: ProcessedMarket = {

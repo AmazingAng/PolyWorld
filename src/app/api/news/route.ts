@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readNewsFromDb } from "@/lib/newsSync";
+import { apiError } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,6 @@ export async function GET(request: Request) {
     const items = readNewsFromDb(marketId);
     return NextResponse.json(items);
   } catch (err) {
-    console.error("[api/news] error:", err);
-    return NextResponse.json([], { status: 500 });
+    return apiError("news", "Failed to read news", 500, err);
   }
 }
