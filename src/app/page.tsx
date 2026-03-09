@@ -380,11 +380,8 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapped, unmapped]);
 
-  useEffect(() => {
-    const handler = () => useUIStore.getState().setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", handler);
-    return () => document.removeEventListener("fullscreenchange", handler);
-  }, []);
+  // Note: isFullscreen is now purely a UI layout toggle (map panel fullscreen),
+  // no longer tied to browser fullscreen API.
 
   const handleFlyTo = useCallback(
     (coords: [number, number], marketId: string) => {
@@ -938,12 +935,32 @@ export default function Home() {
         }}
       />
 
-      <div className="main-content" ref={mainRef} style={{ gridTemplateColumns: `${mapWidthPct}% 6px 1fr` } as React.CSSProperties}>
+      <div className="main-content" ref={mainRef} style={{ gridTemplateColumns: isFullscreen ? "1fr" : `${mapWidthPct}% 6px 1fr` } as React.CSSProperties}>
         {/* Map section */}
         <div className="map-section" ref={mapSectionRef}>
           <div className="map-panel-header">
             <span className="panel-title">World Map</span>
             <span className="panel-count">{timeFiltered.length} markets</span>
+            <div className="flex-1" />
+            <button
+              onClick={() => useUIStore.getState().setIsFullscreen(!isFullscreen)}
+              className="panel-expand-btn"
+              title={isFullscreen ? "Exit map fullscreen" : "Map fullscreen"}
+            >
+              <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                {isFullscreen ? (
+                  <>
+                    <path d="M5 1v4H1" /><path d="M9 1v4h4" />
+                    <path d="M5 13V9H1" /><path d="M9 13V9h4" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M1 5V1h4" /><path d="M13 5V1H9" />
+                    <path d="M1 9v4h4" /><path d="M13 9v4H9" />
+                  </>
+                )}
+              </svg>
+            </button>
           </div>
           <div className="map-container">
             <WorldMap
@@ -969,28 +986,31 @@ export default function Home() {
               whaleTrades={smartMoneyTrades}
             />
           </div>
-          {/* Horizontal resize handle between map and bottom panels */}
-          <ResizeHandle direction="horizontal" onResize={handleHorizontalResize} />
-          {/* Bottom panels grid */}
-          {(bottomVisiblePanels.length > 0 || isDragging) && (
-            <div
-              className={`bottom-panels-grid${bottomVisiblePanels.length === 0 ? " bottom-panels-grid-empty" : ""}`}
-              ref={bottomPanelsRef}
-              style={{ height: bottomPanelHeight }}
-            >
-              {bottomVisiblePanels.map((key) => renderPanel(key))}
-            </div>
+          {/* Horizontal resize handle + bottom panels (hidden in map fullscreen) */}
+          {!isFullscreen && (
+            <>
+              <ResizeHandle direction="horizontal" onResize={handleHorizontalResize} />
+              {(bottomVisiblePanels.length > 0 || isDragging) && (
+                <div
+                  className={`bottom-panels-grid${bottomVisiblePanels.length === 0 ? " bottom-panels-grid-empty" : ""}`}
+                  ref={bottomPanelsRef}
+                  style={{ height: bottomPanelHeight }}
+                >
+                  {bottomVisiblePanels.map((key) => renderPanel(key))}
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Vertical resize handle between map and panels */}
-        <ResizeHandle direction="vertical" onResize={handleVerticalResize} />
-
-        {/* Right panels grid */}
+        {/* Vertical resize handle + right panels (hidden in map fullscreen) */}
         {!isFullscreen && (
-          <div className="panels-grid" ref={panelsRef}>
-            {rightVisiblePanels.map((key) => renderPanel(key))}
-          </div>
+          <>
+            <ResizeHandle direction="vertical" onResize={handleVerticalResize} />
+            <div className="panels-grid" ref={panelsRef}>
+              {rightVisiblePanels.map((key) => renderPanel(key))}
+            </div>
+          </>
         )}
       </div>
 

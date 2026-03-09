@@ -80,11 +80,11 @@ export default function Panel({
           )}
           {badge}
         </div>
-        <div className="flex items-center gap-1.5">
-          {headerRight}
+        <div className="flex items-center gap-1.5 min-w-0 shrink">
+          {headerRight && <span className="min-w-0 truncate">{headerRight}</span>}
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="panel-expand-btn"
+            className="panel-expand-btn shrink-0"
             title={expanded ? "Exit fullscreen" : "Fullscreen"}
           >
             {expanded ? (

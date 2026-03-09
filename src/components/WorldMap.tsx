@@ -226,7 +226,7 @@ function WorldMapInner({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [currentTier, setCurrentTier] = useState(() => zoomToTier(1.5));
+  const [currentTier, setCurrentTier] = useState(() => zoomToTier(1.2));
   const marketsLookup = useRef<Map<string, ProcessedMarket>>(new Map());
   const countryLayersAdded = useRef(false);
   const pulseRef = useRef<number>(0);
@@ -263,7 +263,7 @@ function WorldMapInner({
       container: mapContainer.current,
       style: DARK_STYLE,
       center: [10, 25],
-      zoom: 1.5,
+      zoom: 1.2,
       minZoom: 1.2,
       maxZoom: 10,
       attributionControl: false,

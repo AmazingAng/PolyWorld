@@ -172,24 +172,11 @@ export default function MapToolbar({
         </div>
       </div>
 
-      {/* Bottom-right: clock + fullscreen */}
+      {/* Bottom-right: clock */}
       <div className="absolute bottom-2.5 right-2.5 z-10 flex items-center gap-1.5 font-mono">
         <span className="text-[13px] text-[#777] tracking-wider select-none">
           {utcTime} UTC
         </span>
-        <button
-          onClick={onToggleFullscreen}
-          className="w-[28px] h-[28px] flex items-center justify-center bg-[#0a0a0a]/80 border border-[#1e1e1e] text-[#8a8a8a] hover:text-[#e8e8e8] transition-colors backdrop-blur-sm"
-          title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-        >
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            {isFullscreen ? (
-              <path d="M6 1v4H2M10 1v4h4M6 15v-4H2M10 15v-4h4" />
-            ) : (
-              <path d="M1 6V2h4M15 6V2h-4M1 10v4h4M15 10v4h-4" />
-            )}
-          </svg>
-        </button>
       </div>
     </>
   );

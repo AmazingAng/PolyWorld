@@ -52,6 +52,7 @@ Return ONLY valid JSON, no other text.`;
       messages: [{ role: "user", content: prompt }],
     });
   } catch {
+    if (!fallbackClient) throw new Error("AI primary failed and no fallback configured");
     response = await fallbackClient.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 4000,

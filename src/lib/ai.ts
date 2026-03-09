@@ -1,19 +1,21 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({
-  baseURL: "https://api.skyapi.org",
-  apiKey: "REDACTED_API_KEY",
+  baseURL: process.env.AI_BASE_URL || "https://api.anthropic.com",
+  apiKey: process.env.AI_API_KEY || "",
 });
 
-const fallbackClient = new Anthropic({
-  baseURL: "https://api.minimaxi.com/anthropic",
-  apiKey: "REDACTED_FALLBACK_API_KEY",
-});
+const fallbackClient = process.env.AI_FALLBACK_API_KEY
+  ? new Anthropic({
+      baseURL: process.env.AI_FALLBACK_BASE_URL || "https://api.anthropic.com",
+      apiKey: process.env.AI_FALLBACK_API_KEY,
+    })
+  : null;
 
 export { client, fallbackClient };
 
 export function isAiConfigured(): boolean {
-  return !!(client.baseURL && client.apiKey);
+  return !!process.env.AI_API_KEY;
 }
 
 export interface MarketContext {
