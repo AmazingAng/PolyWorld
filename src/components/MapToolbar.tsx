@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { TimeRange } from "./TimeRangeFilter";
 import { Category } from "@/types";
 import { CATEGORY_COLORS, CATEGORY_SHAPES } from "@/lib/categories";
@@ -36,17 +36,8 @@ export default function MapToolbar({
   colorMode = "category",
   onColorModeChange,
 }: MapToolbarProps) {
-  const [utcTime, setUtcTime] = useState("");
   const [layersOpen, setLayersOpen] = useState(false);
   const [regionOpen, setRegionOpen] = useState(false);
-
-  useEffect(() => {
-    const tick = () =>
-      setUtcTime(new Date().toISOString().slice(11, 19));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
 
   return (
     <>
@@ -172,12 +163,6 @@ export default function MapToolbar({
         </div>
       </div>
 
-      {/* Bottom-right: clock */}
-      <div className="absolute bottom-2.5 right-2.5 z-10 flex items-center gap-1.5 font-mono">
-        <span className="text-[13px] text-[#777] tracking-wider select-none">
-          {utcTime} UTC
-        </span>
-      </div>
     </>
   );
 }

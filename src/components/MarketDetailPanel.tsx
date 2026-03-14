@@ -460,6 +460,7 @@ function MarketDetailPanelInner({
             <span>Liq <span className="text-[var(--text-dim)]">{formatVolume(market.liquidity)}</span></span>
           </div>
 
+
           {market.closed && hasOutcomes && <ResolutionBanner markets={activeMarketsList} />}
 
           {/* Chart — reuse Price Chart panel */}
@@ -509,6 +510,7 @@ function MarketDetailPanelInner({
                 {market.resolutionSource && (
                   <div className="mt-2 text-[11px] text-[var(--text-faint)]">
                     source: <span className="text-[var(--text-dim)]">{market.resolutionSource}</span>
+                    <ResolutionMonitorBadge eventId={market.id} />
                   </div>
                 )}
               </div>
@@ -534,7 +536,7 @@ function MarketDetailPanelInner({
                 <div className="border border-[var(--border-subtle)] rounded-sm px-3 py-3">
                   <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-1">created</div>
                   <div className="text-[12px] text-[var(--text-dim)]">
-                    {new Date(market.createdAt!).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                    {new Date(market.createdAt!).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
                   </div>
                 </div>
               )}
@@ -567,6 +569,7 @@ function MarketDetailPanelInner({
             <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--text-faint)] hover:text-[var(--text-dim)] transition-colors">
               polymarket {"\u2192"}
             </a>
+            <CopyLinkButton marketId={market.id} />
           </div>
         </div>
       )}
@@ -576,6 +579,26 @@ function MarketDetailPanelInner({
         <SmartMoneySection smartMoney={market.smartMoney} />
       )}
     </div>
+  );
+}
+
+function CopyLinkButton({ marketId }: { marketId: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set("m", marketId);
+          navigator.clipboard.writeText(url.toString());
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch { /* ignore */ }
+      }}
+      className="text-[11px] text-[var(--text-faint)] hover:text-[var(--text-dim)] transition-colors"
+    >
+      {copied ? "copied!" : "copy link"}
+    </button>
   );
 }
 
@@ -710,5 +733,37 @@ function ResolutionBanner({ markets }: { markets: ProcessedMarket["markets"] }) 
         </div>
       ))}
     </div>
+  );
+}
+
+function ResolutionMonitorBadge({ eventId }: { eventId: string }) {
+  const [status, setStatus] = useState<{ sourceType: string; lastCheckedAt: string | null } | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/resolution-alerts?marketId=${eventId}`)
+      .then((r) => r.json())
+      .then((data) => { if (data.monitor) setStatus(data.monitor); })
+      .catch(() => {});
+  }, [eventId]);
+
+  if (!status) return null;
+
+  const isMonitored = ["known_feed", "price_feed", "sports_feed"].includes(status.sourceType);
+  if (isMonitored) {
+    const ago = status.lastCheckedAt
+      ? `${Math.round((Date.now() - new Date(status.lastCheckedAt).getTime()) / 60_000)}m ago`
+      : "pending";
+    const label = status.sourceType === "price_feed" ? "price" : status.sourceType === "sports_feed" ? "sports" : "rss";
+    return (
+      <span className="ml-2 text-[10px] text-[#22c55e]/70">
+        {label} monitored · {ago}
+      </span>
+    );
+  }
+
+  return (
+    <span className="ml-2 text-[10px] text-[var(--text-ghost)]">
+      not monitorable
+    </span>
   );
 }

@@ -2,34 +2,13 @@ import crypto from "crypto";
 import RssParser from "rss-parser";
 import { getDb } from "./db";
 import { NEWS_SOURCES } from "./newsSources";
+import { isAiConfigured, matchNewsToMarkets } from "./ai";
+import { extractKeywords } from "./keywords";
 import type { NewsItem } from "@/types";
 
 const parser = new RssParser({ timeout: 10_000 });
 const NEWS_SYNC_INTERVAL = 300_000; // 5 minutes
 
-const STOP_WORDS = new Set([
-  "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-  "of", "with", "by", "from", "is", "it", "as", "be", "was", "are",
-  "been", "has", "had", "have", "will", "can", "may", "not", "this",
-  "that", "its", "his", "her", "their", "our", "your", "all", "more",
-  "new", "out", "up", "one", "two", "also", "into", "over", "after",
-  "than", "about", "says", "said", "would", "could", "should", "who",
-  "what", "when", "where", "how", "which", "just", "some", "other",
-  "most", "them", "these", "then", "so", "no", "yes", "he", "she",
-  "they", "we", "you", "me", "him", "us", "my", "do", "did", "does",
-  "if", "each", "get", "got", "go", "been", "being", "make", "made",
-  "very", "much", "many", "any", "own", "such", "like", "even", "still",
-  "between", "through", "during", "before", "under", "against", "both",
-  // High-frequency words that cause false matches across domains
-  "market", "markets", "price", "prices", "win", "winner", "won",
-  "will", "year", "day", "time", "first", "last", "next", "end",
-  "top", "best", "back", "take", "come", "world", "hit", "set",
-  "per", "report", "reports", "according", "people", "says",
-  "could", "may", "might", "week", "month", "state", "states",
-  "news", "update", "latest", "today", "yesterday", "number",
-]);
-
-const MIN_KEYWORD_LENGTH = 4; // skip 3-letter words like "war", "oil", "gas" — too generic
 const MAX_MATCHES_PER_ITEM = 20; // limit matches per news/tweet to prevent explosion
 
 function makeId(url: string): string {
@@ -98,20 +77,21 @@ export async function runNewsSync(): Promise<{ items: number; matches: number }>
 
   totalMatches = runKeywordMatching(db);
 
+  // AI semantic matching for zero-match news items
+  if (isAiConfigured()) {
+    try {
+      totalMatches += await runAiMatching(db);
+    } catch (err) {
+      console.error("[newsSync] AI matching error:", err);
+    }
+  }
+
   // Cleanup: remove items older than 7 days
   db.prepare(`DELETE FROM news_items WHERE published_at < datetime('now', '-7 days')`).run();
   db.prepare(`DELETE FROM news_market_matches WHERE news_id NOT IN (SELECT id FROM news_items)`).run();
 
-  console.log(`[newsSync] OK - ${totalItems} items, ${totalMatches} matches`);
+  console.info(`[newsSync] OK - ${totalItems} items, ${totalMatches} matches`);
   return { items: totalItems, matches: totalMatches };
-}
-
-function extractKeywords(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((w) => w.length >= MIN_KEYWORD_LENGTH && !STOP_WORDS.has(w));
 }
 
 function runKeywordMatching(db: ReturnType<typeof getDb>): number {
@@ -184,6 +164,64 @@ function runKeywordMatching(db: ReturnType<typeof getDb>): number {
   return matches;
 }
 
+async function runAiMatching(db: ReturnType<typeof getDb>): Promise<number> {
+  // Find news items with zero keyword matches (published in last 3 days)
+  const unmatched = db.prepare(`
+    SELECT id, title, summary FROM news_items
+    WHERE published_at > datetime('now', '-3 days')
+      AND ai_match_done = 0
+      AND id NOT IN (SELECT DISTINCT news_id FROM news_market_matches)
+    LIMIT 50
+  `).all() as Array<{ id: string; title: string; summary: string | null }>;
+
+  if (unmatched.length === 0) return 0;
+
+  const markets = db.prepare(`
+    SELECT id, title FROM events WHERE is_active = 1 AND is_closed = 0
+    ORDER BY volume_24h DESC LIMIT 100
+  `).all() as Array<{ id: string; title: string }>;
+
+  if (markets.length === 0) return 0;
+
+  const upsertMatch = db.prepare(`
+    INSERT INTO news_market_matches (news_id, market_id, relevance_score, match_method)
+    VALUES (?, ?, ?, 'ai')
+    ON CONFLICT(news_id, market_id) DO UPDATE SET
+      relevance_score = MAX(excluded.relevance_score, news_market_matches.relevance_score)
+  `);
+  const markDone = db.prepare(`UPDATE news_items SET ai_match_done = 1 WHERE id = ?`);
+
+  let matches = 0;
+  for (const news of unmatched) {
+    try {
+      const results = await matchNewsToMarkets(news.title, news.summary, markets);
+      for (const r of results) {
+        upsertMatch.run(news.id, r.marketId, Math.round(r.score * 100) / 100);
+        matches++;
+      }
+    } catch { /* skip individual failures */ }
+    markDone.run(news.id);
+    // 200ms delay between AI calls
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  if (matches > 0) console.info(`[newsSync] AI matched ${matches} news-market pairs`);
+  return matches;
+}
+
+interface NewsItemRow {
+  id: string;
+  title: string;
+  url: string;
+  source: string;
+  source_url: string;
+  summary: string | null;
+  published_at: string;
+  image_url: string | null;
+  categories_json: string;
+  relevance_score?: number;
+}
+
 export function readNewsFromDb(marketId?: string): NewsItem[] {
   const db = getDb();
 
@@ -195,7 +233,7 @@ export function readNewsFromDb(marketId?: string): NewsItem[] {
       WHERE m.market_id = ?
       ORDER BY m.relevance_score DESC, n.published_at DESC
       LIMIT 20
-    `).all(marketId) as Array<Record<string, unknown>>;
+    `).all(marketId) as NewsItemRow[];
     return rows.map(rowToNewsItem);
   }
 
@@ -203,22 +241,22 @@ export function readNewsFromDb(marketId?: string): NewsItem[] {
     SELECT * FROM news_items
     ORDER BY published_at DESC
     LIMIT 30
-  `).all() as Array<Record<string, unknown>>;
+  `).all() as NewsItemRow[];
   return rows.map(rowToNewsItem);
 }
 
-function rowToNewsItem(row: Record<string, unknown>): NewsItem {
+function rowToNewsItem(row: NewsItemRow): NewsItem {
   return {
-    id: row.id as string,
-    title: row.title as string,
-    url: row.url as string,
-    source: row.source as string,
-    sourceUrl: (row.source_url as string) || "",
-    summary: (row.summary as string) || null,
-    publishedAt: (row.published_at as string) || new Date().toISOString(),
-    imageUrl: (row.image_url as string) || null,
+    id: row.id,
+    title: row.title,
+    url: row.url,
+    source: row.source,
+    sourceUrl: row.source_url || "",
+    summary: row.summary || null,
+    publishedAt: row.published_at || new Date().toISOString(),
+    imageUrl: row.image_url || null,
     categories: (() => {
-      try { return JSON.parse((row.categories_json as string) || "[]"); } catch { return []; }
+      try { return JSON.parse(row.categories_json || "[]"); } catch { return []; }
     })(),
   };
 }
@@ -232,4 +270,12 @@ export function startNewsSyncLoop() {
   syncTimer = setInterval(() => {
     runNewsSync().catch((err) => console.error("[newsSync] sync error:", err));
   }, NEWS_SYNC_INTERVAL);
+}
+
+export function stopNewsSyncLoop() {
+  if (syncTimer) {
+    clearInterval(syncTimer);
+    syncTimer = null;
+    console.info("[newsSync] Stopped news sync loop");
+  }
 }

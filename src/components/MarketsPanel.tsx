@@ -1,8 +1,13 @@
 "use client";
 
-import { useState, useMemo, useEffect, memo } from "react";
+import { useState, useMemo, useEffect, memo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { ProcessedMarket, Category } from "@/types";
 import MarketCard from "./MarketCard";
+import FilterDropdown, { FilterGroup } from "./FilterDropdown";
+import { CATEGORY_COLORS } from "@/lib/categories";
+import { getCountryFlag } from "@/lib/countries";
+import { formatVolume } from "@/lib/format";
 import { useColResize } from "@/hooks/useColResize";
 import { useRowResize } from "@/hooks/useRowResize";
 
@@ -25,7 +30,8 @@ interface MarketsPanelProps {
   maxColSpan?: number;
 }
 
-type SortTab = "default" | "impact";
+type SortOrder = "sections" | "volume" | "impact" | "change" | "new";
+const CATEGORIES: Category[] = ["Politics", "Crypto", "Sports", "Finance", "Tech", "Culture", "Other"];
 const NEW_THRESHOLD_MS = 6 * 60 * 60 * 1000;
 
 function MarketsPanelInner({
@@ -47,7 +53,8 @@ function MarketsPanelInner({
   maxColSpan,
 }: MarketsPanelProps) {
   const [search, setSearch] = useState("");
-  const [sortTab, setSortTab] = useState<SortTab>("default");
+  const [localCategoryFilter, setLocalCategoryFilter] = useState<Set<string>>(new Set());
+  const [localSortSet, setLocalSortSet] = useState<Set<string>>(new Set(["impact"]));
 
   // Sync external search (e.g. tag click from detail panel)
   useEffect(() => {
@@ -64,10 +71,17 @@ function MarketsPanelInner({
     return () => document.removeEventListener("keydown", handler);
   }, [expanded]);
 
+  const sortOrder: SortOrder = ([...localSortSet][0] as SortOrder) || "impact";
+
+  const effectiveCategories = useMemo(
+    () => localCategoryFilter.size > 0 ? localCategoryFilter as Set<Category> : activeCategories,
+    [localCategoryFilter, activeCategories]
+  );
+
   const all = useMemo(() => [...mapped, ...unmapped], [mapped, unmapped]);
   const filtered = useMemo(
-    () => all.filter((m) => activeCategories.has(m.category)),
-    [all, activeCategories]
+    () => all.filter((m) => effectiveCategories.has(m.category)),
+    [all, effectiveCategories]
   );
 
   const searchFiltered = useMemo(() => {
@@ -127,14 +141,54 @@ function MarketsPanelInner({
     [searchFiltered, unmapped, activeCategories]
   );
 
-  const impactSorted = useMemo(
-    () =>
-      [...(searchFiltered || filtered)]
-        .filter((m) => !m.closed)
-        .sort((a, b) => (b.impactScore || 0) - (a.impactScore || 0))
-        .slice(0, 20),
-    [searchFiltered, filtered]
-  );
+  const sortedAll = useMemo(() => {
+    if (sortOrder === "sections") return null;
+    const base = [...(searchFiltered || filtered)].filter((m) => !m.closed);
+    if (sortOrder === "impact") return base.sort((a, b) => (b.impactScore || 0) - (a.impactScore || 0)).slice(0, 30);
+    if (sortOrder === "volume") return base.sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0)).slice(0, 30);
+    if (sortOrder === "change") return base.filter((m) => m.change !== null).sort((a, b) => Math.abs(b.change!) - Math.abs(a.change!)).slice(0, 30);
+    if (sortOrder === "new") return base.filter((m) => m.createdAt).sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()).slice(0, 30);
+    return null;
+  }, [sortOrder, searchFiltered, filtered]);
+
+  // Country hover popup
+  const [countryPopup, setCountryPopup] = useState<{ name: string; rect: DOMRect } | null>(null);
+  const locationHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countryHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleLocationHover = useCallback((location: string, rect: DOMRect) => {
+    if (locationHoverTimer.current) clearTimeout(locationHoverTimer.current);
+    if (countryHideTimer.current) clearTimeout(countryHideTimer.current);
+    locationHoverTimer.current = setTimeout(() => setCountryPopup({ name: location, rect }), 700);
+  }, []);
+
+  const handleLocationLeave = useCallback(() => {
+    if (locationHoverTimer.current) clearTimeout(locationHoverTimer.current);
+    countryHideTimer.current = setTimeout(() => setCountryPopup(null), 300);
+  }, []);
+
+  const handlePopupEnter = useCallback(() => {
+    if (countryHideTimer.current) clearTimeout(countryHideTimer.current);
+  }, []);
+
+  const handlePopupLeave = useCallback(() => {
+    countryHideTimer.current = setTimeout(() => setCountryPopup(null), 150);
+  }, []);
+
+  const countryStats = useMemo(() => {
+    if (!countryPopup) return null;
+    const loc = countryPopup.name.toLowerCase();
+    const markets = all.filter((m) => (m.location || m.category).toLowerCase() === loc);
+    const active = markets.filter((m) => !m.closed);
+    return {
+      flag: getCountryFlag(countryPopup.name),
+      count: markets.length,
+      activeCount: active.length,
+      volume: markets.reduce((s, m) => s + m.volume, 0),
+      volume24h: markets.reduce((s, m) => s + (m.volume24h || 0), 0),
+      topMarket: active.sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))[0] ?? null,
+    };
+  }, [countryPopup, all]);
 
   const cardAction = (m: ProcessedMarket) => {
     if (m.coords) onFlyTo(m.coords, m.id);
@@ -145,6 +199,8 @@ function MarketsPanelInner({
     isWatched && onToggleWatch
       ? { isWatched: isWatched(m.id), onToggleWatch: () => onToggleWatch(m.id) }
       : {};
+
+  const locationProps = { onLocationHover: handleLocationHover, onLocationLeave: handleLocationLeave };
 
   const totalCount = searchFiltered ? searchFiltered.length : filtered.length;
   const { onMouseDown: handleResizeStart } = useColResize(colSpan ?? 2, onColSpanChange, maxColSpan);
@@ -157,7 +213,7 @@ function MarketsPanelInner({
   return (
     <div data-panel="markets" className={`panel${colSpan === 2 ? " panel-wide" : ""}${expanded ? " panel-expanded" : ""}`} style={spanStyle}>
       <div className="panel-header">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <span className="drag-handle" title="Drag to reorder">
             <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor">
               <circle cx="1" cy="1" r="1" /><circle cx="5" cy="1" r="1" />
@@ -167,47 +223,54 @@ function MarketsPanelInner({
           </span>
           <span className="panel-title">Markets</span>
           <span className="panel-count">{totalCount}</span>
-          {/* Sort tabs — inline in header */}
-          <div className="flex items-center gap-0.5 ml-1">
-            {(["default", "impact"] as SortTab[]).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setSortTab(tab)}
-                className={`px-1.5 py-0.5 text-[10px] font-mono transition-colors ${
-                  sortTab === tab
-                    ? "text-[var(--text)] bg-[var(--surface-hover)]"
-                    : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"
-                }`}
-              >
-                {tab === "default" ? "Default" : "Impact"}
-              </button>
-            ))}
-          </div>
-        </div>
-        {/* Search input in header */}
-        <div className="relative flex-1 max-w-[200px]">
-          <svg
-            className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-faint)]"
-            width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
-          >
-            <circle cx="7" cy="7" r="5" />
-            <path d="M11 11l3 3" />
-          </svg>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="search..."
-            className="w-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[12px] text-[var(--text-secondary)] font-mono py-1 pl-8 pr-2 placeholder:text-[var(--text-ghost)] focus:outline-none focus:border-[var(--scrollbar-thumb)] transition-colors"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-faint)] hover:text-[var(--text-secondary)] text-[12px]"
+          {/* Search input */}
+          <div className="relative w-[110px] shrink-0">
+            <svg
+              className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[var(--text-faint)]"
+              width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
             >
-              x
-            </button>
-          )}
+              <circle cx="7" cy="7" r="5" />
+              <path d="M11 11l3 3" />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="search..."
+              className="w-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[11px] text-[var(--text-secondary)] font-mono py-0.5 pl-6 pr-5 placeholder:text-[var(--text-ghost)] focus:outline-none focus:border-[var(--scrollbar-thumb)] transition-colors"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--text-faint)] hover:text-[var(--text-secondary)] text-[11px]"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          <div className="ml-auto flex items-center gap-1.5">
+            <FilterDropdown groups={[
+              {
+                label: "Category",
+                options: CATEGORIES.map((cat) => ({ key: cat, label: cat, color: CATEGORY_COLORS[cat] })),
+                selected: localCategoryFilter,
+                onChange: setLocalCategoryFilter,
+              },
+              {
+                label: "Sort",
+                exclusive: true,
+                options: [
+                  { key: "impact", label: "Impact" },
+                  { key: "volume", label: "Volume" },
+                  { key: "change", label: "Change" },
+                  { key: "new", label: "Newest" },
+                  { key: "sections", label: "Sections" },
+                ],
+                selected: localSortSet,
+                onChange: setLocalSortSet,
+              },
+            ] satisfies FilterGroup[]} />
+          </div>
         </div>
         <button
           onClick={() => setExpanded((v) => !v)}
@@ -241,15 +304,15 @@ function MarketsPanelInner({
           </div>
         )}
 
-        {/* Impact tab */}
-        {sortTab === "impact" ? (
+        {sortedAll ? (
           <>
-            <SectionLabel title="By Impact Score" />
-            {impactSorted.length === 0 ? (
+            <SectionLabel title={sortOrder === "volume" ? "By Volume" : sortOrder === "impact" ? "By Impact" : sortOrder === "change" ? "By Change" : "Newest First"} />
+
+            {sortedAll.length === 0 ? (
               <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
             ) : (
-              impactSorted.map((m) => (
-                <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} />
+              sortedAll.map((m) => (
+                <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
               ))
             )}
           </>
@@ -263,7 +326,7 @@ function MarketsPanelInner({
                   <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no markets match</div>
                 ) : (
                   searchFiltered.slice(0, 30).map((m) => (
-                    <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} />
+                    <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
                   ))
                 )}
               </>
@@ -273,7 +336,7 @@ function MarketsPanelInner({
                   <>
                     <SectionLabel title="New Markets" />
                     {newMarkets.map((m) => (
-                      <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} />
+                      <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
                     ))}
                   </>
                 )}
@@ -291,7 +354,28 @@ function MarketsPanelInner({
                           title={`Anomaly z=${m.anomaly.zScore}`}
                         />
                       )}
-                      <MarketCard market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} />
+                      <MarketCard market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
+                      {m.indicators && (
+                        <div className="flex items-center gap-2 px-2.5 pb-1 -mt-0.5 text-[9px] font-mono text-[var(--text-faint)]">
+                          {m.indicators.momentum !== null && (
+                            <span title={`Momentum: ${(m.indicators.momentum * 100).toFixed(2)}%`}>
+                              <span style={{ color: m.indicators.momentum > 0.01 ? "#22c55e" : m.indicators.momentum < -0.01 ? "#ff4444" : "var(--text-ghost)" }}>
+                                {m.indicators.momentum > 0.01 ? "\u2191\u2191" : m.indicators.momentum > 0 ? "\u2191" : m.indicators.momentum < -0.01 ? "\u2193\u2193" : m.indicators.momentum < 0 ? "\u2193" : "\u2192"}
+                              </span>
+                            </span>
+                          )}
+                          {m.indicators.volatility !== null && m.indicators.volatility > 0.02 && (
+                            <span style={{ color: "#f59e0b" }} title={`Volatility: ${(m.indicators.volatility * 100).toFixed(1)}%`}>
+                              vol {(m.indicators.volatility * 100).toFixed(1)}%
+                            </span>
+                          )}
+                          {m.indicators.orderFlowImbalance !== null && Math.abs(m.indicators.orderFlowImbalance) > 0.1 && (
+                            <span style={{ color: m.indicators.orderFlowImbalance > 0 ? "#22c55e" : "#ff4444" }} title={`Order flow: ${(m.indicators.orderFlowImbalance * 100).toFixed(0)}%`}>
+                              flow {m.indicators.orderFlowImbalance > 0 ? "+" : ""}{(m.indicators.orderFlowImbalance * 100).toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -301,7 +385,7 @@ function MarketsPanelInner({
                   <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
                 ) : (
                   trending.map((m) => (
-                    <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} />
+                    <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
                   ))
                 )}
 
@@ -309,7 +393,7 @@ function MarketsPanelInner({
                   <>
                     <SectionLabel title="Global Markets" />
                     {global.map((m) => (
-                      <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} />
+                      <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
                     ))}
                   </>
                 )}
@@ -318,6 +402,44 @@ function MarketsPanelInner({
           </>
         )}
       </div>
+
+      {/* Country hover popup */}
+      {countryPopup && countryStats && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed z-[9999] bg-[var(--bg)] border border-[var(--border)] rounded-md font-mono"
+          style={{
+            top: Math.min(countryPopup.rect.bottom + 6, window.innerHeight - 160),
+            left: Math.min(countryPopup.rect.left, window.innerWidth - 220),
+            width: 210,
+            padding: "10px 12px",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+          }}
+          onMouseEnter={handlePopupEnter}
+          onMouseLeave={handlePopupLeave}
+        >
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className="text-[16px] leading-none">{countryStats.flag}</span>
+            <span className="text-[11px] text-[var(--text)] capitalize">{countryPopup.name}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+            <span className="text-[var(--text-faint)]">markets</span>
+            <span className="text-[var(--text-secondary)] tabular-nums">{countryStats.count}</span>
+            <span className="text-[var(--text-faint)]">active</span>
+            <span className="text-[var(--text-secondary)] tabular-nums">{countryStats.activeCount}</span>
+            <span className="text-[var(--text-faint)]">volume</span>
+            <span className="text-[var(--text-secondary)] tabular-nums">{formatVolume(countryStats.volume)}</span>
+            <span className="text-[var(--text-faint)]">24h vol</span>
+            <span className="text-[var(--text-secondary)] tabular-nums">{formatVolume(countryStats.volume24h)}</span>
+          </div>
+          {countryStats.topMarket && (
+            <div className="mt-2 pt-2 border-t border-[var(--border-subtle)]">
+              <div className="text-[9px] text-[var(--text-faint)] uppercase tracking-wider mb-0.5">top market</div>
+              <div className="text-[10px] text-[var(--text-dim)] line-clamp-2 leading-snug">{countryStats.topMarket.title}</div>
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
 
       {/* Right-edge resize handle */}
       {onColSpanChange && !expanded && (

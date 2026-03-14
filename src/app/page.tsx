@@ -4,17 +4,20 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { ProcessedMarket, Category } from "@/types";
 import { processEvents, getSampleData } from "@/lib/polymarket";
+import { findSimilarMarkets } from "@/lib/correlation";
 import Header from "@/components/Header";
 import Panel from "@/components/Panel";
 import MarketsPanel from "@/components/MarketsPanel";
 import MarketDetailPanel from "@/components/MarketDetailPanel";
 import CountryPanel from "@/components/CountryPanel";
-import LivePanel from "@/components/LivePanel";
+import LivePanel, { LiveChannelDropdown } from "@/components/LivePanel";
+import type { StreamSource } from "@/lib/streams";
 import NewsPanel from "@/components/NewsPanel";
 import SettingsModal from "@/components/SettingsModal";
 import type { PanelVisibility } from "@/components/SettingsModal";
 import ToastContainer from "@/components/Toast";
 import { usePanelDrag } from "@/hooks/usePanelDrag";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import ResizeHandle from "@/components/ResizeHandle";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useWatchlist } from "@/hooks/useWatchlist";
@@ -29,6 +32,14 @@ import ChartPanel from "@/components/ChartPanel";
 import SentimentPanel from "@/components/SentimentPanel";
 import TweetsPanel from "@/components/TweetsPanel";
 import TraderPanel from "@/components/TraderPanel";
+import ArbitragePanel from "@/components/ArbitragePanel";
+import CalendarPanel from "@/components/CalendarPanel";
+import SignalPanel from "@/components/SignalPanel";
+import ResolutionPanel from "@/components/ResolutionPanel";
+import PortfolioPanel from "@/components/PortfolioPanel";
+import FilterDropdown from "@/components/FilterDropdown";
+import { detectSignals } from "@/lib/smartSignals";
+import PanelErrorBoundary from "@/components/PanelErrorBoundary";
 import { usePanelColSpans } from "@/hooks/usePanelColSpans";
 import { usePanelRowSpans } from "@/hooks/usePanelRowSpans";
 import { useMarketStore } from "@/stores/marketStore";
@@ -50,7 +61,7 @@ const WorldMap = dynamic(() => import("@/components/WorldMap"), {
 const REFRESH_INTERVAL = 45000;
 
 const DEFAULT_COL_SPANS: Record<string, number> = {
-  markets: 2, country: 2, news: 2, tweets: 1, live: 2, watchlist: 2, detail: 2, leaderboard: 1, trader: 2, smartMoney: 1, whaleTrades: 1, orderbook: 1, sentiment: 1, chart: 2,
+  markets: 1, country: 1, news: 1, tweets: 1, live: 1, watchlist: 1, detail: 2, leaderboard: 1, trader: 1, smartMoney: 1, whaleTrades: 1, orderbook: 1, sentiment: 1, chart: 1, arbitrage: 1, calendar: 1, signals: 1, resolution: 1, portfolio: 1,
 };
 
 // Time range → max age in milliseconds (0 = no filter)
@@ -97,6 +108,8 @@ export default function Home() {
   const isDragging = useUIStore((s) => s.isDragging);
   const mapWidthPct = useUIStore((s) => s.mapWidthPct);
   const bottomPanelHeight = useUIStore((s) => s.bottomPanelHeight);
+  const bottomPanelCollapsed = useUIStore((s) => s.bottomPanelCollapsed);
+  const activeMobilePanel = useUIStore((s) => s.activeMobilePanel);
   const marketSearch = useUIStore((s) => s.marketSearch);
   const region = useUIStore((s) => s.region);
   const colorMode = useUIStore((s) => s.colorMode);
@@ -117,8 +130,30 @@ export default function Home() {
   const setRegion = useUIStore((s) => s.setRegion);
   const togglePanelVisibility = useUIStore((s) => s.togglePanelVisibility);
 
+  // ─── Panel filter state ───
+  const [sigStrFilter, setSigStrFilter] = useState<Set<string>>(new Set());
+  const [sigCatFilter, setSigCatFilter] = useState<Set<string>>(new Set());
+  const [resStrFilter, setResStrFilter] = useState<Set<string>>(new Set());
+  const [resCatFilter, setResCatFilter] = useState<Set<string>>(new Set());
+  const [newsCleared, setNewsCleared] = useState(false);
+  const [tweetsCleared, setTweetsCleared] = useState(false);
+  const [liveActiveStream, setLiveActiveStream] = useState<StreamSource | null>(null);
+
+  // Reset per-panel market overrides when a new market is selected
+  useEffect(() => { setNewsCleared(false); setTweetsCleared(false); }, [selectedMarket]);
+
   const panelsRef = useRef<HTMLDivElement>(null);
   const bottomPanelsRef = useRef<HTMLDivElement>(null);
+
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 768px)");
+    setIsMobile(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
 
   // Watchlist
   const { watchedIds, isWatched, toggleWatch, count: watchedCount, addedAt } = useWatchlist();
@@ -129,7 +164,7 @@ export default function Home() {
 
   // Pre-generate stable handler objects for all panels (avoids inline arrow functions in renderPanel)
   const panelHandlers = useMemo(() => {
-    const ids = ["detail", "markets", "country", "news", "tweets", "live", "watchlist", "leaderboard", "smartMoney", "whaleTrades", "orderbook", "trader", "sentiment", "chart"];
+    const ids = ["detail", "markets", "country", "news", "tweets", "live", "watchlist", "leaderboard", "smartMoney", "whaleTrades", "orderbook", "trader", "sentiment", "chart", "arbitrage", "calendar", "signals", "resolution", "portfolio"];
     const h: Record<string, { onColSpanChange: (s: number) => void; onColSpanReset: () => void; onRowSpanChange: (s: number) => void; onRowSpanReset: () => void }> = {};
     for (const id of ids) {
       h[id] = {
@@ -219,8 +254,6 @@ export default function Home() {
     useUIStore.getState().setMapWidthPct((prev) => Math.max(30, Math.min(80, prev + (delta / totalW) * 100)));
   }, []);
 
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const smartMoneyTimerRef = useRef<NodeJS.Timeout | null>(null);
   const flyToTimer = useRef<NodeJS.Timeout | null>(null);
   const seenSignalIds = useRef<Set<string>>(new Set());
   const seenMarketIds = useRef<Set<string>>(new Set());
@@ -325,46 +358,38 @@ export default function Home() {
     fetchSmartMoney();
   }, [fetchData, fetchSmartMoney]);
 
-  // Restore cached selections after data loads
+  // Restore cached selections after data loads (URL param takes priority)
   const restoredRef = useRef(false);
   useEffect(() => {
     if (restoredRef.current || (mapped.length === 0 && unmapped.length === 0)) return;
     restoredRef.current = true;
     try {
-      const cachedMarketId = sessionStorage.getItem("pw:selectedMarket");
+      // URL ?m= param takes priority over sessionStorage
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlMarketId = urlParams.get("m");
+      const cachedMarketId = urlMarketId || sessionStorage.getItem("pw:selectedMarket");
       if (cachedMarketId) {
         const all = [...mapped, ...unmapped];
         const found = all.find(m => m.id === cachedMarketId);
-        if (found) useMarketStore.getState().selectMarket(found);
+        if (found) {
+          useMarketStore.getState().selectMarket(found);
+          if (found.location) useMarketStore.getState().selectCountry(found.location);
+        }
       }
       const cachedCountry = sessionStorage.getItem("pw:selectedCountry");
-      if (cachedCountry) useMarketStore.getState().selectCountry(cachedCountry);
+      if (cachedCountry && !useMarketStore.getState().selectedCountry) {
+        useMarketStore.getState().selectCountry(cachedCountry);
+      }
     } catch {}
   }, [mapped, unmapped]);
 
-  useEffect(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (autoRefresh) {
-      timerRef.current = setInterval(fetchData, REFRESH_INTERVAL);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [fetchData, autoRefresh]);
-
-  // Independent 30s polling for smart money
-  useEffect(() => {
-    if (smartMoneyTimerRef.current) clearInterval(smartMoneyTimerRef.current);
-    if (autoRefresh) {
-      smartMoneyTimerRef.current = setInterval(fetchSmartMoney, 30_000);
-    }
-    return () => {
-      if (smartMoneyTimerRef.current) clearInterval(smartMoneyTimerRef.current);
-    };
-  }, [fetchSmartMoney, autoRefresh]);
+  // Visibility-aware polling: pauses when tab is hidden, resumes on visibility
+  useVisibilityPolling(fetchData, REFRESH_INTERVAL, autoRefresh);
+  useVisibilityPolling(fetchSmartMoney, 30_000, autoRefresh);
 
   // Alert evaluation on data refresh
   const alertEvalRef = useRef(false);
+  const newsCache = useRef<{ items: import("@/types").NewsItem[]; ts: number }>({ items: [], ts: 0 });
   useEffect(() => {
     if (mapped.length === 0 && unmapped.length === 0) return;
     if (!alertEvalRef.current) {
@@ -373,9 +398,26 @@ export default function Home() {
       return;
     }
     const freshIds = new Set(newMarkets.map((m) => m.id));
-    const triggered = evaluateAlerts([...mapped, ...unmapped], freshIds);
-    for (const t of triggered) {
-      sendNotification("PolyWorld Alert", { body: t.message });
+    const allMarkets = [...mapped, ...unmapped];
+    const sm = useSmartMoneyStore.getState();
+    const signals = detectSignals(sm.trades, allMarkets, 6);
+
+    // Fetch news for news_impact alerts (cached 2min)
+    const runEval = (newsItems?: import("@/types").NewsItem[]) => {
+      const triggered = evaluateAlerts(allMarkets, freshIds, signals, sm.trades, newsItems);
+      for (const t of triggered) {
+        sendNotification("PolyWorld Alert", { body: t.message });
+      }
+    };
+
+    const now = Date.now();
+    if (now - newsCache.current.ts < 120_000) {
+      runEval(newsCache.current.items);
+    } else {
+      fetch("/api/news").then((r) => r.ok ? r.json() : []).then((items) => {
+        newsCache.current = { items, ts: Date.now() };
+        runEval(items);
+      }).catch(() => runEval());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapped, unmapped]);
@@ -411,19 +453,11 @@ export default function Home() {
     [bottomPanelOrder, panelVisibility]
   );
 
-  // Related markets for detail panel
+  // Related markets for detail panel — correlation-based similarity
   const relatedMarkets = useMemo(() => {
     if (!selectedMarket) return [];
     const all = [...mapped, ...unmapped];
-    return all
-      .filter(
-        (m) =>
-          m.id !== selectedMarket.id &&
-          (m.category === selectedMarket.category ||
-            (selectedMarket.location && m.location === selectedMarket.location))
-      )
-      .sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))
-      .slice(0, 5);
+    return findSimilarMarkets(selectedMarket, all, 5).map((r) => r.market);
   }, [selectedMarket, mapped, unmapped]);
 
   const isEnded = useCallback((m: ProcessedMarket) =>
@@ -480,6 +514,21 @@ export default function Home() {
     if (found) handleSelectMarketFromPanel(found);
   }, [handleSelectMarketFromPanel]);
 
+  const STRENGTH_OPTIONS = [
+    { key: "strong", label: "Strong", color: "#ff4444" },
+    { key: "moderate", label: "Moderate", color: "#f59e0b" },
+    { key: "weak", label: "Weak" },
+  ];
+  const CATEGORY_OPTIONS = [
+    { key: "Politics", label: "Politics" },
+    { key: "Crypto", label: "Crypto" },
+    { key: "Sports", label: "Sports" },
+    { key: "Finance", label: "Finance" },
+    { key: "Tech", label: "Tech" },
+    { key: "Culture", label: "Culture" },
+    { key: "Other", label: "Other" },
+  ];
+
   function renderPanel(key: string) {
     const maxColSpan = bottomPanelSet.has(key) ? 3 : 2;
     switch (key) {
@@ -501,6 +550,15 @@ export default function Home() {
             maxColSpan={maxColSpan}
             headerRight={selectedMarket ? (
               <div className="flex items-center gap-1">
+                <a
+                  href={`https://polymarket.com/event/${encodeURIComponent(selectedMarket.slug)}?via=pw`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1 rounded-sm opacity-40 hover:opacity-90 transition-opacity"
+                  title="View on Polymarket"
+                >
+                  <img src="/polymarket-icon.png" alt="Polymarket" width={16} height={16} />
+                </a>
                 <button
                   onClick={() => toggleWatch(selectedMarket.id)}
                   className={`p-1 rounded-sm transition-colors ${
@@ -593,7 +651,8 @@ export default function Home() {
             )}
           </Panel>
         );
-      case "news":
+      case "news": {
+        const newsMarket = newsCleared ? null : selectedMarket;
         return (
           <Panel
             key="news"
@@ -605,18 +664,21 @@ export default function Home() {
             rowSpan={rowSpanFor("news")}
             maxColSpan={maxColSpan}
             headerRight={
-              <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: selectedMarket ? "var(--green)" : "var(--text-muted)" }}>
-                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: selectedMarket ? "var(--green)" : "var(--text-ghost)" }} />
-                {selectedMarket
-                  ? `${selectedMarket.title.slice(0, 50)}${selectedMarket.title.length > 50 ? "\u2026" : ""}`
-                  : "global feed"}
+              <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: newsMarket ? "var(--green)" : "var(--text-muted)" }}>
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: newsMarket ? "var(--green)" : "var(--text-ghost)" }} />
+                <span className="truncate">{newsMarket ? `${newsMarket.title.slice(0, 40)}${newsMarket.title.length > 40 ? "\u2026" : ""}` : "global feed"}</span>
+                {selectedMarket && !newsCleared && (
+                  <button onClick={() => setNewsCleared(true)} className="shrink-0 text-[13px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors leading-none ml-1" title="Show all news">×</button>
+                )}
               </span>
             }
           >
-            <NewsPanel selectedMarket={selectedMarket} />
+            <NewsPanel selectedMarket={newsMarket} />
           </Panel>
         );
-      case "tweets":
+      }
+      case "tweets": {
+        const tweetsMarket = tweetsCleared ? null : selectedMarket;
         return (
           <Panel
             key="tweets"
@@ -628,17 +690,19 @@ export default function Home() {
             rowSpan={rowSpanFor("tweets")}
             maxColSpan={maxColSpan}
             headerRight={
-              <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: selectedMarket ? "var(--green)" : "var(--text-muted)" }}>
-                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: selectedMarket ? "var(--green)" : "var(--text-ghost)" }} />
-                {selectedMarket
-                  ? `${selectedMarket.title.slice(0, 50)}${selectedMarket.title.length > 50 ? "\u2026" : ""}`
-                  : "all accounts"}
+              <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: tweetsMarket ? "var(--green)" : "var(--text-muted)" }}>
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: tweetsMarket ? "var(--green)" : "var(--text-ghost)" }} />
+                <span className="truncate">{tweetsMarket ? `${tweetsMarket.title.slice(0, 40)}${tweetsMarket.title.length > 40 ? "\u2026" : ""}` : "all accounts"}</span>
+                {selectedMarket && !tweetsCleared && (
+                  <button onClick={() => setTweetsCleared(true)} className="shrink-0 text-[13px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors leading-none ml-1" title="Show all tweets">×</button>
+                )}
               </span>
             }
           >
-            <TweetsPanel selectedMarket={selectedMarket} />
+            <TweetsPanel selectedMarket={tweetsMarket} />
           </Panel>
         );
+      }
       case "live":
         return (
           <Panel
@@ -647,12 +711,18 @@ export default function Home() {
             title="Live Streams"
             className="panel-live"
             badge={<span className="panel-data-badge live">live</span>}
+            headerRight={
+              <LiveChannelDropdown
+                activeStream={liveActiveStream}
+                onSelect={setLiveActiveStream}
+              />
+            }
             colSpan={colSpanFor("live")}
             {...panelHandlers["live"]}
             rowSpan={rowSpanFor("live")}
             maxColSpan={maxColSpan}
           >
-            <LivePanel />
+            <LivePanel activeStream={liveActiveStream} />
           </Panel>
         );
       case "watchlist":
@@ -749,6 +819,7 @@ export default function Home() {
           >
             <SmartMoneyPanel
               smartTrades={smartMoneySmartTrades}
+              markets={[...mapped, ...unmapped]}
               walletFilter={smartWalletFilter}
               onClearFilter={() => useSmartMoneyStore.getState().setWalletFilter(null)}
               onSelectWallet={handleSmartMoneySelectWallet}
@@ -895,6 +966,109 @@ export default function Home() {
             <ChartPanel selectedMarket={selectedMarket} />
           </Panel>
         );
+      case "arbitrage":
+        return (
+          <Panel
+            key="arbitrage"
+            panelId="arbitrage"
+            title="Arbitrage"
+            colSpan={colSpanFor("arbitrage")}
+            {...panelHandlers["arbitrage"]}
+            rowSpan={rowSpanFor("arbitrage")}
+            maxColSpan={maxColSpan}
+          >
+            <ArbitragePanel
+              markets={[...mapped, ...unmapped]}
+              onSelectMarket={handleSmartMoneySelectMarket}
+            />
+          </Panel>
+        );
+      case "calendar":
+        return (
+          <Panel
+            key="calendar"
+            panelId="calendar"
+            title="Calendar"
+            colSpan={colSpanFor("calendar")}
+            {...panelHandlers["calendar"]}
+            rowSpan={rowSpanFor("calendar")}
+            maxColSpan={maxColSpan}
+          >
+            <CalendarPanel
+              markets={[...mapped, ...unmapped]}
+              onSelectMarket={handleSmartMoneySelectMarket}
+            />
+          </Panel>
+        );
+      case "signals":
+        return (
+          <Panel
+            key="signals"
+            panelId="signals"
+            title="Signals"
+            colSpan={colSpanFor("signals")}
+            {...panelHandlers["signals"]}
+            rowSpan={rowSpanFor("signals")}
+            maxColSpan={maxColSpan}
+            headerRight={
+              <FilterDropdown groups={[
+                { label: "Strength", options: STRENGTH_OPTIONS, selected: sigStrFilter, onChange: setSigStrFilter },
+                { label: "Category", options: CATEGORY_OPTIONS, selected: sigCatFilter, onChange: setSigCatFilter },
+              ]} />
+            }
+          >
+            <SignalPanel
+              trades={smartMoneyTrades}
+              markets={[...mapped, ...unmapped]}
+              leaderboard={smartMoneyLeaderboard}
+              onSelectWallet={handleSmartMoneySelectWallet}
+              onSelectMarket={handleSmartMoneySelectMarket}
+              categoryFilter={sigCatFilter}
+              strengthFilter={sigStrFilter}
+            />
+          </Panel>
+        );
+      case "resolution":
+        return (
+          <Panel
+            key="resolution"
+            panelId="resolution"
+            title="Resolution"
+            colSpan={colSpanFor("resolution")}
+            {...panelHandlers["resolution"]}
+            rowSpan={rowSpanFor("resolution")}
+            maxColSpan={maxColSpan}
+            headerRight={
+              <FilterDropdown groups={[
+                { label: "Strength", options: STRENGTH_OPTIONS, selected: resStrFilter, onChange: setResStrFilter },
+                { label: "Category", options: CATEGORY_OPTIONS, selected: resCatFilter, onChange: setResCatFilter },
+              ]} />
+            }
+          >
+            <ResolutionPanel
+              onSelectMarket={handleSmartMoneySelectMarket}
+              categoryFilter={resCatFilter}
+              strengthFilter={resStrFilter}
+            />
+          </Panel>
+        );
+      case "portfolio":
+        return (
+          <Panel
+            key="portfolio"
+            panelId="portfolio"
+            title="Portfolio"
+            colSpan={colSpanFor("portfolio")}
+            {...panelHandlers["portfolio"]}
+            rowSpan={rowSpanFor("portfolio")}
+            maxColSpan={maxColSpan}
+          >
+            <PortfolioPanel
+              markets={[...mapped, ...unmapped]}
+              onSelectMarket={handleSmartMoneySelectMarket}
+            />
+          </Panel>
+        );
       default:
         return null;
     }
@@ -912,7 +1086,6 @@ export default function Home() {
         lastSyncTime={lastSyncTime}
         onOpenSettings={() => useUIStore.getState().setSettingsOpen(true)}
         watchedCount={watchedCount}
-        whaleTradeCount={smartMoneyTrades.length}
         alertUnreadCount={unreadCount}
         autoRefresh={autoRefresh}
         refreshError={refreshError}
@@ -989,14 +1162,24 @@ export default function Home() {
           {/* Horizontal resize handle + bottom panels (hidden in map fullscreen) */}
           {!isFullscreen && (
             <>
-              <ResizeHandle direction="horizontal" onResize={handleHorizontalResize} />
-              {(bottomVisiblePanels.length > 0 || isDragging) && (
+              <div className="flex items-center">
+                <ResizeHandle direction="horizontal" onResize={handleHorizontalResize} />
+                <button
+                  onClick={() => useUIStore.getState().toggleBottomPanel()}
+                  className="shrink-0 px-1.5 py-0 text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-muted)] transition-colors z-20"
+                  title={bottomPanelCollapsed ? "Expand bottom panel" : "Collapse bottom panel"}
+                  style={{ marginLeft: -4 }}
+                >
+                  {bottomPanelCollapsed ? "\u25B2" : "\u25BC"}
+                </button>
+              </div>
+              {!bottomPanelCollapsed && (bottomVisiblePanels.length > 0 || isDragging) && (
                 <div
                   className={`bottom-panels-grid${bottomVisiblePanels.length === 0 ? " bottom-panels-grid-empty" : ""}`}
                   ref={bottomPanelsRef}
                   style={{ height: bottomPanelHeight }}
                 >
-                  {bottomVisiblePanels.map((key) => renderPanel(key))}
+                  {bottomVisiblePanels.map((key) => <PanelErrorBoundary key={`eb-${key}`} panelName={key}>{renderPanel(key)}</PanelErrorBoundary>)}
                 </div>
               )}
             </>
@@ -1004,15 +1187,34 @@ export default function Home() {
         </div>
 
         {/* Vertical resize handle + right panels (hidden in map fullscreen) */}
-        {!isFullscreen && (
+        {!isFullscreen && !isMobile && (
           <>
             <ResizeHandle direction="vertical" onResize={handleVerticalResize} />
             <div className="panels-grid" ref={panelsRef}>
-              {rightVisiblePanels.map((key) => renderPanel(key))}
+              {rightVisiblePanels.map((key) => <PanelErrorBoundary key={`eb-${key}`} panelName={key}>{renderPanel(key)}</PanelErrorBoundary>)}
             </div>
           </>
         )}
+
+        {/* Mobile: single panel fullscreen view */}
+        {!isFullscreen && isMobile && activeMobilePanel && (
+          <div className="mobile-panel-view" ref={panelsRef}>
+            <PanelErrorBoundary panelName={activeMobilePanel}>
+              {renderPanel(activeMobilePanel)}
+            </PanelErrorBoundary>
+          </div>
+        )}
       </div>
+
+      {/* Mobile bottom tab bar */}
+      {isMobile && (
+        <MobileTabBar
+          activePanel={activeMobilePanel}
+          onSelect={(panel) => useUIStore.getState().setActiveMobilePanel(
+            panel === "map" ? null : panel
+          )}
+        />
+      )}
 
       {settingsOpen && (
         <SettingsModal
@@ -1036,5 +1238,67 @@ export default function Home() {
 
       <ToastContainer signals={signals} newMarkets={newMarkets} onSelectMarket={handleSelectMarketFromPanel} />
     </div>
+  );
+}
+
+const MOBILE_TABS: Array<{ id: string; label: string; icon: string }> = [
+  { id: "map", label: "Map", icon: "\uD83C\uDF0D" },
+  { id: "markets", label: "Markets", icon: "\uD83D\uDCC8" },
+  { id: "news", label: "News", icon: "\uD83D\uDCF0" },
+  { id: "smartMoney", label: "Smart $", icon: "\uD83D\uDCB0" },
+  { id: "more", label: "More", icon: "\u2026" },
+];
+
+const MORE_PANELS = ["detail", "country", "tweets", "live", "watchlist", "leaderboard", "whaleTrades", "orderbook", "trader", "sentiment", "chart"];
+
+function MobileTabBar({ activePanel, onSelect }: { activePanel: string | null; onSelect: (id: string) => void }) {
+  const [showMore, setShowMore] = useState(false);
+
+  return (
+    <>
+      {/* "More" dropdown */}
+      {showMore && (
+        <div className="mobile-more-menu">
+          {MORE_PANELS.map((id) => (
+            <button
+              key={id}
+              onClick={() => { onSelect(id); setShowMore(false); }}
+              className={`mobile-more-item${activePanel === id ? " active" : ""}`}
+            >
+              {id}
+            </button>
+          ))}
+        </div>
+      )}
+      <nav className="mobile-tab-bar">
+        {MOBILE_TABS.map((tab) => {
+          const isActive = tab.id === "map"
+            ? activePanel === null
+            : tab.id === "more"
+            ? MORE_PANELS.includes(activePanel || "")
+            : activePanel === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => {
+                if (tab.id === "more") {
+                  setShowMore((v) => !v);
+                } else if (tab.id === "map") {
+                  onSelect("map"); // null will close panel view
+                  setShowMore(false);
+                } else {
+                  onSelect(tab.id);
+                  setShowMore(false);
+                }
+              }}
+              className={`mobile-tab${isActive ? " active" : ""}`}
+            >
+              <span className="mobile-tab-icon">{tab.icon}</span>
+              <span className="mobile-tab-label">{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+    </>
   );
 }

@@ -1,11 +1,15 @@
 "use client";
 
-import { useMemo, useRef, useEffect } from "react";
-import type { WhaleTrade } from "@/types";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import type { WhaleTrade, ProcessedMarket } from "@/types";
+import type { CategoryFlow } from "@/lib/flowAnalysis";
 import { formatVolume } from "@/lib/format";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
+import { detectSignals, type SmartSignal } from "@/lib/smartSignals";
 
 interface SmartMoneyPanelProps {
   smartTrades: WhaleTrade[];
+  markets?: ProcessedMarket[];
   walletFilter?: string | null;
   onClearFilter?: () => void;
   onSelectMarket?: (slug: string) => void;
@@ -31,13 +35,41 @@ function tradeKey(t: WhaleTrade): string {
   return `${t.wallet}-${t.conditionId}-${t.timestamp}`;
 }
 
+type SmartMoneyTab = "trades" | "flow" | "signals";
+
 export default function SmartMoneyPanel({
   smartTrades,
+  markets,
   walletFilter,
   onClearFilter,
   onSelectMarket,
   onSelectWallet,
 }: SmartMoneyPanelProps) {
+  const [tab, setTab] = useState<SmartMoneyTab>("trades");
+  const [flows, setFlows] = useState<CategoryFlow[]>([]);
+  const [flowLoading, setFlowLoading] = useState(false);
+
+  const fetchFlows = useCallback(async () => {
+    try {
+      const res = await fetch("/api/smart-money?view=flow");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.flows) setFlows(data.flows);
+    } catch { /* non-critical */ }
+    setFlowLoading(false);
+  }, []);
+
+  // Fetch flows on tab switch
+  useEffect(() => {
+    if (tab === "flow" && flows.length === 0) {
+      setFlowLoading(true);
+      fetchFlows();
+    }
+  }, [tab, flows.length, fetchFlows]);
+
+  // Auto-refresh flow data every 2 min when on flow tab
+  useVisibilityPolling(fetchFlows, 120_000, tab === "flow");
+
   const filteredTrades = useMemo(() => {
     if (!walletFilter) return smartTrades;
     return smartTrades.filter(
@@ -63,67 +95,282 @@ export default function SmartMoneyPanel({
 
   return (
     <div className="font-mono">
-      {walletFilter && (
-        <div className="flex items-center gap-2 mb-2 px-1">
-          <span className="text-[10px] text-[var(--text-faint)]">
-            filtering: {truncAddr(walletFilter)}
-          </span>
+      {/* Tab bar */}
+      <div className="flex items-center gap-0.5 mb-2">
+        {(["trades", "flow", "signals"] as SmartMoneyTab[]).map((t) => (
           <button
-            onClick={onClearFilter}
-            className="text-[10px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors"
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-2 py-0.5 text-[10px] font-mono transition-colors ${
+              tab === t
+                ? "text-[var(--text)] bg-[var(--surface-hover)]"
+                : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"
+            }`}
           >
-            clear
+            {t === "trades" ? "Trades" : t === "flow" ? "Flow" : "Signals"}
           </button>
-        </div>
-      )}
+        ))}
+      </div>
 
-      {filteredTrades.length === 0 ? (
-        <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center">
-          {walletFilter ? "no smart trades for this wallet" : "syncing smart trades..."}
-        </div>
-      ) : (
-        <div className="space-y-0.5">
-          {filteredTrades.map((t, i) => {
-            const k = tradeKey(t);
-            return (
-              <div
-                key={`${k}-${i}`}
-                className={`smart-money-row${newKeys.has(k) ? " trade-new" : ""}`}
+      {tab === "signals" ? (
+        <SignalsView
+          smartTrades={smartTrades}
+          markets={markets || []}
+          onSelectMarket={onSelectMarket}
+          onSelectWallet={onSelectWallet}
+        />
+      ) : tab === "trades" ? (
+        <>
+          {walletFilter && (
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <span className="text-[10px] text-[var(--text-faint)]">
+                filtering: {truncAddr(walletFilter)}
+              </span>
+              <button
+                onClick={onClearFilter}
+                className="text-[10px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors"
               >
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-[var(--text-faint)] shrink-0 tabular-nums w-5 text-right">
-                    {timeAgo(t.timestamp)}
-                  </span>
-                  <button
-                    onClick={() => onSelectWallet?.(t.wallet)}
-                    className="text-[10px] text-[var(--text-muted)] truncate w-16 shrink-0 text-left hover:text-[var(--text)] transition-colors"
-                    title={t.wallet}
+                clear
+              </button>
+            </div>
+          )}
+
+          {filteredTrades.length === 0 ? (
+            <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center">
+              {walletFilter ? "no smart trades for this wallet" : "syncing smart trades..."}
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {filteredTrades.map((t, i) => {
+                const k = tradeKey(t);
+                return (
+                  <div
+                    key={`${k}-${i}`}
+                    className={`smart-money-row${newKeys.has(k) ? " trade-new" : ""}`}
                   >
-                    {t.username || truncAddr(t.wallet)}
-                  </button>
-                  <button
-                    onClick={() => onSelectMarket?.(t.slug)}
-                    className="text-[11px] text-[var(--text-secondary)] truncate flex-1 min-w-0 text-left hover:text-[var(--text)] transition-colors"
-                    title={t.title}
-                  >
-                    {t.title}
-                  </button>
-                  <span
-                    className={`text-[11px] font-bold shrink-0 ${
-                      t.side === "BUY" ? "text-[#22c55e]" : "text-[#ff4444]"
-                    }`}
-                  >
-                    {t.side}
-                  </span>
-                  <span className="text-[11px] text-[var(--text-dim)] tabular-nums shrink-0">
-                    {formatVolume(t.usdcSize || t.size)}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-[var(--text-faint)] shrink-0 tabular-nums w-5 text-right">
+                        {timeAgo(t.timestamp)}
+                      </span>
+                      <button
+                        onClick={() => onSelectWallet?.(t.wallet)}
+                        className="text-[10px] text-[var(--text-muted)] truncate w-16 shrink-0 text-left hover:text-[var(--text)] transition-colors"
+                        title={t.wallet}
+                      >
+                        {t.username || truncAddr(t.wallet)}
+                      </button>
+                      <button
+                        onClick={() => onSelectMarket?.(t.slug)}
+                        className="text-[11px] text-[var(--text-secondary)] truncate flex-1 min-w-0 text-left hover:text-[var(--text)] transition-colors"
+                        title={t.title}
+                      >
+                        {t.title}
+                      </button>
+                      <span
+                        className={`text-[11px] font-bold shrink-0 ${
+                          t.side === "BUY" ? "text-[#22c55e]" : "text-[#ff4444]"
+                        }`}
+                      >
+                        {t.side}
+                      </span>
+                      <span className="text-[11px] text-[var(--text-dim)] tabular-nums shrink-0">
+                        {formatVolume(t.usdcSize || t.size)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <FlowView flows={flows} loading={flowLoading} />
       )}
+    </div>
+  );
+}
+
+function FlowView({ flows, loading }: { flows: CategoryFlow[]; loading: boolean }) {
+  if (loading && flows.length === 0) {
+    return (
+      <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center">
+        loading flow data...
+      </div>
+    );
+  }
+
+  if (flows.length === 0) {
+    return (
+      <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center">
+        no flow data available
+      </div>
+    );
+  }
+
+  const maxAbsVol = Math.max(...flows.map((f) => Math.abs(f.netVolume)), 1);
+
+  return (
+    <div className="space-y-0.5">
+      {flows.map((f) => {
+        const trendColor = f.trend === "bullish" ? "#22c55e" : f.trend === "bearish" ? "#ff4444" : "var(--text-faint)";
+        const barPct = Math.min(Math.abs(f.netVolume) / maxAbsVol * 100, 100);
+        const isBullish = f.netVolume >= 0;
+        return (
+          <div key={f.category} className="flex items-center gap-2 px-1.5 py-[4px] border-b border-[var(--border-subtle)] last:border-0">
+            {/* Category name */}
+            <span className="text-[10px] text-[var(--text-secondary)] w-16 shrink-0 truncate">
+              {f.category}
+            </span>
+
+            {/* Direction arrow */}
+            <span style={{ color: trendColor }} className="text-[11px] font-bold w-4 shrink-0 text-center">
+              {f.trend === "bullish" ? "\u2191" : f.trend === "bearish" ? "\u2193" : "\u2194"}
+            </span>
+
+            {/* Bar chart — buy/sell comparison */}
+            <div className="flex-1 h-3 bg-[var(--bg)] rounded-sm relative overflow-hidden">
+              <div
+                className="h-full rounded-sm transition-all duration-500"
+                style={{
+                  width: `${Math.max(barPct, 2)}%`,
+                  background: isBullish
+                    ? "linear-gradient(90deg, #22c55eaa, #22c55e44)"
+                    : "linear-gradient(90deg, #ff4444aa, #ff444444)",
+                }}
+              />
+            </div>
+
+            {/* Net volume */}
+            <span className="text-[9px] tabular-nums w-14 text-right shrink-0" style={{ color: trendColor }}>
+              {isBullish ? "+" : ""}{formatVolume(Math.abs(f.netVolume))}
+            </span>
+
+            {/* Smart ratio */}
+            <span className="text-[9px] text-[var(--text-faint)] tabular-nums w-8 text-right shrink-0" title="Smart wallet ratio">
+              {(f.smartRatio * 100).toFixed(0)}%
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const SIGNAL_ICONS: Record<string, string> = {
+  whale_accumulation: "\uD83D\uDC33",
+  smart_divergence: "\u26A1",
+  cluster_activity: "\uD83C\uDFAF",
+  momentum_shift: "\uD83D\uDD04",
+};
+
+const SIGNAL_LABELS: Record<string, string> = {
+  whale_accumulation: "Whale Accumulation",
+  smart_divergence: "Smart Divergence",
+  cluster_activity: "Cluster Activity",
+  momentum_shift: "Momentum Shift",
+};
+
+const STRENGTH_COLORS: Record<string, string> = {
+  strong: "#ff4444",
+  moderate: "#f59e0b",
+  weak: "var(--text-faint)",
+};
+
+function signalTimeAgo(ts: number): string {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function SignalsView({
+  smartTrades,
+  markets,
+  onSelectMarket,
+  onSelectWallet,
+}: {
+  smartTrades: WhaleTrade[];
+  markets: ProcessedMarket[];
+  onSelectMarket?: (slug: string) => void;
+  onSelectWallet?: (address: string) => void;
+}) {
+  const signals = useMemo(
+    () => detectSignals(smartTrades, markets),
+    [smartTrades, markets]
+  );
+
+  if (signals.length === 0) {
+    return (
+      <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center">
+        No signals detected in the last 6 hours
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-0.5">
+      {signals.map((sig) => (
+        <div
+          key={sig.id}
+          className="border-b border-[var(--border-subtle)] last:border-0 px-1.5 py-[5px]"
+        >
+          {/* Header row */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[12px] shrink-0">{SIGNAL_ICONS[sig.type] || "?"}</span>
+            <span
+              className="text-[8px] px-1 rounded-sm shrink-0 font-bold uppercase"
+              style={{
+                color: STRENGTH_COLORS[sig.strength],
+                background: sig.strength === "strong" ? "rgba(255,68,68,0.1)" : sig.strength === "moderate" ? "rgba(245,158,11,0.1)" : "rgba(128,128,128,0.1)",
+              }}
+            >
+              {sig.strength}
+            </span>
+            <span className="text-[10px] text-[var(--text-faint)] shrink-0">
+              {SIGNAL_LABELS[sig.type]}
+            </span>
+            <span className="text-[9px] text-[var(--text-ghost)] ml-auto shrink-0 tabular-nums">
+              {signalTimeAgo(sig.timestamp)}
+            </span>
+          </div>
+
+          {/* Market title */}
+          <button
+            onClick={() => onSelectMarket?.(sig.market.slug)}
+            className="text-[11px] text-[var(--text-secondary)] truncate w-full text-left hover:text-[var(--text)] transition-colors mt-0.5"
+            title={sig.market.title}
+          >
+            {sig.market.title}
+          </button>
+
+          {/* Details row */}
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className={`text-[10px] font-bold ${sig.direction === "bullish" ? "text-[#22c55e]" : "text-[#ff4444]"}`}>
+              {sig.direction === "bullish" ? "\u2191 BULLISH" : "\u2193 BEARISH"}
+            </span>
+            <span className="text-[9px] text-[var(--text-faint)]">
+              {sig.wallets.length} wallet{sig.wallets.length !== 1 ? "s" : ""}
+            </span>
+            {sig.details.totalVolume && (
+              <span className="text-[9px] text-[var(--text-dim)] tabular-nums">
+                ${formatVolume(sig.details.totalVolume)}
+              </span>
+            )}
+            {sig.wallets.length > 0 && (
+              <button
+                onClick={() => onSelectWallet?.(sig.wallets[0].address)}
+                className="text-[9px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors ml-auto"
+                title={sig.wallets[0].address}
+              >
+                {sig.wallets[0].username || `${sig.wallets[0].address.slice(0, 6)}...${sig.wallets[0].address.slice(-4)}`}
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

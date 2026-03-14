@@ -81,7 +81,7 @@ export default function Panel({
           {badge}
         </div>
         <div className="flex items-center gap-1.5 min-w-0 shrink">
-          {headerRight && <span className="min-w-0 truncate">{headerRight}</span>}
+          {headerRight && <span className="min-w-0 flex items-center gap-1">{headerRight}</span>}
           <button
             onClick={() => setExpanded((v) => !v)}
             className="panel-expand-btn shrink-0"

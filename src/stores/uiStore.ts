@@ -7,11 +7,13 @@ const DEFAULT_PANEL_VISIBILITY: PanelVisibility = {
   markets: true, detail: true, country: true, news: true, live: true,
   watchlist: true, leaderboard: true, smartMoney: true, whaleTrades: true,
   orderbook: true, sentiment: true, tweets: true, trader: true, chart: true,
+  arbitrage: true, calendar: true, signals: true, resolution: true, portfolio: true,
 };
 
 const DEFAULT_PANEL_ORDER = [
-  "sentiment", "watchlist", "markets", "country", "news", "tweets", "live",
-  "leaderboard", "trader", "smartMoney", "whaleTrades", "orderbook", "chart",
+  "signals", "markets", "smartMoney", "news", "watchlist",
+  "tweets", "whaleTrades", "sentiment", "leaderboard", "trader",
+  "chart", "arbitrage", "calendar", "resolution", "portfolio", "live", "country",
 ];
 
 interface UIState {
@@ -21,6 +23,7 @@ interface UIState {
   isDragging: boolean;
   mapWidthPct: number;
   bottomPanelHeight: number;
+  bottomPanelCollapsed: boolean;
   marketSearch: string | undefined;
   region: string;
   colorMode: "category" | "impact";
@@ -31,6 +34,7 @@ interface UIState {
   panelOrder: string[];
   bottomPanelOrder: string[];
   alertPrefill: { marketId?: string; marketTitle?: string } | undefined;
+  activeMobilePanel: string | null;
 }
 
 interface UIActions {
@@ -40,6 +44,8 @@ interface UIActions {
   setIsDragging: (v: boolean) => void;
   setMapWidthPct: (v: number | ((prev: number) => number)) => void;
   setBottomPanelHeight: (v: number | ((prev: number) => number)) => void;
+  setBottomPanelCollapsed: (v: boolean) => void;
+  toggleBottomPanel: () => void;
   setMarketSearch: (v: string | undefined) => void;
   setRegion: (v: string) => void;
   setColorMode: (v: "category" | "impact") => void;
@@ -50,6 +56,7 @@ interface UIActions {
   setPanelOrder: (v: string[] | ((prev: string[]) => string[])) => void;
   setBottomPanelOrder: (v: string[] | ((prev: string[]) => string[])) => void;
   setAlertPrefill: (v: UIState["alertPrefill"]) => void;
+  setActiveMobilePanel: (v: string | null) => void;
   toggleCategory: (cat: Category) => void;
   togglePanelVisibility: (panel: string) => void;
   toggleFullscreen: () => void;
@@ -72,7 +79,8 @@ export const useUIStore = create<UIState & UIActions>((set, get) => ({
   alertManagerOpen: false,
   isDragging: false,
   mapWidthPct: 60,
-  bottomPanelHeight: 360,
+  bottomPanelHeight: typeof window !== "undefined" && window.innerWidth <= 768 ? 200 : 360,
+  bottomPanelCollapsed: false,
   marketSearch: undefined,
   region: "global",
   colorMode: "category",
@@ -81,8 +89,9 @@ export const useUIStore = create<UIState & UIActions>((set, get) => ({
   activeCategories: new Set(["Politics", "Crypto", "Sports", "Finance", "Tech", "Culture", "Other"] as Category[]),
   panelVisibility: { ...DEFAULT_PANEL_VISIBILITY },
   panelOrder: [...DEFAULT_PANEL_ORDER],
-  bottomPanelOrder: ["detail"],
+  bottomPanelOrder: ["detail", "orderbook"],
   alertPrefill: undefined,
+  activeMobilePanel: null,
 
   setIsFullscreen: (v) => set({ isFullscreen: v }),
   setSettingsOpen: (v) => set({ settingsOpen: v }),
@@ -96,6 +105,9 @@ export const useUIStore = create<UIState & UIActions>((set, get) => ({
   setBottomPanelHeight: (v) => set((s) => ({
     bottomPanelHeight: typeof v === "function" ? v(s.bottomPanelHeight) : v,
   })),
+  setBottomPanelCollapsed: (v) => set({ bottomPanelCollapsed: v }),
+  toggleBottomPanel: () => set((s) => ({ bottomPanelCollapsed: !s.bottomPanelCollapsed })),
+  setActiveMobilePanel: (v) => set({ activeMobilePanel: v }),
   setMarketSearch: (v) => set({ marketSearch: v }),
   setRegion: (v) => set({ region: v }),
   setColorMode: (v) => set({ colorMode: v }),
@@ -149,9 +161,15 @@ export const useUIStore = create<UIState & UIActions>((set, get) => ({
     if (!po.includes("tweets")) po = [...po, "tweets"];
     if (!po.includes("trader")) po = [...po, "trader"];
     if (!po.includes("chart")) po = [...po, "chart"];
+    if (!po.includes("arbitrage")) po = [...po, "arbitrage"];
+    if (!po.includes("calendar")) po = [...po, "calendar"];
+    if (!po.includes("signals")) po = [...po, "signals"];
+    if (!po.includes("resolution")) po = [...po, "resolution"];
+    if (!po.includes("portfolio")) po = [...po, "portfolio"];
 
     let bpo = prefs.bottomPanelOrder;
-    if (!bpo || !Array.isArray(bpo)) bpo = ["detail"];
+    if (!bpo || !Array.isArray(bpo)) bpo = ["detail", "orderbook"];
+    if (!bpo.includes("orderbook")) bpo = [...bpo, "orderbook"];
     po = po.filter((id) => !bpo.includes(id));
 
     set({

@@ -34,8 +34,13 @@ const DEFAULT_PREFERENCES: UserPreferences = {
     tweets: true,
     trader: true,
     chart: true,
+    arbitrage: true,
+    calendar: true,
+    signals: true,
+    resolution: true,
+    portfolio: true,
   },
-  panelOrder: ["sentiment", "watchlist", "markets", "country", "news", "tweets", "live", "leaderboard", "trader", "smartMoney", "whaleTrades", "orderbook", "chart"],
+  panelOrder: ["signals", "markets", "smartMoney", "news", "watchlist", "tweets", "whaleTrades", "sentiment", "leaderboard", "trader", "chart", "arbitrage", "calendar", "resolution", "portfolio", "live", "country"],
   activeCategories: [
     "Politics", "Crypto", "Sports",
     "Finance", "Tech", "Culture", "Other",
@@ -45,7 +50,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   region: "global",
   autoRefresh: true,
   mapWidthPct: 58,
-  bottomPanelOrder: ["detail"],
+  bottomPanelOrder: ["detail", "orderbook"],
 };
 
 export function usePreferences() {

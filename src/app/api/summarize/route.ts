@@ -20,6 +20,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing type or cacheKey" }, { status: 400 });
     }
 
+    if (type !== "market" && type !== "country") {
+      return NextResponse.json({ error: "Invalid type" }, { status: 400 });
+    }
+
+    if (typeof cacheKey !== "string" || cacheKey.length > 200 || (!cacheKey.startsWith("market:") && !cacheKey.startsWith("country:"))) {
+      return NextResponse.json({ error: "Invalid cacheKey" }, { status: 400 });
+    }
+
     const db = getDb();
 
     // Check cache
@@ -62,6 +70,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ summary, cached: false });
   } catch (err) {
-    return apiError("summarize", err instanceof Error ? err.message : "Unknown error", 500, err);
+    return apiError("summarize", "Failed to generate summary", 500, err);
   }
 }

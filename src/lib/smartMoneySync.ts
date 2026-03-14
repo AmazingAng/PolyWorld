@@ -15,9 +15,16 @@ let lastFullSync = 0;
 export async function runFullLeaderboardSync(): Promise<void> {
   const db = getDb();
   try {
-    console.log("[smartMoney] Starting full leaderboard sync (PnL >= $100k)...");
+    console.info("[smartMoney] Starting full leaderboard sync (PnL >= $100k)...");
     const leaderboard = await fetchFullLeaderboard(100_000);
     if (leaderboard.length === 0) return;
+
+    // Safety: skip if new data is less than 50% of current table size (partial API response)
+    const currentCount = (db.prepare(`SELECT COUNT(*) as c FROM smart_wallets`).get() as { c: number }).c;
+    if (currentCount > 0 && leaderboard.length < currentCount * 0.5) {
+      console.warn(`[smartMoney] Skipping full leaderboard wipe: API returned ${leaderboard.length} vs ${currentCount} existing (need ≥50%)`);
+      return;
+    }
 
     const upsertWallet = db.prepare(`
       INSERT INTO smart_wallets (address, username, pnl, volume, rank, profile_image, updated_at)
@@ -31,7 +38,7 @@ export async function runFullLeaderboardSync(): Promise<void> {
         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
     `);
 
-    // Remove wallets that dropped below threshold
+    // Replace wallets that dropped below threshold
     db.transaction(() => {
       db.prepare(`DELETE FROM smart_wallets WHERE 1`).run();
       for (const w of leaderboard) {
@@ -47,7 +54,7 @@ export async function runFullLeaderboardSync(): Promise<void> {
     })();
 
     lastFullSync = Date.now();
-    console.log(`[smartMoney] Full leaderboard sync complete — ${leaderboard.length} wallets (PnL >= $100k)`);
+    console.info(`[smartMoney] Full leaderboard sync complete — ${leaderboard.length} wallets (PnL >= $100k)`);
   } catch (err) {
     console.error("[smartMoney] Full leaderboard sync error:", err);
   }
@@ -88,7 +95,7 @@ async function syncLeaderboardCache(): Promise<void> {
       console.error(`[smartMoney] Leaderboard cache sync error for ${period}:`, err);
     }
   }
-  console.log(`[smartMoney] Leaderboard cache synced (${periods.join(", ")})`);
+  console.info(`[smartMoney] Leaderboard cache synced (${periods.join(", ")})`);
 }
 
 export async function runSmartMoneySync(): Promise<void> {
@@ -122,7 +129,7 @@ export async function runSmartMoneySync(): Promise<void> {
         }
       });
       txn();
-      console.log(`[smartMoney] Synced ${leaderboard.length} wallets`);
+      console.info(`[smartMoney] Synced ${leaderboard.length} wallets`);
     }
 
     // Build a set of smart wallet addresses for cross-referencing
@@ -200,7 +207,7 @@ export async function runSmartMoneySync(): Promise<void> {
     // 5. Sync leaderboard cache for all time periods
     await syncLeaderboardCache();
 
-    console.log(
+    console.info(
       `[smartMoney] Sync complete — ${leaderboard.length} wallets, ${totalTrades} trades (${smartTradeCount} smart)`
     );
   } catch (err) {
@@ -208,12 +215,15 @@ export async function runSmartMoneySync(): Promise<void> {
   }
 }
 
+let startupTimer: ReturnType<typeof setTimeout> | null = null;
+
 export function startSmartMoneySync() {
   if (syncTimer) return;
-  console.log("[smartMoney] Starting smart money sync (5min trades + 1h full leaderboard)");
+  console.info("[smartMoney] Starting smart money sync (5min trades + 1h full leaderboard)");
 
   // Full leaderboard sync on startup (after short delay), then every hour
-  setTimeout(() => {
+  startupTimer = setTimeout(() => {
+    startupTimer = null;
     runFullLeaderboardSync().then(() => runSmartMoneySync());
   }, 10_000);
 
@@ -225,4 +235,20 @@ export function startSmartMoneySync() {
   syncTimer = setInterval(() => {
     runSmartMoneySync();
   }, SYNC_INTERVAL);
+}
+
+export function stopSmartMoneySync() {
+  if (startupTimer) {
+    clearTimeout(startupTimer);
+    startupTimer = null;
+  }
+  if (syncTimer) {
+    clearInterval(syncTimer);
+    syncTimer = null;
+  }
+  if (fullLeaderboardTimer) {
+    clearInterval(fullLeaderboardTimer);
+    fullLeaderboardTimer = null;
+  }
+  console.info("[smartMoney] Stopped smart money sync");
 }

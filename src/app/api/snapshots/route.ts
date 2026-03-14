@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { apiError } from "@/lib/apiError";
 import type { PolymarketMarket } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -208,7 +209,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(rows);
   } catch (err) {
-    console.error("[api/snapshots] Error:", err);
-    return NextResponse.json([], { status: 500 });
+    return apiError("snapshots", "Failed to fetch snapshot data", 500, err);
   }
 }

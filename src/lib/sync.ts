@@ -3,6 +3,7 @@ import { fetchEventsFromAPI, processEvents } from "./polymarket";
 import type { ProcessedMarket, PolymarketMarket, SmartMoneyFlow, WhaleTrade } from "@/types";
 import { computeImpactScores } from "./impact";
 import { detectAnomalies } from "./anomaly";
+import { computeIndicators } from "./indicators";
 import { aiGeocodeBatch, addJitter } from "./aiGeo";
 import { isAiConfigured } from "./ai";
 import { geolocate } from "./geo";
@@ -11,6 +12,8 @@ const SYNC_INTERVAL = 30_000;
 
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let geocodeRunning = false;
+let geocodeStartedAt = 0;
+const GEOCODE_WATCHDOG_MS = 120_000; // 120s max for geocoding
 
 // --- Caches for readMarketsFromDb ---
 let resultCache: { data: { mapped: ProcessedMarket[]; unmapped: ProcessedMarket[] }; ts: number } | null = null;
@@ -27,6 +30,11 @@ const SNAPSHOT_WRITE_INTERVAL = 300_000; // 5 min — sentiment/anomaly don't ne
 
 /** Fire-and-forget: geocode pending markets without blocking sync */
 function geocodePending(db: ReturnType<typeof getDb>) {
+  // Watchdog: reset stuck flag after 120s
+  if (geocodeRunning && Date.now() - geocodeStartedAt > GEOCODE_WATCHDOG_MS) {
+    console.warn("[sync] Geocode watchdog: resetting stuck flag");
+    geocodeRunning = false;
+  }
   if (geocodeRunning) return;
   const ungeo = db
     .prepare(`SELECT id, title, description, location FROM events WHERE ai_geo_done = 0 LIMIT 25`)
@@ -65,13 +73,14 @@ function geocodePending(db: ReturnType<typeof getDb>) {
 
   if (isAiConfigured()) {
     geocodeRunning = true;
+    geocodeStartedAt = Date.now();
     aiGeocodeBatch(ungeo.map((r) => ({ id: r.id, title: r.title, description: r.description, currentLocation: r.location })))
       .then((results) => writeResults(new Map(results.map((r) => [r.id, r]))))
-      .catch(() => writeResults(null))
-      .finally(() => { geocodeRunning = false; console.log(`[sync] Geocoded ${ungeo.length} markets`); });
+      .catch((err) => { console.error("[sync] Geocode batch failed:", err); writeResults(null); })
+      .finally(() => { geocodeRunning = false; console.info(`[sync] Geocoded ${ungeo.length} markets`); });
   } else {
     writeResults(null);
-    console.log(`[sync] Geocoded ${ungeo.length} markets (regex)`);
+    console.info(`[sync] Geocoded ${ungeo.length} markets (regex)`);
   }
 }
 
@@ -89,9 +98,9 @@ export async function runSync(): Promise<{
 
     const upsert = db.prepare(`
       INSERT INTO events (id, market_id, title, slug, category, volume, volume_24h, prob, change, recent_change, location, lat, lng, markets_json, created_at, updated_at,
-        description, resolution_source, end_date, image, liquidity, is_active, is_closed, comment_count, tags_json)
+        description, resolution_source, end_date, image, liquidity, is_active, is_closed, comment_count, tags_json, neg_risk)
       VALUES (@id, @marketId, @title, @slug, @category, @volume, @volume24h, @prob, @change, @recentChange, @location, @lat, @lng, @marketsJson, @updatedAt, @updatedAt,
-        @description, @resolutionSource, @endDate, @image, @liquidity, @isActive, @isClosed, @commentCount, @tagsJson)
+        @description, @resolutionSource, @endDate, @image, @liquidity, @isActive, @isClosed, @commentCount, @tagsJson, @negRisk)
       ON CONFLICT(id) DO UPDATE SET
         market_id = @marketId, title = @title, slug = @slug, category = @category,
         volume = @volume, volume_24h = @volume24h, prob = @prob, change = @change,
@@ -102,7 +111,7 @@ export async function runSync(): Promise<{
         markets_json = @marketsJson, updated_at = @updatedAt,
         description = @description, resolution_source = @resolutionSource, end_date = @endDate,
         image = @image, liquidity = @liquidity, is_active = @isActive, is_closed = @isClosed,
-        comment_count = @commentCount, tags_json = @tagsJson
+        comment_count = @commentCount, tags_json = @tagsJson, neg_risk = @negRisk
     `);
 
     const writeSnapshots = Date.now() - lastSnapshotWrite >= SNAPSHOT_WRITE_INTERVAL;
@@ -139,13 +148,14 @@ export async function runSync(): Promise<{
           isClosed: m.closed ? 1 : 0,
           commentCount: m.commentCount,
           tagsJson: JSON.stringify(m.tags || []),
+          negRisk: m.negRisk ? 1 : 0,
         });
 
         insertSnapshot?.run(m.id, m.prob, m.volume24h, m.change);
       }
     });
-    if (writeSnapshots) lastSnapshotWrite = Date.now();
     txn();
+    if (writeSnapshots) lastSnapshotWrite = Date.now();
 
     // Mark stale events as closed — not in current API fetch means
     // the event is no longer active on Polymarket (closed, resolved, or delisted)
@@ -167,7 +177,7 @@ export async function runSync(): Promise<{
           for (const r of staleIds) markClosed.run(r.id);
         });
         closeTxn();
-        console.log(`[sync] Marked ${staleIds.length} stale resolved events as closed`);
+        console.info(`[sync] Marked ${staleIds.length} stale resolved events as closed`);
       }
     } else if (fetchedIds.size < openCount * 0.5) {
       console.warn(`[sync] Skipped stale marking: API returned only ${fetchedIds.size} events vs ${openCount} open in DB (need ≥50%) — likely API issue`);
@@ -181,6 +191,14 @@ export async function runSync(): Promise<{
       // Remove snapshots for closed events — they'll never change
       db.prepare(
         `DELETE FROM price_snapshots WHERE event_id IN (SELECT id FROM events WHERE is_closed = 1)`
+      ).run();
+      // market_snapshots: retain 90 days
+      db.prepare(
+        `DELETE FROM market_snapshots WHERE recorded_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-90 days')`
+      ).run();
+      // ai_summaries: retain 7 days
+      db.prepare(
+        `DELETE FROM ai_summaries WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-7 days')`
       ).run();
       lastCleanup = Date.now();
     }
@@ -196,7 +214,7 @@ export async function runSync(): Promise<{
     // Geocode new markets — fire-and-forget to avoid blocking sync
     geocodePending(db);
 
-    console.log(`[sync] OK — ${all.length} events (${mapped.length} mapped)`);
+    console.info(`[sync] OK — ${all.length} events (${mapped.length} mapped)`);
     return { eventCount: all.length, status: "ok" };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -216,7 +234,7 @@ export async function runSync(): Promise<{
 
 export function startSyncLoop() {
   if (syncTimer) return;
-  console.log("[sync] Starting sync loop (30s interval)");
+  console.info("[sync] Starting sync loop (30s interval)");
 
   // Run immediately
   runSync();
@@ -224,6 +242,14 @@ export function startSyncLoop() {
   syncTimer = setInterval(() => {
     runSync();
   }, SYNC_INTERVAL);
+}
+
+export function stopSyncLoop() {
+  if (syncTimer) {
+    clearInterval(syncTimer);
+    syncTimer = null;
+    console.info("[sync] Stopped sync loop");
+  }
 }
 
 /** Invalidate caches after a sync so next request gets fresh data */
@@ -263,6 +289,49 @@ function trimMarket(m: PolymarketMarket): TrimmedMarket {
   };
 }
 
+interface EventRow {
+  id: string;
+  market_id: string;
+  title: string;
+  slug: string;
+  category: string;
+  volume: number;
+  volume_24h: number;
+  prob: number | null;
+  change: number | null;
+  recent_change: number | null;
+  markets_json: string;
+  location: string | null;
+  lat: number | null;
+  lng: number | null;
+  created_at: string;
+  description: string | null;
+  resolution_source: string | null;
+  end_date: string | null;
+  image: string | null;
+  liquidity: number;
+  is_active: number;
+  is_closed: number;
+  comment_count: number;
+  tags_json: string;
+  neg_risk: number;
+}
+
+interface WhaleTradeRow {
+  wallet: string;
+  condition_id: string;
+  event_id: string | null;
+  side: string;
+  size: number;
+  price: number;
+  usdc_size: number;
+  outcome: string;
+  title: string;
+  slug: string;
+  timestamp: string;
+  is_smart_wallet: number;
+}
+
 export function readMarketsFromDb(): {
   mapped: ProcessedMarket[];
   unmapped: ProcessedMarket[];
@@ -278,10 +347,10 @@ export function readMarketsFromDb(): {
       `SELECT id, market_id, title, slug, category, volume, volume_24h, prob, change,
               recent_change, markets_json, location, lat, lng, created_at, description,
               resolution_source, end_date, image, liquidity, is_active, is_closed,
-              comment_count, tags_json
+              comment_count, tags_json, neg_risk
        FROM events WHERE is_closed = 0 ORDER BY volume_24h DESC`
     )
-    .all() as Array<Record<string, unknown>>;
+    .all() as EventRow[];
 
   const mapped: ProcessedMarket[] = [];
   const unmapped: ProcessedMarket[] = [];
@@ -289,7 +358,7 @@ export function readMarketsFromDb(): {
   for (const row of rows) {
     let markets: TrimmedMarket[] = [];
     try {
-      const raw = JSON.parse((row.markets_json as string) || "[]");
+      const raw = JSON.parse(row.markets_json || "[]");
       markets = Array.isArray(raw) ? raw.map(trimMarket) : [];
     } catch {
       // Malformed JSON in DB — use empty array
@@ -297,39 +366,40 @@ export function readMarketsFromDb(): {
 
     let tags: string[] = [];
     try {
-      tags = JSON.parse((row.tags_json as string) || "[]");
+      tags = JSON.parse(row.tags_json || "[]");
     } catch {
       // Malformed tags JSON — use empty array
     }
 
     const item: ProcessedMarket = {
-      id: row.id as string,
-      marketId: row.market_id as string,
-      title: row.title as string,
-      slug: row.slug as string,
+      id: row.id,
+      marketId: row.market_id,
+      title: row.title,
+      slug: row.slug,
       category: row.category as ProcessedMarket["category"],
-      volume: row.volume as number,
-      volume24h: row.volume_24h as number,
-      prob: row.prob as number | null,
-      change: row.change as number | null,
-      recentChange: row.recent_change as number | null,
+      volume: row.volume,
+      volume24h: row.volume_24h,
+      prob: row.prob,
+      change: row.change,
+      recentChange: row.recent_change,
       markets,
-      location: row.location as string | null,
+      location: row.location,
       coords:
         row.lat != null && row.lng != null
-          ? [row.lat as number, row.lng as number]
+          ? [row.lat, row.lng]
           : null,
-      createdAt: (row.created_at as string) || null,
-      description: (row.description as string) || null,
-      resolutionSource: (row.resolution_source as string) || null,
-      endDate: (row.end_date as string) || null,
-      image: (row.image as string) || null,
-      liquidity: (row.liquidity as number) || 0,
+      createdAt: row.created_at || null,
+      description: row.description || null,
+      resolutionSource: row.resolution_source || null,
+      endDate: row.end_date || null,
+      image: row.image || null,
+      liquidity: row.liquidity || 0,
       active: row.is_active !== 0,
       closed: row.is_closed === 1
-        || (markets.length > 0 && markets.every((mk: any) => mk.active === false)),
-      commentCount: (row.comment_count as number) || 0,
+        || (markets.length > 0 && markets.every((mk: TrimmedMarket) => mk.active === false)),
+      commentCount: row.comment_count || 0,
       tags,
+      negRisk: row.neg_risk === 1,
       impactScore: 0,
       impactLevel: "info",
     };
@@ -371,6 +441,20 @@ export function readMarketsFromDb(): {
     // anomaly detection is non-critical
   }
 
+  // Compute momentum/volatility/orderFlow indicators for top 50 markets (by volume)
+  try {
+    const top50 = [...allMarkets]
+      .sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))
+      .slice(0, 50);
+    const indicators = computeIndicators(db, top50.map((m) => m.id));
+    for (const m of allMarkets) {
+      const ind = indicators.get(m.id);
+      if (ind) m.indicators = ind;
+    }
+  } catch {
+    // indicators are non-critical
+  }
+
   // Attach smart money flow indicators for top 50 markets
   try {
     const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -381,12 +465,12 @@ export function readMarketsFromDb(): {
          FROM whale_trades WHERE timestamp >= ?
          ORDER BY timestamp DESC`
       )
-      .all(cutoff24h) as Array<Record<string, unknown>>;
+      .all(cutoff24h) as WhaleTradeRow[];
 
     // Group by event_id
-    const byEvent = new Map<string, Array<Record<string, unknown>>>();
+    const byEvent = new Map<string, WhaleTradeRow[]>();
     for (const t of trades) {
-      const eid = t.event_id as string;
+      const eid = t.event_id;
       if (!eid) continue;
       if (!byEvent.has(eid)) byEvent.set(eid, []);
       byEvent.get(eid)!.push(t);
@@ -399,7 +483,7 @@ export function readMarketsFromDb(): {
         .prepare(`SELECT address, username FROM smart_wallets`)
         .all() as Array<{ address: string; username: string | null }>;
       for (const w of wallets) walletNames.set(w.address.toLowerCase(), w.username);
-    } catch { /* ignore */ }
+    } catch { /* smart_wallets table may not exist yet — proceed without usernames */ }
 
     for (const m of allMarkets) {
       const eventTrades = byEvent.get(m.id);
@@ -410,7 +494,7 @@ export function readMarketsFromDb(): {
       const seenWallets = new Set<string>();
 
       for (const t of eventTrades) {
-        const side = t.side as string;
+        const side = t.side;
         const isSmart = t.is_smart_wallet === 1;
         if (side === "BUY") {
           whaleBuys++;
@@ -420,14 +504,14 @@ export function readMarketsFromDb(): {
           if (isSmart) smartSells++;
         }
         // Track top wallets (first occurrence per wallet)
-        const addr = (t.wallet as string).toLowerCase();
+        const addr = t.wallet.toLowerCase();
         if (isSmart && !seenWallets.has(addr) && topWallets.length < 5) {
           seenWallets.add(addr);
           topWallets.push({
-            address: t.wallet as string,
+            address: t.wallet,
             username: walletNames.get(addr) || null,
             side: side as "BUY" | "SELL",
-            size: t.usdc_size as number || t.size as number,
+            size: t.usdc_size || t.size,
           });
         }
       }
@@ -437,18 +521,18 @@ export function readMarketsFromDb(): {
         buyRatio > 0.6 ? "bullish" : buyRatio < 0.4 ? "bearish" : "neutral";
 
       const recentTrades: WhaleTrade[] = eventTrades.slice(0, 5).map((t) => ({
-        wallet: t.wallet as string,
-        username: walletNames.get((t.wallet as string).toLowerCase()) || undefined,
-        conditionId: t.condition_id as string,
-        eventId: t.event_id as string | null,
+        wallet: t.wallet,
+        username: walletNames.get(t.wallet.toLowerCase()) || undefined,
+        conditionId: t.condition_id,
+        eventId: t.event_id,
         side: t.side as "BUY" | "SELL",
-        size: t.size as number,
-        price: t.price as number,
-        usdcSize: t.usdc_size as number,
-        outcome: t.outcome as string,
-        title: t.title as string,
-        slug: t.slug as string,
-        timestamp: t.timestamp as string,
+        size: t.size,
+        price: t.price,
+        usdcSize: t.usdc_size,
+        outcome: t.outcome,
+        title: t.title,
+        slug: t.slug,
+        timestamp: t.timestamp,
         isSmartWallet: t.is_smart_wallet === 1,
       }));
 

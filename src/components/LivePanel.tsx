@@ -1,141 +1,267 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { STREAMS, StreamSource } from "@/lib/streams";
 import HLSPlayer from "./HLSPlayer";
 
-type StreamMode = "hls" | "embed";
+type StreamMode = "hls" | "yt-hls" | "embed";
+type CategoryTab = "news" | "sports";
 
-export default function LivePanel() {
-  const [activeStream, setActiveStream] = useState<StreamSource | null>(null);
-  const [mode, setMode] = useState<StreamMode>("hls");
-  const [failedHls, setFailedHls] = useState<Set<string>>(new Set());
+interface LiveInfo {
+  videoId: string | null;
+  hlsUrl: string | null;
+  loading: boolean;
+}
 
-  const handleHlsFatal = useCallback(() => {
-    if (!activeStream) return;
-    // If this stream has a YouTube fallback, switch to it
-    if (activeStream.ytEmbed) {
-      setMode("embed");
-      setFailedHls((prev) => new Set(prev).add(activeStream.hlsUrl));
-    }
-  }, [activeStream]);
+const liveInfoCache = new Map<
+  string,
+  { videoId: string | null; hlsUrl: string | null; ts: number }
+>();
+const CACHE_TTL = 5 * 60 * 1000;
 
-  const selectStream = useCallback((stream: StreamSource) => {
-    if (activeStream?.name === stream.name) {
-      setActiveStream(null);
-      return;
-    }
-    // If HLS previously failed for this stream and it has embed, go straight to embed
-    if (failedHls.has(stream.hlsUrl) && stream.ytEmbed) {
-      setMode("embed");
-    } else {
-      setMode("hls");
-    }
-    setActiveStream(stream);
-  }, [activeStream, failedHls]);
+async function fetchLiveInfo(
+  handle: string,
+): Promise<{ videoId: string | null; hlsUrl: string | null }> {
+  const cached = liveInfoCache.get(handle);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return { videoId: cached.videoId, hlsUrl: cached.hlsUrl };
+  }
+  try {
+    const res = await fetch(
+      `/api/youtube-live?channel=${encodeURIComponent(handle)}`,
+    );
+    if (!res.ok) throw new Error("API error");
+    const data = await res.json();
+    const result = { videoId: data.videoId || null, hlsUrl: data.hlsUrl || null };
+    liveInfoCache.set(handle, { ...result, ts: Date.now() });
+    return result;
+  } catch {
+    return { videoId: null, hlsUrl: null };
+  }
+}
 
-  const toggleMode = useCallback(() => {
-    setMode((m) => (m === "hls" ? "embed" : "hls"));
-  }, []);
+/** Dropdown button for the Panel header — renders channel list inline */
+export function LiveChannelDropdown({
+  activeStream,
+  onSelect,
+}: {
+  activeStream: StreamSource | null;
+  onSelect: (stream: StreamSource | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<CategoryTab>("news");
+  const ref = useRef<HTMLDivElement>(null);
+
+  const filteredStreams = useMemo(
+    () => STREAMS.filter((s) => s.category === tab),
+    [tab],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
 
   return (
-    <div className="font-mono">
-      {/* Active player */}
-      {activeStream ? (
-        <div className="mb-2">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#ff4444] animate-pulse" />
-              <span className="text-[11px] text-[var(--text-secondary)]">{activeStream.name}</span>
-              <span className="text-[11px] text-[var(--text-faint)]">{activeStream.region}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              {/* Mode toggle: HLS / Embed */}
-              {activeStream.ytEmbed && (
-                <button
-                  onClick={toggleMode}
-                  className={`text-[10px] px-1.5 py-0.5 border transition-colors font-mono ${
-                    mode === "embed"
-                      ? "border-[#f59e0b]/30 text-[#f59e0b]"
-                      : "border-[var(--border-subtle)] text-[var(--text-faint)] hover:text-[var(--text-secondary)]"
-                  }`}
-                  title={mode === "hls" ? "Switch to YouTube embed" : "Switch to HLS stream"}
-                >
-                  {mode === "hls" ? "HLS" : "YT"}
-                </button>
-              )}
+    <div ref={ref} className="relative font-mono">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 border transition-colors ${
+          open || activeStream
+            ? "border-[var(--text-secondary)]/30 text-[var(--text-secondary)]"
+            : "border-[var(--border-subtle)] text-[var(--text-faint)] hover:text-[var(--text-secondary)]"
+        }`}
+      >
+        {activeStream ? (
+          <>
+            <span className="w-1 h-1 rounded-full bg-[#22c55e] animate-pulse shrink-0" />
+            <span className="max-w-[90px] truncate">{activeStream.name}</span>
+          </>
+        ) : (
+          <>channel <span className="text-[8px]">▾</span></>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-0.5 z-[9999] bg-[var(--bg)] border border-[var(--border)] shadow-[0_8px_32px_rgba(0,0,0,0.4)] min-w-[180px]">
+          {/* Category tabs */}
+          <div className="flex border-b border-[var(--border-subtle)]">
+            {(["news", "sports"] as const).map((t) => (
               <button
-                onClick={() => setActiveStream(null)}
-                className="text-[10px] text-[var(--text-faint)] hover:text-[var(--text-secondary)] transition-colors px-1.5 py-0.5 border border-[var(--border-subtle)]"
+                key={t}
+                onClick={() => setTab(t)}
+                className={`flex-1 text-[9px] uppercase tracking-wide px-2 py-1.5 font-mono transition-colors ${
+                  tab === t
+                    ? "text-[var(--text-secondary)] bg-[var(--surface)]"
+                    : "text-[var(--text-faint)] hover:text-[var(--text-secondary)]"
+                }`}
               >
-                close
+                {t}
               </button>
-            </div>
+            ))}
           </div>
-          <div className="border border-[var(--border)] overflow-hidden">
-            {mode === "embed" && activeStream.ytEmbed ? (
-              <iframe
-                src={activeStream.ytEmbed}
-                className="w-full aspect-video"
-                allow="autoplay; encrypted-media"
-                allowFullScreen
-                style={{ border: "none" }}
-              />
-            ) : (
-              <HLSPlayer
-                url={activeStream.hlsUrl}
-                onFatalError={handleHlsFatal}
-              />
+
+          {/* Stream list */}
+          <div className="py-0.5">
+            {activeStream && (
+              <button
+                onClick={() => { onSelect(null); setOpen(false); }}
+                className="w-full text-left px-2.5 py-1.5 text-[10px] text-[#ff6666] hover:bg-[var(--surface-hover)] font-mono border-b border-[var(--border-subtle)] mb-0.5"
+              >
+                ✕ stop stream
+              </button>
             )}
-          </div>
-        </div>
-      ) : (
-        <div className="mb-2 border border-[var(--border-subtle)] bg-[var(--bg)] flex items-center justify-center" style={{ height: 120 }}>
-          <div className="text-center">
-            <div className="text-[11px] text-[var(--text-faint)]">select a stream to watch</div>
+            {filteredStreams.map((stream) => {
+              const isActive = activeStream?.id === stream.id;
+              return (
+                <button
+                  key={stream.id}
+                  onClick={() => { onSelect(isActive ? null : stream); if (!isActive) setOpen(false); }}
+                  className={`w-full text-left px-2.5 py-1.5 hover:bg-[var(--surface-hover)] transition-colors ${
+                    isActive ? "bg-[#22c55e]/5" : ""
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`text-[10px] font-mono truncate ${
+                        isActive ? "text-[#22c55e]" : "text-[var(--text-secondary)]"
+                      }`}
+                    >
+                      {stream.name}
+                    </span>
+                    {isActive && (
+                      <span className="w-1 h-1 rounded-full bg-[#22c55e] animate-pulse shrink-0" />
+                    )}
+                  </div>
+                  <div className="text-[9px] text-[var(--text-faint)]">
+                    {stream.region}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* Stream grid */}
-      <div className="grid grid-cols-2 gap-1">
-        {STREAMS.map((stream) => {
-          const isActive = activeStream?.name === stream.name;
-          const hlsFailed = failedHls.has(stream.hlsUrl);
-          return (
-            <button
-              key={stream.name}
-              onClick={() => selectStream(stream)}
-              className={`text-left p-2 border transition-colors ${
-                isActive
-                  ? "border-[#22c55e]/30 bg-[#22c55e]/5"
-                  : "border-[var(--border-subtle)] hover:bg-[var(--surface)]"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-[11px] ${
-                    isActive ? "text-[#22c55e]" : "text-[var(--text-secondary)]"
-                  }`}
-                >
-                  {stream.name}
-                </span>
-                <div className="flex items-center gap-1">
-                  {hlsFailed && stream.ytEmbed && (
-                    <span className="text-[9px] text-[#f59e0b]" title="Using YouTube fallback">YT</span>
-                  )}
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      isActive ? "bg-[#22c55e] animate-pulse" : "bg-[var(--scrollbar-thumb)]"
-                    }`}
-                  />
-                </div>
-              </div>
-              <div className="text-[10px] text-[var(--text-faint)]">{stream.region}</div>
-            </button>
-          );
-        })}
+interface LivePanelProps {
+  activeStream: StreamSource | null;
+}
+
+export default function LivePanel({ activeStream }: LivePanelProps) {
+  const [mode, setMode] = useState<StreamMode>("hls");
+  const [liveInfo, setLiveInfo] = useState<LiveInfo>({
+    videoId: null,
+    hlsUrl: null,
+    loading: false,
+  });
+  const fetchingRef = useRef(false);
+
+  useEffect(() => {
+    if (!activeStream) return;
+    let cancelled = false;
+    fetchingRef.current = true;
+    setLiveInfo({ videoId: null, hlsUrl: null, loading: true });
+
+    fetchLiveInfo(activeStream.handle).then((info) => {
+      if (cancelled) return;
+      fetchingRef.current = false;
+      setLiveInfo({ ...info, loading: false });
+      if (activeStream.hlsUrl) setMode("hls");
+      else if (info.hlsUrl) setMode("yt-hls");
+      else setMode("embed");
+    });
+
+    return () => { cancelled = true; };
+  }, [activeStream]);
+
+  const handleHlsFatal = useCallback(() => {
+    if (mode === "hls" && liveInfo.hlsUrl) setMode("yt-hls");
+    else setMode("embed");
+  }, [mode, liveInfo.hlsUrl]);
+
+  const ytEmbedUrl = useMemo(() => {
+    if (!activeStream) return null;
+    const vid = liveInfo.videoId || activeStream.fallbackVideoId;
+    if (!vid) return null;
+    return `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1`;
+  }, [activeStream, liveInfo.videoId]);
+
+  if (!activeStream) {
+    return (
+      <div
+        className="w-full bg-[var(--bg)] border border-[var(--border-subtle)] flex items-center justify-center font-mono"
+        style={{ aspectRatio: "16/9" }}
+      >
+        <span className="text-[11px] text-[var(--text-faint)]">
+          select a channel ↗
+        </span>
       </div>
+    );
+  }
+
+  return (
+    <div className="border border-[var(--border)] overflow-hidden">
+        {liveInfo.loading ? (
+          <div className="w-full aspect-video bg-[#000] flex items-center justify-center">
+            <div className="flex items-center gap-2">
+              <svg
+                className="animate-spin w-4 h-4 text-[#8a8a8a]"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeDasharray="31.4 31.4"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span className="text-[11px] text-[#8a8a8a] font-mono">
+                detecting live stream...
+              </span>
+            </div>
+          </div>
+        ) : mode === "embed" && ytEmbedUrl ? (
+          <iframe
+            src={ytEmbedUrl}
+            className="w-full aspect-video"
+            allow="autoplay; encrypted-media"
+            allowFullScreen
+            style={{ border: "none" }}
+          />
+        ) : mode === "yt-hls" && liveInfo.hlsUrl ? (
+          <HLSPlayer
+            url={liveInfo.hlsUrl}
+            onFatalError={() => setMode("embed")}
+          />
+        ) : mode === "hls" && activeStream.hlsUrl ? (
+          <HLSPlayer url={activeStream.hlsUrl} onFatalError={handleHlsFatal} />
+        ) : ytEmbedUrl ? (
+          <iframe
+            src={ytEmbedUrl}
+            className="w-full aspect-video"
+            allow="autoplay; encrypted-media"
+            allowFullScreen
+            style={{ border: "none" }}
+          />
+        ) : (
+          <div className="w-full aspect-video bg-[var(--bg)] flex items-center justify-center">
+            <span className="text-[11px] text-[var(--text-faint)]">
+              no stream available
+            </span>
+          </div>
+        )}
     </div>
   );
 }

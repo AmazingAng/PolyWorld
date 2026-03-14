@@ -2,12 +2,16 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { ProcessedMarket, OrderBookData, OrderBookLevel } from "@/types";
+import MarketDepthChart from "./MarketDepthChart";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 // Brighter colors for better contrast on dark backgrounds
 const BID_COLOR = "#4ade80";
 const ASK_COLOR = "#f87171";
 const BID_BAR = "rgba(74, 222, 128, 0.18)";
 const ASK_BAR = "rgba(248, 113, 113, 0.18)";
+
+type BookSide = "YES" | "NO" | "merged";
 
 interface OrderBookPanelProps {
   selectedMarket: ProcessedMarket | null;
@@ -28,29 +32,54 @@ function getAllYesTokenIds(market: ProcessedMarket): string[] {
   return ids;
 }
 
+/** Extract all No token IDs from active sub-markets (second token = No) */
+function getAllNoTokenIds(market: ProcessedMarket): string[] {
+  const ids: string[] = [];
+  for (const m of market.markets) {
+    if (m.active === false) continue;
+    const raw = m.clobTokenIds;
+    if (!raw) continue;
+    try {
+      const arr: string[] = Array.isArray(raw) ? raw : JSON.parse(raw);
+      if (arr[1]) ids.push(arr[1]);
+    } catch { /* skip */ }
+  }
+  return ids;
+}
+
 export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) {
-  const [data, setData] = useState<OrderBookData | null>(null);
+  const [yesData, setYesData] = useState<OrderBookData | null>(null);
+  const [noData, setNoData] = useState<OrderBookData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bookSide, setBookSide] = useState<BookSide>("YES");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const retryCount = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const midRef = useRef<HTMLDivElement>(null);
 
-  const tokenIds = useMemo(() => {
+  const yesTokenIds = useMemo(() => {
     if (!selectedMarket || selectedMarket.closed) return [];
     return getAllYesTokenIds(selectedMarket);
   }, [selectedMarket]);
 
-  // Track which token ID is currently working
-  const activeTokenRef = useRef<string | null>(null);
+  const noTokenIds = useMemo(() => {
+    if (!selectedMarket || selectedMarket.closed) return [];
+    return getAllNoTokenIds(selectedMarket);
+  }, [selectedMarket]);
 
-  const fetchBook = useCallback(async () => {
-    if (tokenIds.length === 0) return;
+  // Track which token ID is currently working per side
+  const activeYesTokenRef = useRef<string | null>(null);
+  const activeNoTokenRef = useRef<string | null>(null);
 
-    // Try the known working token first, then fall back to others
-    const tryOrder = activeTokenRef.current
-      ? [activeTokenRef.current, ...tokenIds.filter(t => t !== activeTokenRef.current)]
+  const fetchSide = useCallback(async (
+    tokenIds: string[],
+    activeRef: React.MutableRefObject<string | null>,
+  ): Promise<OrderBookData | null> => {
+    if (tokenIds.length === 0) return null;
+
+    const tryOrder = activeRef.current
+      ? [activeRef.current, ...tokenIds.filter(t => t !== activeRef.current)]
       : tokenIds;
 
     for (const tid of tryOrder) {
@@ -60,49 +89,66 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
         const d = await res.json();
         if (d.error) continue;
         if (d.bids?.length > 0 || d.asks?.length > 0) {
-          activeTokenRef.current = tid;
-          setData(d);
-          setError(null);
-          retryCount.current = 0;
-          return;
+          activeRef.current = tid;
+          return d;
         }
       } catch { /* try next */ }
     }
-    if (retryCount.current < 3) {
-      const delay = 2000 * Math.pow(2, retryCount.current);
-      retryCount.current++;
-      setTimeout(fetchBook, delay);
-    } else {
-      setError("加载失败");
+    return null;
+  }, []);
+
+  const fetchBook = useCallback(async () => {
+    if (yesTokenIds.length === 0) return;
+
+    const [yes, no] = await Promise.all([
+      fetchSide(yesTokenIds, activeYesTokenRef),
+      noTokenIds.length > 0 ? fetchSide(noTokenIds, activeNoTokenRef) : Promise.resolve(null),
+    ]);
+
+    if (yes) {
+      setYesData(yes);
+      setError(null);
+      retryCount.current = 0;
     }
-  }, [tokenIds]);
+    if (no) {
+      setNoData(no);
+    }
+
+    if (!yes) {
+      if (retryCount.current < 3) {
+        const delay = 2000 * Math.pow(2, retryCount.current);
+        retryCount.current++;
+        setTimeout(fetchBook, delay);
+      } else {
+        setError("load failed");
+      }
+    }
+  }, [yesTokenIds, noTokenIds, fetchSide]);
 
   useEffect(() => {
-    if (tokenIds.length === 0) { setData(null); setError(null); activeTokenRef.current = null; return; }
+    if (yesTokenIds.length === 0) { setYesData(null); setNoData(null); setError(null); activeYesTokenRef.current = null; activeNoTokenRef.current = null; return; }
     setLoading(true);
     setError(null);
     fetchBook().finally(() => setLoading(false));
-  }, [tokenIds, fetchBook]);
+  }, [yesTokenIds, noTokenIds, fetchBook]);
 
-  useEffect(() => {
-    if (tokenIds.length === 0) return;
-    intervalRef.current = setInterval(fetchBook, 10_000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [tokenIds, fetchBook]);
+  useVisibilityPolling(fetchBook, 15_000, yesTokenIds.length > 0);
 
   // Track whether we need to scroll-center on next data render
   const needsScrollCenter = useRef(true);
 
   useEffect(() => {
-    setData(null);
+    setYesData(null);
+    setNoData(null);
+    setBookSide("YES");
     needsScrollCenter.current = true;
   }, [selectedMarket?.id]);
 
   // Scroll to center mid-price after fresh data renders
+  const data = bookSide === "NO" ? noData : yesData;
   useEffect(() => {
     if (!data || !needsScrollCenter.current) return;
     needsScrollCenter.current = false;
-    // Double-rAF: first rAF lets React commit DOM, second lets browser layout
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const container = scrollRef.current;
@@ -116,7 +162,7 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
     });
   }, [data]);
 
-  if (!selectedMarket || tokenIds.length === 0) {
+  if (!selectedMarket || yesTokenIds.length === 0) {
     return (
       <div className="text-[11px] text-[var(--text-muted)] font-mono p-2">
         {selectedMarket?.closed
@@ -137,7 +183,7 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
 
   if (error && !data) {
     return (
-      <div className="text-[11px] text-[var(--red)] font-mono py-2 text-center">
+      <div className="text-[11px] text-[var(--red)] font-mono py-2 text-center" aria-live="polite">
         {error} <button onClick={() => { retryCount.current = 0; setLoading(true); setError(null); fetchBook().finally(() => setLoading(false)); }} className="ml-2 underline">retry</button>
       </div>
     );
@@ -156,9 +202,34 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
   const totalAskDepth = asks.reduce((s, l) => s + l.size, 0);
   const spreadPct = data.midPrice > 0 ? (data.spread / data.midPrice) * 100 : 0;
 
+  const hasNo = noTokenIds.length > 0;
+
   return (
     <div className="flex flex-col h-full -m-2">
-      {/* Stats bar — compact top strip */}
+      {/* YES/NO toggle */}
+      {hasNo && (
+        <div className="flex items-center gap-0.5 px-2 py-1 shrink-0 border-b border-[var(--border-subtle)]">
+          {(["YES", "NO"] as BookSide[]).map((side) => (
+            <button
+              key={side}
+              onClick={() => { setBookSide(side); needsScrollCenter.current = true; }}
+              className="px-2 py-0 text-[9px] rounded transition-colors leading-[18px]"
+              style={{
+                background: bookSide === side ? (side === "YES" ? "rgba(74,222,128,0.15)" : "rgba(248,113,113,0.15)") : "transparent",
+                color: bookSide === side ? (side === "YES" ? BID_COLOR : ASK_COLOR) : "var(--text-faint)",
+                border: `1px solid ${bookSide === side ? (side === "YES" ? "rgba(74,222,128,0.3)" : "rgba(248,113,113,0.3)") : "transparent"}`,
+              }}
+            >
+              {side}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Depth chart */}
+      <MarketDepthChart bids={bids} asks={asks} />
+
+      {/* Stats bar */}
       <div className="flex items-center justify-between px-2 py-1 text-[9px] tabular-nums border-b border-[var(--border-subtle)] shrink-0" style={{ background: "rgba(255,255,255,0.02)" }}>
         <span className="text-[var(--text-faint)]">
           spread <span className="text-[var(--text-secondary)]">{data.spread.toFixed(3)}</span>
@@ -176,14 +247,12 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
         <span className="flex-1 text-right">total</span>
       </div>
 
-      {/* Scrollable orderbook — centered on mid-price */}
+      {/* Scrollable orderbook */}
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto ob-scroll relative">
-        {/* Asks (reversed: highest at top, lowest near spread) */}
         {[...asks].reverse().map((level, i) => (
           <OBRow key={`a-${i}`} level={level} side="ask" maxCum={maxCumSize} />
         ))}
 
-        {/* Mid-price divider */}
         <div ref={midRef} className="flex items-center gap-1.5 px-2 py-1 my-px" style={{ background: "rgba(255,255,255,0.03)" }}>
           <div className="flex-1 h-px bg-[var(--border)]" />
           <span className="text-[11px] font-bold tabular-nums text-[var(--text)]">
@@ -192,7 +261,6 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
           <div className="flex-1 h-px bg-[var(--border)]" />
         </div>
 
-        {/* Bids */}
         {bids.map((level, i) => (
           <OBRow key={`b-${i}`} level={level} side="bid" maxCum={maxCumSize} />
         ))}

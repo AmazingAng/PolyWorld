@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { ProcessedMarket, TweetItem } from "@/types";
 import { TWEET_SOURCES, HANDLE_ABBREVS } from "@/lib/tweetSources";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 interface TweetsPanelProps {
   selectedMarket: ProcessedMarket | null;
@@ -166,7 +167,7 @@ export default function TweetsPanel({ selectedMarket }: TweetsPanelProps) {
         retryCount.current++;
         setTimeout(fetchTweets, delay);
       } else {
-        setError("加载失败");
+        setError("load failed");
       }
     } finally {
       setLoading(false);
@@ -176,9 +177,9 @@ export default function TweetsPanel({ selectedMarket }: TweetsPanelProps) {
   useEffect(() => {
     setLoading(true);
     fetchTweets();
-    const timer = setInterval(fetchTweets, 90_000);
-    return () => clearInterval(timer);
   }, [fetchTweets]);
+
+  useVisibilityPolling(fetchTweets, 90_000);
 
   const filteredItems = useMemo(() => {
     if (!handleFilter) return items;
@@ -236,7 +237,7 @@ export default function TweetsPanel({ selectedMarket }: TweetsPanelProps) {
 
       {/* Error state */}
       {error && !loading && (
-        <div className="text-[11px] text-[var(--red)] font-mono py-2 text-center">
+        <div className="text-[11px] text-[var(--red)] font-mono py-2 text-center" aria-live="polite">
           {error} <button onClick={() => { retryCount.current = 0; setLoading(true); fetchTweets(); }} className="ml-2 underline">retry</button>
         </div>
       )}

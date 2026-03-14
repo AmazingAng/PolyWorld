@@ -83,6 +83,8 @@ export default function ToastContainer({ signals, newMarkets, onSelectMarket }: 
 
   return (
     <div
+      role="status"
+      aria-live="polite"
       className="fixed top-[50px] right-4 z-[2000] flex flex-col gap-1 pointer-events-none"
     >
       {toasts.map((toast) => {

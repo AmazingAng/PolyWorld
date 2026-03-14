@@ -21,6 +21,11 @@ export interface PanelVisibility {
   tweets: boolean;
   trader: boolean;
   chart: boolean;
+  arbitrage: boolean;
+  calendar: boolean;
+  signals: boolean;
+  resolution: boolean;
+  portfolio: boolean;
 }
 
 interface SettingsModalProps {
@@ -34,7 +39,7 @@ interface SettingsModalProps {
   onToggleAutoRefresh: () => void;
   panelVisibility: PanelVisibility;
   onTogglePanelVisibility: (panel: string) => void;
-  dataMode: "live" | "proxy" | "sample";
+  dataMode: "live" | "sample";
   lastSyncTime: string | null;
   marketCount: number;
   globalCount: number;
@@ -70,6 +75,11 @@ const PANEL_LABELS: Record<string, string> = {
   tweets: "Tweets",
   trader: "Trader",
   chart: "Price Chart",
+  arbitrage: "Arbitrage",
+  calendar: "Calendar",
+  signals: "Signals",
+  resolution: "Resolution",
+  portfolio: "Portfolio",
 };
 
 export default function SettingsModal({
@@ -318,7 +328,7 @@ function SourcesTab({
   dataMode,
   lastSyncTime,
 }: {
-  dataMode: "live" | "proxy" | "sample";
+  dataMode: "live" | "sample";
   lastSyncTime: string | null;
 }) {
   return (
@@ -335,7 +345,7 @@ function SourcesTab({
           />
           <InfoRow
             label="Last sync"
-            value={lastSyncTime ? new Date(lastSyncTime).toLocaleTimeString() : "—"}
+            value={lastSyncTime ? new Date(lastSyncTime).toLocaleTimeString("en-US") : "—"}
           />
           <InfoRow label="Refresh interval" value="45s" />
           <InfoRow label="HLS streams" value={String(STREAMS.length)} />
@@ -355,7 +365,7 @@ function SystemTab({
   activeCategories,
   timeRange,
 }: {
-  dataMode: "live" | "proxy" | "sample";
+  dataMode: "live" | "sample";
   lastSyncTime: string | null;
   marketCount: number;
   globalCount: number;

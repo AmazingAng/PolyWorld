@@ -23,6 +23,8 @@ export interface PolymarketEvent {
   commentCount?: number;
   startDate?: string;
   createdAt?: string;
+  /** true = mutually exclusive outcomes (election, championship); false = independent/overlapping (date thresholds) */
+  negRisk?: boolean;
 }
 
 export interface PolymarketMarket {
@@ -89,6 +91,9 @@ export interface ProcessedMarket {
   impactLevel: ImpactLevel;
   anomaly?: AnomalyInfo;
   smartMoney?: SmartMoneyFlow | null;
+  indicators?: MarketIndicators;
+  /** true = mutually exclusive outcomes (valid for arbitrage) */
+  negRisk?: boolean;
 }
 
 export interface GeoResult {
@@ -176,6 +181,12 @@ export interface SentimentIndex {
   subScores: SentimentSubScore[];
   activeMarkets: number;
   updatedAt: string;
+}
+
+export interface MarketIndicators {
+  momentum: number | null;           // price change acceleration = (change_now - change_6h_ago)
+  volatility: number | null;         // 24h prob standard deviation
+  orderFlowImbalance: number | null; // (smartBuys - smartSells) / total
 }
 
 export interface SmartMoneyFlow {

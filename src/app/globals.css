@@ -234,16 +234,6 @@ body.resize-active .map-container {
     grid-template-columns: 1fr 1fr;
     grid-auto-rows: 175px;
   }
-  /* Panel min-heights (grid-column controlled by inline style via colSpan) */
-  .panels-grid .panel-wide {
-    min-height: 250px;
-  }
-  .panels-grid .panel-news {
-    min-height: 220px;
-  }
-  .panels-grid .panel-live {
-    min-height: 220px;
-  }
 }
 
 /* Mobile */
@@ -255,9 +245,116 @@ body.resize-active .map-container {
     padding: 0;
   }
   .map-section {
-    height: calc(100dvh - 48px) !important;
-    min-height: 60vh !important;
+    height: calc(100dvh - 48px - 52px) !important; /* account for mobile tab bar */
+    min-height: 50vh !important;
   }
+  /* Mobile: single-column cards */
+  .panel-wide {
+    grid-column: span 1 !important;
+  }
+  .panel {
+    grid-column: span 1 !important;
+  }
+
+  /* Mobile panel fullscreen view */
+  .mobile-panel-view {
+    position: fixed;
+    inset: 36px 0 52px 0; /* below header, above tab bar */
+    z-index: 40;
+    background: var(--bg);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .mobile-panel-view .panel {
+    flex: 1;
+    border: none;
+    min-height: 100%;
+  }
+}
+
+/* Mobile tab bar */
+.mobile-tab-bar {
+  display: flex;
+  align-items: stretch;
+  height: 52px;
+  background: var(--panel-bg);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 50;
+}
+
+.mobile-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  cursor: pointer;
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.mobile-tab.active {
+  color: var(--green);
+}
+
+.mobile-tab-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.mobile-tab-label {
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* More menu */
+.mobile-more-menu {
+  position: fixed;
+  bottom: 52px;
+  left: 0;
+  right: 0;
+  z-index: 55;
+  background: var(--panel-bg);
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  padding: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.mobile-more-item {
+  padding: 8px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: capitalize;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-more-item.active {
+  color: var(--green);
+  border-color: rgba(34, 197, 94, 0.3);
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.mobile-more-item:active {
+  background: var(--surface-hover);
 }
 
 /* === Panel Component === */
@@ -272,11 +369,9 @@ body.resize-active .map-container {
   min-width: 0;
   grid-row: span 2;
   box-shadow: 0 0 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.02);
-  cursor: grab;
+  cursor: default;
   transition: transform 0.15s, box-shadow 0.15s;
 }
-
-.panel:active { cursor: grabbing; }
 
 /* Drag handle (grip dots) */
 .drag-handle {
@@ -285,6 +380,7 @@ body.resize-active .map-container {
   justify-content: center;
   width: 14px;
   height: 20px;
+  touch-action: none;
   color: var(--text-ghost);
   cursor: grab;
   opacity: 0;
@@ -297,6 +393,9 @@ body.resize-active .map-container {
 }
 .drag-handle:hover {
   color: var(--text-muted);
+}
+.drag-handle:active {
+  cursor: grabbing;
 }
 .drag-handle:active {
   cursor: grabbing;
@@ -373,7 +472,6 @@ body.resize-active .map-container {
 
 .panel-wide {
   /* grid-column now controlled by inline style via colSpan */
-  min-height: 200px;
 }
 
 .panel-header {
@@ -422,6 +520,7 @@ body.resize-active .map-container {
   flex: 1;
   overflow-y: auto;
   padding: 8px;
+  min-height: 0;
   min-width: 0;
 }
 
@@ -1018,13 +1117,10 @@ body.resize-active .map-container {
 
 /* === Panel Row Resize Handle (bottom edge) === */
 .panel-row-resize-handle {
-  position: absolute;
-  bottom: 0;
-  left: 0;
+  flex-shrink: 0;
   width: 100%;
   height: 16px;
   cursor: ns-resize;
-  z-index: 15;
   display: flex;
   align-items: center;
   justify-content: center;

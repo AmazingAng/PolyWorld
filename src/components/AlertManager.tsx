@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import type { AlertConfig, AlertHistoryEntry } from "@/hooks/useAlerts";
+import type { AlertConfig, AlertHistoryEntry, AlertType } from "@/hooks/useAlerts";
 import type { ProcessedMarket, Category } from "@/types";
+import type { SignalType } from "@/lib/smartSignals";
 
 const CATEGORIES: Category[] = [
   "Politics", "Crypto", "Sports",
@@ -27,7 +28,6 @@ interface AlertManagerProps {
 }
 
 type Tab = "alerts" | "history";
-type AlertType = "price_cross" | "new_market";
 
 export default function AlertManager({
   open,
@@ -56,6 +56,10 @@ export default function AlertManager({
   const [formDirection, setFormDirection] = useState<"above" | "below">("above");
   const [formCategory, setFormCategory] = useState<Category | "">("");
   const [formTag, setFormTag] = useState("");
+  const [formSignalType, setFormSignalType] = useState<SignalType | "">("");
+  const [formSignalStrength, setFormSignalStrength] = useState<"strong" | "moderate" | "weak">("moderate");
+  const [formMinUsdcSize, setFormMinUsdcSize] = useState("5000");
+  const [formHoursBeforeEnd, setFormHoursBeforeEnd] = useState("24");
   const [showForm, setShowForm] = useState(!!prefill);
 
   // Update when prefill changes
@@ -102,6 +106,40 @@ export default function AlertManager({
         threshold: parseFloat(formThreshold),
         direction: formDirection,
       });
+    } else if (formType === "smart_signal") {
+      onAddAlert({
+        type: "smart_signal",
+        signalType: formSignalType || undefined,
+        signalStrength: formSignalStrength,
+      });
+    } else if (formType === "whale_trade") {
+      onAddAlert({
+        type: "whale_trade",
+        marketId: formMarketId || undefined,
+        marketTitle: formMarketTitle || undefined,
+        minUsdcSize: parseFloat(formMinUsdcSize) || 5000,
+      });
+    } else if (formType === "resolution_imminent") {
+      onAddAlert({
+        type: "resolution_imminent",
+        marketId: formMarketId || undefined,
+        marketTitle: formMarketTitle || undefined,
+        category: formCategory || undefined,
+        hoursBeforeEnd: parseFloat(formHoursBeforeEnd) || 24,
+      });
+    } else if (formType === "smart_divergence") {
+      onAddAlert({
+        type: "smart_divergence",
+        marketId: formMarketId || undefined,
+        marketTitle: formMarketTitle || undefined,
+      });
+    } else if (formType === "news_impact") {
+      onAddAlert({
+        type: "news_impact",
+        marketId: formMarketId || undefined,
+        marketTitle: formMarketTitle || undefined,
+        tag: formTag || undefined,
+      });
     } else {
       onAddAlert({
         type: "new_market",
@@ -117,6 +155,10 @@ export default function AlertManager({
     setFormDirection("above");
     setFormCategory("");
     setFormTag("");
+    setFormSignalType("");
+    setFormSignalStrength("moderate");
+    setFormMinUsdcSize("5000");
+    setFormHoursBeforeEnd("24");
     setShowForm(false);
   };
 
@@ -220,10 +262,27 @@ export default function AlertManager({
                     {alerts.map((alert) => (
                       <div key={alert.id} className="alert-item">
                         {/* Type icon */}
-                        <div className={`alert-type-icon ${alert.type === "price_cross" ? "alert-type-price" : "alert-type-new"}`}>
+                        <div className={`alert-type-icon ${alert.type === "price_cross" || alert.type === "smart_signal" || alert.type === "smart_divergence" ? "alert-type-price" : "alert-type-new"}`}>
                           {alert.type === "price_cross" ? (
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                            </svg>
+                          ) : alert.type === "smart_signal" || alert.type === "smart_divergence" ? (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M2 12h4l3-9 6 18 3-9h4" />
+                            </svg>
+                          ) : alert.type === "whale_trade" ? (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                            </svg>
+                          ) : alert.type === "resolution_imminent" ? (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="12" cy="12" r="10" />
+                              <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                          ) : alert.type === "news_impact" ? (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2zm0 0a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2" />
                             </svg>
                           ) : (
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -242,6 +301,33 @@ export default function AlertManager({
                               <span className={alert.direction === "above" ? "alert-val-green" : "alert-val-red"}>
                                 {alert.threshold}%
                               </span>
+                            </div>
+                          ) : alert.type === "smart_signal" ? (
+                            <div className="alert-item-desc">
+                              Smart signal
+                              {alert.signalType && <span className="alert-item-market"> ({alert.signalType.replace(/_/g, " ")})</span>}
+                              {alert.signalStrength && <span className="alert-item-market"> min: {alert.signalStrength}</span>}
+                            </div>
+                          ) : alert.type === "whale_trade" ? (
+                            <div className="alert-item-desc">
+                              Whale trade{alert.marketTitle ? <span className="alert-item-market"> on {alert.marketTitle}</span> : " (any market)"}
+                              <span className="alert-item-market"> min ${((alert.minUsdcSize || 5000) / 1000).toFixed(0)}k</span>
+                            </div>
+                          ) : alert.type === "resolution_imminent" ? (
+                            <div className="alert-item-desc">
+                              Resolution imminent
+                              {alert.marketTitle ? <span className="alert-item-market"> — {alert.marketTitle}</span> : alert.category ? <span className="alert-item-market"> — {alert.category}</span> : " (any market)"}
+                              <span className="alert-item-market"> within {alert.hoursBeforeEnd || 24}h</span>
+                            </div>
+                          ) : alert.type === "smart_divergence" ? (
+                            <div className="alert-item-desc">
+                              Smart money divergence
+                              {alert.marketTitle ? <span className="alert-item-market"> on {alert.marketTitle}</span> : " (any market)"}
+                            </div>
+                          ) : alert.type === "news_impact" ? (
+                            <div className="alert-item-desc">
+                              News impact
+                              {alert.marketTitle ? <span className="alert-item-market"> on {alert.marketTitle}</span> : alert.tag ? <span className="alert-item-market"> matching &quot;{alert.tag}&quot;</span> : " (any)"}
                             </div>
                           ) : (
                             <div className="alert-item-desc">
@@ -302,21 +388,43 @@ export default function AlertManager({
                         onClick={() => setFormType("price_cross")}
                         className={`alert-type-btn ${formType === "price_cross" ? "active" : ""}`}
                       >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                        </svg>
                         Price Cross
                       </button>
                       <button
                         onClick={() => setFormType("new_market")}
                         className={`alert-type-btn ${formType === "new_market" ? "active" : ""}`}
                       >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="12" cy="12" r="10" />
-                          <line x1="12" y1="8" x2="12" y2="16" />
-                          <line x1="8" y1="12" x2="16" y2="12" />
-                        </svg>
                         New Market
+                      </button>
+                      <button
+                        onClick={() => setFormType("smart_signal")}
+                        className={`alert-type-btn ${formType === "smart_signal" ? "active" : ""}`}
+                      >
+                        Smart Signal
+                      </button>
+                      <button
+                        onClick={() => setFormType("whale_trade")}
+                        className={`alert-type-btn ${formType === "whale_trade" ? "active" : ""}`}
+                      >
+                        Whale Trade
+                      </button>
+                      <button
+                        onClick={() => setFormType("resolution_imminent")}
+                        className={`alert-type-btn ${formType === "resolution_imminent" ? "active" : ""}`}
+                      >
+                        Resolution
+                      </button>
+                      <button
+                        onClick={() => setFormType("smart_divergence")}
+                        className={`alert-type-btn ${formType === "smart_divergence" ? "active" : ""}`}
+                      >
+                        Divergence
+                      </button>
+                      <button
+                        onClick={() => setFormType("news_impact")}
+                        className={`alert-type-btn ${formType === "news_impact" ? "active" : ""}`}
+                      >
+                        News Impact
                       </button>
                     </div>
 
@@ -435,6 +543,289 @@ export default function AlertManager({
                             value={formTag}
                             onChange={(e) => setFormTag(e.target.value)}
                             placeholder="e.g. bitcoin, election"
+                            className="alert-input"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {formType === "smart_signal" && (
+                      <div className="alert-form-fields">
+                        <div className="alert-field">
+                          <label className="alert-field-label">Signal type (optional)</label>
+                          <div className="alert-category-grid">
+                            <button
+                              onClick={() => setFormSignalType("")}
+                              className={`alert-cat-btn ${!formSignalType ? "active" : ""}`}
+                            >
+                              Any
+                            </button>
+                            {(["whale_accumulation", "smart_divergence", "cluster_activity", "momentum_shift"] as SignalType[]).map((st) => (
+                              <button
+                                key={st}
+                                onClick={() => setFormSignalType(st)}
+                                className={`alert-cat-btn ${formSignalType === st ? "active" : ""}`}
+                              >
+                                {st.replace(/_/g, " ")}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="alert-field">
+                          <label className="alert-field-label">Minimum strength</label>
+                          <div className="alert-direction-btns">
+                            {(["weak", "moderate", "strong"] as const).map((s) => (
+                              <button
+                                key={s}
+                                onClick={() => setFormSignalStrength(s)}
+                                className={`alert-dir-btn ${formSignalStrength === s ? "alert-dir-above" : ""}`}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {formType === "whale_trade" && (
+                      <div className="alert-form-fields">
+                        <div className="alert-field">
+                          <label className="alert-field-label">Market (optional — leave empty for any)</label>
+                          <div className="alert-search-wrap">
+                            <input
+                              type="text"
+                              value={formMarketSearch}
+                              onChange={(e) => {
+                                setFormMarketSearch(e.target.value);
+                                setFormMarketId("");
+                                setFormMarketTitle("");
+                              }}
+                              placeholder="Search markets..."
+                              className="alert-input"
+                            />
+                            {searchResults.length > 0 && !formMarketId && (
+                              <div className="alert-search-results">
+                                {searchResults.map((m) => (
+                                  <button
+                                    key={m.id}
+                                    onClick={() => {
+                                      setFormMarketId(m.id);
+                                      setFormMarketTitle(m.title);
+                                      setFormMarketSearch(m.title);
+                                    }}
+                                    className="alert-search-item"
+                                  >
+                                    {m.title}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {formMarketId && (
+                              <div className="alert-selected-market">
+                                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <polyline points="3 8 7 12 13 4" />
+                                </svg>
+                                {formMarketTitle}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="alert-field">
+                          <label className="alert-field-label">Minimum trade size (USDC)</label>
+                          <input
+                            type="number"
+                            value={formMinUsdcSize}
+                            onChange={(e) => setFormMinUsdcSize(e.target.value)}
+                            min="1000"
+                            step="1000"
+                            className="alert-input"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {formType === "resolution_imminent" && (
+                      <div className="alert-form-fields">
+                        <div className="alert-field">
+                          <label className="alert-field-label">Market (optional)</label>
+                          <div className="alert-search-wrap">
+                            <input
+                              type="text"
+                              value={formMarketSearch}
+                              onChange={(e) => {
+                                setFormMarketSearch(e.target.value);
+                                setFormMarketId("");
+                                setFormMarketTitle("");
+                              }}
+                              placeholder="Search markets..."
+                              className="alert-input"
+                            />
+                            {searchResults.length > 0 && !formMarketId && (
+                              <div className="alert-search-results">
+                                {searchResults.map((m) => (
+                                  <button
+                                    key={m.id}
+                                    onClick={() => {
+                                      setFormMarketId(m.id);
+                                      setFormMarketTitle(m.title);
+                                      setFormMarketSearch(m.title);
+                                    }}
+                                    className="alert-search-item"
+                                  >
+                                    {m.title}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {formMarketId && (
+                              <div className="alert-selected-market">
+                                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <polyline points="3 8 7 12 13 4" />
+                                </svg>
+                                {formMarketTitle}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="alert-field-row">
+                          <div className="alert-field alert-field-half">
+                            <label className="alert-field-label">Hours before end</label>
+                            <input
+                              type="number"
+                              value={formHoursBeforeEnd}
+                              onChange={(e) => setFormHoursBeforeEnd(e.target.value)}
+                              min="1"
+                              max="168"
+                              step="1"
+                              className="alert-input"
+                            />
+                          </div>
+                          <div className="alert-field alert-field-half">
+                            <label className="alert-field-label">Category (optional)</label>
+                            <div className="alert-category-grid">
+                              <button
+                                onClick={() => setFormCategory("")}
+                                className={`alert-cat-btn ${!formCategory ? "active" : ""}`}
+                              >
+                                Any
+                              </button>
+                              {CATEGORIES.map((cat) => (
+                                <button
+                                  key={cat}
+                                  onClick={() => setFormCategory(cat)}
+                                  className={`alert-cat-btn ${formCategory === cat ? "active" : ""}`}
+                                >
+                                  {cat}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {formType === "smart_divergence" && (
+                      <div className="alert-form-fields">
+                        <div className="alert-field">
+                          <label className="alert-field-label">Market (optional — leave empty for any)</label>
+                          <div className="alert-search-wrap">
+                            <input
+                              type="text"
+                              value={formMarketSearch}
+                              onChange={(e) => {
+                                setFormMarketSearch(e.target.value);
+                                setFormMarketId("");
+                                setFormMarketTitle("");
+                              }}
+                              placeholder="Search markets..."
+                              className="alert-input"
+                            />
+                            {searchResults.length > 0 && !formMarketId && (
+                              <div className="alert-search-results">
+                                {searchResults.map((m) => (
+                                  <button
+                                    key={m.id}
+                                    onClick={() => {
+                                      setFormMarketId(m.id);
+                                      setFormMarketTitle(m.title);
+                                      setFormMarketSearch(m.title);
+                                    }}
+                                    className="alert-search-item"
+                                  >
+                                    {m.title}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {formMarketId && (
+                              <div className="alert-selected-market">
+                                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <polyline points="3 8 7 12 13 4" />
+                                </svg>
+                                {formMarketTitle}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="alert-field">
+                          <span className="alert-field-label" style={{ color: "var(--text-dim)" }}>
+                            Alerts when smart money trades against the market consensus (e.g. buying when price is low, selling when high)
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {formType === "news_impact" && (
+                      <div className="alert-form-fields">
+                        <div className="alert-field">
+                          <label className="alert-field-label">Market (optional)</label>
+                          <div className="alert-search-wrap">
+                            <input
+                              type="text"
+                              value={formMarketSearch}
+                              onChange={(e) => {
+                                setFormMarketSearch(e.target.value);
+                                setFormMarketId("");
+                                setFormMarketTitle("");
+                              }}
+                              placeholder="Search markets..."
+                              className="alert-input"
+                            />
+                            {searchResults.length > 0 && !formMarketId && (
+                              <div className="alert-search-results">
+                                {searchResults.map((m) => (
+                                  <button
+                                    key={m.id}
+                                    onClick={() => {
+                                      setFormMarketId(m.id);
+                                      setFormMarketTitle(m.title);
+                                      setFormMarketSearch(m.title);
+                                    }}
+                                    className="alert-search-item"
+                                  >
+                                    {m.title}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {formMarketId && (
+                              <div className="alert-selected-market">
+                                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <polyline points="3 8 7 12 13 4" />
+                                </svg>
+                                {formMarketTitle}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="alert-field">
+                          <label className="alert-field-label">Keyword (optional — used if no market selected)</label>
+                          <input
+                            type="text"
+                            value={formTag}
+                            onChange={(e) => setFormTag(e.target.value)}
+                            placeholder="e.g. bitcoin, trump, fed"
                             className="alert-input"
                           />
                         </div>

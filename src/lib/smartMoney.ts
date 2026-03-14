@@ -1,3 +1,5 @@
+import { fetchWithRetry } from "./retry";
+
 const DATA_API_BASE = "https://data-api.polymarket.com";
 const REQUEST_TIMEOUT = 10_000;
 const RATE_LIMIT_MS = 200;
@@ -10,14 +12,7 @@ async function rateLimitedFetch(url: string): Promise<Response> {
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastRequestTime = Date.now();
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    return res;
-  } finally {
-    clearTimeout(timeout);
-  }
+  return fetchWithRetry(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) }, 2);
 }
 
 export interface LeaderboardEntry {
@@ -29,15 +24,29 @@ export interface LeaderboardEntry {
   rank: number;
 }
 
+interface LeaderboardApiEntry {
+  proxyWallet?: string;
+  address?: string;
+  wallet?: string;
+  userName?: string;
+  username?: string | null;
+  profileImage?: string;
+  profileImageOptimized?: string;
+  pnl?: number | string;
+  vol?: number | string;
+  volume?: number | string;
+  rank?: number | string;
+}
+
 /**
  * Actual API response shape (array):
  * { rank: "1", proxyWallet: "0x...", userName: "Theo4", vol: 43251303, pnl: 22053933, profileImage: "" }
  */
-function parseLeaderboardEntries(data: Record<string, unknown>[]): LeaderboardEntry[] {
+function parseLeaderboardEntries(data: LeaderboardApiEntry[]): LeaderboardEntry[] {
   return data.map((e, i) => ({
     address: String(e.proxyWallet || e.address || e.wallet || ""),
-    username: (e.userName || e.username || null) as string | null,
-    profileImage: ((e.profileImage || e.profileImageOptimized || null) as string | null) || null,
+    username: e.userName || e.username || null,
+    profileImage: e.profileImage || e.profileImageOptimized || null,
     pnl: parseFloat(String(e.pnl || 0)),
     volume: parseFloat(String(e.vol || e.volume || 0)),
     rank: parseInt(String(e.rank), 10) || i + 1,
@@ -72,11 +81,14 @@ export async function fetchLeaderboard(limit = 50, timePeriod: LeaderboardTimePe
  */
 export async function fetchFullLeaderboard(minPnl = 100_000): Promise<LeaderboardEntry[]> {
   const PAGE_SIZE = 50;
+  const MAX_PAGES = 200;
   const all: LeaderboardEntry[] = [];
   let offset = 0;
+  let page = 0;
 
   try {
-    while (true) {
+    while (page < MAX_PAGES) {
+      page++;
       const res = await rateLimitedFetch(
         `${DATA_API_BASE}/v1/leaderboard?orderBy=PNL&timePeriod=all&limit=${PAGE_SIZE}&offset=${offset}`
       );
@@ -116,6 +128,24 @@ export interface MarketTrade {
   eventSlug: string;
 }
 
+interface TradeApiEntry {
+  timestamp?: number | string;
+  size?: number | string;
+  price?: number | string;
+  proxyWallet?: string;
+  wallet?: string;
+  maker?: string;
+  name?: string;
+  userName?: string;
+  pseudonym?: string;
+  conditionId?: string;
+  side?: string;
+  outcome?: string;
+  title?: string;
+  slug?: string;
+  eventSlug?: string;
+}
+
 /**
  * Actual API response shape (array):
  * { proxyWallet: "0x...", side: "BUY"|"SELL", size: 5536.88, price: 0.931,
@@ -136,7 +166,7 @@ export async function fetchMarketTrades(
     if (!res.ok) return [];
     const data = await res.json();
     const trades = Array.isArray(data) ? data : data.trades || data.data || [];
-    return trades.map((t: Record<string, unknown>) => {
+    return trades.map((t: TradeApiEntry) => {
       // timestamp may be unix seconds (number) or ISO string
       let ts = t.timestamp;
       if (typeof ts === "number") {
@@ -148,9 +178,9 @@ export async function fetchMarketTrades(
 
       return {
         wallet: String(t.proxyWallet || t.wallet || t.maker || ""),
-        username: (t.name || t.userName || t.pseudonym || null) as string | null,
+        username: t.name || t.userName || t.pseudonym || null,
         conditionId: String(t.conditionId || conditionId),
-        side: (String(t.side || "BUY").toUpperCase() === "SELL" ? "SELL" : "BUY") as "BUY" | "SELL",
+        side: String(t.side || "BUY").toUpperCase() === "SELL" ? "SELL" : "BUY",
         size: parseFloat(String(t.size || 0)),
         price: parseFloat(String(t.price || 0)),
         usdcSize,
@@ -173,6 +203,16 @@ export interface HolderInfo {
   outcome: string;
 }
 
+interface HolderApiEntry {
+  proxyWallet?: string;
+  address?: string;
+  wallet?: string;
+  amount?: number | string;
+  balance?: number | string;
+  shares?: number | string;
+  outcome?: string;
+}
+
 export async function fetchTopHolders(conditionId: string): Promise<HolderInfo[]> {
   try {
     const res = await rateLimitedFetch(
@@ -181,7 +221,7 @@ export async function fetchTopHolders(conditionId: string): Promise<HolderInfo[]
     if (!res.ok) return [];
     const data = await res.json();
     const holders = Array.isArray(data) ? data : data.holders || data.data || [];
-    return holders.map((h: Record<string, unknown>) => ({
+    return holders.map((h: HolderApiEntry) => ({
       wallet: String(h.proxyWallet || h.address || h.wallet || ""),
       amount: parseFloat(String(h.amount || h.balance || h.shares || 0)),
       outcome: String(h.outcome || ""),
@@ -199,6 +239,16 @@ export interface WalletPosition {
   value: number;
 }
 
+interface PositionApiEntry {
+  conditionId?: string;
+  market?: string;
+  outcome?: string;
+  size?: number | string;
+  shares?: number | string;
+  currentValue?: number | string;
+  value?: number | string;
+}
+
 export async function fetchWalletPositions(wallet: string): Promise<WalletPosition[]> {
   try {
     const res = await rateLimitedFetch(
@@ -207,7 +257,7 @@ export async function fetchWalletPositions(wallet: string): Promise<WalletPositi
     if (!res.ok) return [];
     const data = await res.json();
     const positions = Array.isArray(data) ? data : data.positions || data.data || [];
-    return positions.map((p: Record<string, unknown>) => ({
+    return positions.map((p: PositionApiEntry) => ({
       conditionId: String(p.conditionId || p.market || ""),
       outcome: String(p.outcome || ""),
       size: parseFloat(String(p.size || p.shares || 0)),
@@ -245,7 +295,26 @@ export interface TraderActivity {
   transactionHash: string;
 }
 
-function parseTraderPosition(p: Record<string, unknown>, redeemed: boolean): TraderPosition {
+interface TraderPositionApiEntry {
+  conditionId?: string;
+  market?: string;
+  title?: string;
+  marketTitle?: string;
+  question?: string;
+  outcome?: string;
+  size?: number | string;
+  shares?: number | string;
+  avgPrice?: number | string;
+  averagePrice?: number | string;
+  currentValue?: number | string;
+  value?: number | string;
+  cashPnl?: number | string;
+  percentPnl?: number | string;
+  totalBought?: number | string;
+  realizedPnl?: number | string;
+}
+
+function parseTraderPosition(p: TraderPositionApiEntry, redeemed: boolean): TraderPosition {
   if (redeemed) {
     // Closed positions: API provides totalBought, realizedPnl, avgPrice, curPrice — no size/currentValue
     const totalBought = parseFloat(String(p.totalBought || 0));
@@ -294,13 +363,32 @@ export async function fetchTraderPositions(wallet: string): Promise<TraderPositi
     const openArr = Array.isArray(openData) ? openData : openData.positions || openData.data || [];
     const closedArr = Array.isArray(closedData) ? closedData : closedData.positions || closedData.data || [];
     return [
-      ...openArr.map((p: Record<string, unknown>) => parseTraderPosition(p, false)),
-      ...closedArr.map((p: Record<string, unknown>) => parseTraderPosition(p, true)),
+      ...openArr.map((p: TraderPositionApiEntry) => parseTraderPosition(p, false)),
+      ...closedArr.map((p: TraderPositionApiEntry) => parseTraderPosition(p, true)),
     ];
   } catch (err) {
     console.error(`[smartMoney] Trader positions fetch error for ${wallet}:`, err);
     return [];
   }
+}
+
+interface ActivityApiEntry {
+  timestamp?: number | string;
+  type?: string;
+  action?: string;
+  title?: string;
+  marketTitle?: string;
+  question?: string;
+  outcome?: string;
+  side?: string;
+  size?: number | string;
+  shares?: number | string;
+  usdcSize?: number | string;
+  amount?: number | string;
+  price?: number | string;
+  transactionHash?: string;
+  txHash?: string;
+  hash?: string;
 }
 
 export async function fetchTraderActivity(wallet: string, limit = 100): Promise<TraderActivity[]> {
@@ -311,7 +399,7 @@ export async function fetchTraderActivity(wallet: string, limit = 100): Promise<
     if (!res.ok) return [];
     const data = await res.json();
     const items = Array.isArray(data) ? data : data.activity || data.data || [];
-    return items.map((a: Record<string, unknown>) => {
+    return items.map((a: ActivityApiEntry) => {
       let ts = a.timestamp;
       if (typeof ts === "number") {
         ts = ts < 1e12 ? new Date(ts * 1000).toISOString() : new Date(ts).toISOString();
@@ -323,7 +411,7 @@ export async function fetchTraderActivity(wallet: string, limit = 100): Promise<
         type,
         title: String(a.title || a.marketTitle || a.question || ""),
         outcome: String(a.outcome || ""),
-        side: (String(a.side || "BUY").toUpperCase() === "SELL" ? "SELL" : "BUY") as "BUY" | "SELL",
+        side: String(a.side || "BUY").toUpperCase() === "SELL" ? "SELL" : "BUY",
         size: parseFloat(String(a.size || a.shares || 0)),
         usdcSize: parseFloat(String(a.usdcSize || a.amount || 0)) || parseFloat(String(a.size || 0)) * parseFloat(String(a.price || 0)),
         price: parseFloat(String(a.price || 0)),

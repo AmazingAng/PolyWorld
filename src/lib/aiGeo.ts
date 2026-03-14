@@ -19,6 +19,16 @@ interface GeoResult {
   confidence: number;
 }
 
+interface AiGeoRawResult {
+  id?: string;
+  lat?: number | null;
+  lng?: number | null;
+  location?: string | null;
+  city?: string | null;
+  country?: string | null;
+  confidence?: number;
+}
+
 export async function aiGeocodeBatch(markets: MarketInput[]): Promise<GeoResult[]> {
   if (markets.length === 0) return [];
 
@@ -44,20 +54,21 @@ Return ONLY a JSON array with objects: {"id": "...", "lat": number|null, "lng": 
 
 Return ONLY valid JSON, no other text.`;
 
+  const AI_TIMEOUT_MS = 30_000;
   let response;
   try {
     response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 4000,
       messages: [{ role: "user", content: prompt }],
-    });
+    }, { timeout: AI_TIMEOUT_MS });
   } catch {
     if (!fallbackClient) throw new Error("AI primary failed and no fallback configured");
     response = await fallbackClient.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 4000,
       messages: [{ role: "user", content: prompt }],
-    });
+    }, { timeout: AI_TIMEOUT_MS });
   }
 
   const text = response.content
@@ -72,16 +83,16 @@ Return ONLY valid JSON, no other text.`;
   const parsed = JSON.parse(jsonMatch[0]);
   if (!Array.isArray(parsed)) return [];
 
-  return parsed
-    .filter((item: Record<string, unknown>) => typeof item.id === "string")
-    .map((item: Record<string, unknown>) => ({
-      id: item.id as string,
-      lat: typeof item.lat === "number" && isFinite(item.lat as number) ? item.lat as number : null,
-      lng: typeof item.lng === "number" && isFinite(item.lng as number) ? item.lng as number : null,
+  return (parsed as AiGeoRawResult[])
+    .filter((item): item is AiGeoRawResult & { id: string } => typeof item.id === "string")
+    .map((item) => ({
+      id: item.id,
+      lat: typeof item.lat === "number" && isFinite(item.lat) ? item.lat : null,
+      lng: typeof item.lng === "number" && isFinite(item.lng) ? item.lng : null,
       location: typeof item.location === "string" ? item.location : null,
       city: typeof item.city === "string" ? item.city : null,
       country: typeof item.country === "string" ? item.country : null,
-      confidence: typeof item.confidence === "number" ? Math.min(1, Math.max(0, item.confidence as number)) : 0,
+      confidence: typeof item.confidence === "number" ? Math.min(1, Math.max(0, item.confidence)) : 0,
     }));
 }
 
@@ -166,7 +177,7 @@ export async function processUnGeocodedMarkets(db: Database.Database): Promise<n
         }
       }
       totalProcessed += rows.length;
-      console.log(`[aiGeo] Regex fallback: ${rows.length} processed`);
+      console.info(`[aiGeo] Regex fallback: ${rows.length} processed`);
       continue;
     }
 
@@ -215,10 +226,10 @@ export async function processUnGeocodedMarkets(db: Database.Database): Promise<n
         }
       }
       totalProcessed += batch.length;
-      console.log(`[aiGeo] Progress: ${totalProcessed} processed`);
+      console.info(`[aiGeo] Progress: ${totalProcessed} processed`);
     }
   }
 
-  console.log(`[aiGeo] Done — ${totalProcessed} markets total`);
+  console.info(`[aiGeo] Done — ${totalProcessed} markets total`);
   return totalProcessed;
 }

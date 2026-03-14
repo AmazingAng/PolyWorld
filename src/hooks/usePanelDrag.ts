@@ -202,10 +202,8 @@ export function usePanelDrag(config: {
       startY = clientY;
       active = false;
 
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-      document.addEventListener("touchmove", onTouchMove, { passive: false });
-      document.addEventListener("touchend", onTouchEnd);
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
     }
 
     function moveDrag(clientX: number, clientY: number) {
@@ -231,10 +229,8 @@ export function usePanelDrag(config: {
     }
 
     function endDrag() {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-      document.removeEventListener("touchmove", onTouchMove);
-      document.removeEventListener("touchend", onTouchEnd);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
       document.body.classList.remove("panel-drag-active");
@@ -308,43 +304,34 @@ export function usePanelDrag(config: {
       configRef.current.onDragStateChange?.(false);
     }
 
-    function onMouseDown(e: MouseEvent) {
+    // Unified Pointer Events for mouse + touch
+    function onPointerDown(e: PointerEvent) {
       if (e.button !== 0) return;
       beginDrag(e.clientX, e.clientY, e.target as HTMLElement);
     }
-    function onMouseMove(e: MouseEvent) {
+    function onPointerMove(e: PointerEvent) {
       moveDrag(e.clientX, e.clientY);
     }
-    function onMouseUp() {
+    function onPointerUp() {
       endDrag();
     }
-    function onTouchStart(e: TouchEvent) {
-      const t = e.touches[0];
-      beginDrag(t.clientX, t.clientY, e.target as HTMLElement);
-    }
-    function onTouchMove(e: TouchEvent) {
-      e.preventDefault();
-      const t = e.touches[0];
-      moveDrag(t.clientX, t.clientY);
-    }
-    function onTouchEnd() {
-      endDrag();
+    // Prevent default touch scrolling while dragging
+    function onTouchMovePrevent(e: TouchEvent) {
+      if (active) e.preventDefault();
     }
 
     for (const container of containers) {
-      container.addEventListener("mousedown", onMouseDown);
-      container.addEventListener("touchstart", onTouchStart, { passive: true });
+      container.addEventListener("pointerdown", onPointerDown);
+      container.addEventListener("touchmove", onTouchMovePrevent, { passive: false });
     }
 
     return () => {
       for (const container of containers) {
-        container.removeEventListener("mousedown", onMouseDown);
-        container.removeEventListener("touchstart", onTouchStart);
+        container.removeEventListener("pointerdown", onPointerDown);
+        container.removeEventListener("touchmove", onTouchMovePrevent);
       }
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-      document.removeEventListener("touchmove", onTouchMove);
-      document.removeEventListener("touchend", onTouchEnd);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
       removeGhost();
     };
   }, []);

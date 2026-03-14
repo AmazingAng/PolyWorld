@@ -5,7 +5,7 @@ interface MarketState {
   mapped: ProcessedMarket[];
   unmapped: ProcessedMarket[];
   loading: boolean;
-  dataMode: "live" | "proxy" | "sample";
+  dataMode: "live" | "sample";
   lastRefresh: string | null;
   lastSyncTime: string | null;
   signals: ProcessedMarket[];
@@ -19,7 +19,7 @@ interface MarketActions {
   setMapped: (mapped: ProcessedMarket[]) => void;
   setUnmapped: (unmapped: ProcessedMarket[]) => void;
   setLoading: (loading: boolean) => void;
-  setDataMode: (mode: "live" | "proxy" | "sample") => void;
+  setDataMode: (mode: "live" | "sample") => void;
   setLastRefresh: (time: string | null) => void;
   setLastSyncTime: (time: string | null) => void;
   setSignals: (signals: ProcessedMarket[]) => void;
@@ -55,6 +55,13 @@ export const useMarketStore = create<MarketState & MarketActions>((set) => ({
     try {
       if (market) sessionStorage.setItem("pw:selectedMarket", market.id);
       else sessionStorage.removeItem("pw:selectedMarket");
+      // Sync URL deep link
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        if (market) url.searchParams.set("m", market.id);
+        else url.searchParams.delete("m");
+        window.history.replaceState(null, "", url.toString());
+      }
     } catch {}
   },
   selectCountry: (country) => {

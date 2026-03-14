@@ -1,5 +1,6 @@
 import { PolymarketEvent, ProcessedMarket } from "@/types";
 import { detectCategory } from "./categories";
+import { fetchWithRetry } from "./retry";
 
 const API_BASE = "https://gamma-api.polymarket.com";
 
@@ -19,7 +20,7 @@ export async function fetchEventsFromAPI(): Promise<PolymarketEvent[]> {
       offsets.map(async (off) => {
         const url = `${API_BASE}/events?active=true&closed=false&limit=${BATCH}&offset=${off}&order=volume24hr&ascending=false`;
         try {
-          const res = await fetch(url, { next: { revalidate: 30 } });
+          const res = await fetchWithRetry(url, { next: { revalidate: 30 }, signal: AbortSignal.timeout(10_000) } as RequestInit, 2);
           if (!res.ok) return [];
           return res.json();
         } catch {
@@ -53,7 +54,7 @@ export async function fetchEventsFromAPI(): Promise<PolymarketEvent[]> {
   // Also fetch recently closed events (top 100 by volume) to update status
   try {
     const closedUrl = `${API_BASE}/events?closed=true&limit=200&offset=0&order=volume24hr&ascending=false`;
-    const res = await fetch(closedUrl, { next: { revalidate: 60 } });
+    const res = await fetch(closedUrl, { next: { revalidate: 60 }, signal: AbortSignal.timeout(15_000) });
     if (res.ok) {
       const data = await res.json();
       const arr = Array.isArray(data) ? data : data?.data || data?.events || [];
@@ -68,7 +69,7 @@ export async function fetchEventsFromAPI(): Promise<PolymarketEvent[]> {
     // Non-critical, skip
   }
 
-  console.log(`[polymarket] Fetched ${events.length} events (active + recently closed)`);
+  console.info(`[polymarket] Fetched ${events.length} events (active + recently closed)`);
   return events;
 }
 
@@ -168,6 +169,7 @@ export function processEvents(events: PolymarketEvent[]): {
       createdAt: event.startDate || event.createdAt || null,
       impactScore: 0,
       impactLevel: "info",
+      negRisk: event.negRisk === true,
     };
 
     unmapped.push(item);

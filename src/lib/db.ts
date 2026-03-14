@@ -10,9 +10,11 @@ let db: Database.Database | null = null;
 export function getDb(): Database.Database {
   if (db) return db;
 
-  fs.mkdirSync(DB_DIR, { recursive: true });
+  const dbPath = process.env.DB_PATH || DB_PATH;
+  const dbDir = path.dirname(dbPath);
+  fs.mkdirSync(dbDir, { recursive: true });
 
-  db = new Database(DB_PATH);
+  db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
   db.pragma("busy_timeout = 5000");
 
@@ -20,6 +22,14 @@ export function getDb(): Database.Database {
   migrate(db);
 
   return db;
+}
+
+export function closeDb() {
+  if (db) {
+    db.close();
+    db = null;
+    console.info("[db] Database closed");
+  }
 }
 
 function initSchema(db: Database.Database) {
@@ -197,6 +207,7 @@ function migrate(db: Database.Database) {
     ["ai_geo_done", "INTEGER DEFAULT 0"],
     ["geo_city", "TEXT"],
     ["geo_country", "TEXT"],
+    ["neg_risk", "INTEGER DEFAULT 0"],
   ];
 
   for (const [col, type] of migrations) {
@@ -221,4 +232,48 @@ function migrate(db: Database.Database) {
 
   // Index for AI geocoding queries
   db.exec(`CREATE INDEX IF NOT EXISTS idx_events_ai_geo_done ON events(ai_geo_done)`);
+
+  // Add ai_match_done column to news_items and tweet_items
+  // Prevents infinite re-querying of items that AI found no matches for
+  const newsCols = db.prepare("PRAGMA table_info(news_items)").all() as Array<{ name: string }>;
+  if (!newsCols.some((c) => c.name === "ai_match_done")) {
+    db.exec(`ALTER TABLE news_items ADD COLUMN ai_match_done INTEGER DEFAULT 0`);
+  }
+  const tweetCols = db.prepare("PRAGMA table_info(tweet_items)").all() as Array<{ name: string }>;
+  if (!tweetCols.some((c) => c.name === "ai_match_done")) {
+    db.exec(`ALTER TABLE tweet_items ADD COLUMN ai_match_done INTEGER DEFAULT 0`);
+  }
+
+  // Resolution monitoring tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS resolution_monitors (
+      event_id TEXT PRIMARY KEY,
+      source_type TEXT NOT NULL,
+      feed_url TEXT,
+      org_name TEXT,
+      monitor_config TEXT,
+      last_checked_at TEXT,
+      check_count INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS resolution_alerts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      url TEXT NOT NULL,
+      source TEXT NOT NULL,
+      detected_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      dismissed INTEGER DEFAULT 0,
+      UNIQUE(event_id, url)
+    );
+    CREATE INDEX IF NOT EXISTS idx_resolution_alerts_event ON resolution_alerts(event_id);
+    CREATE INDEX IF NOT EXISTS idx_resolution_alerts_detected ON resolution_alerts(detected_at DESC);
+  `);
+
+  // Add monitor_config column if missing (migration for existing DBs)
+  const monCols = db.prepare("PRAGMA table_info(resolution_monitors)").all() as Array<{ name: string }>;
+  if (monCols.length > 0 && !monCols.some((c) => c.name === "monitor_config")) {
+    db.exec(`ALTER TABLE resolution_monitors ADD COLUMN monitor_config TEXT`);
+  }
 }

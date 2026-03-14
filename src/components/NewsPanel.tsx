@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { ProcessedMarket, NewsItem } from "@/types";
 import { NEWS_SOURCES } from "@/lib/newsSources";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 interface NewsPanelProps {
   selectedMarket: ProcessedMarket | null;
@@ -215,7 +216,7 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
         retryCount.current++;
         setTimeout(fetchNews, delay);
       } else {
-        setError("加载失败");
+        setError("load failed");
       }
     } finally {
       setLoading(false);
@@ -225,9 +226,9 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
   useEffect(() => {
     setLoading(true);
     fetchNews();
-    const timer = setInterval(fetchNews, 120_000);
-    return () => clearInterval(timer);
   }, [fetchNews]);
+
+  useVisibilityPolling(fetchNews, 120_000);
 
   const filteredItems = useMemo(() => {
     if (!sourceFilter) return items;
@@ -285,7 +286,7 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
 
       {/* Error state */}
       {error && !loading && (
-        <div className="text-[11px] text-[var(--red)] font-mono py-2 text-center">
+        <div className="text-[11px] text-[var(--red)] font-mono py-2 text-center" aria-live="polite">
           {error} <button onClick={() => { retryCount.current = 0; setLoading(true); fetchNews(); }} className="ml-2 underline">retry</button>
         </div>
       )}

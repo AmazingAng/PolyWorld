@@ -31,14 +31,6 @@ export default function WatchlistPanel({
       .sort((a, b) => (addedAt[b.id] || 0) - (addedAt[a.id] || 0));
   }, [watchedIds, mapped, unmapped, addedAt]);
 
-  const moversCount = useMemo(
-    () =>
-      watchedMarkets.filter(
-        (m) => m.change !== null && Math.abs(m.change) > 0.02
-      ).length,
-    [watchedMarkets]
-  );
-
   if (watchedIds.size === 0) {
     return (
       <div className="text-[12px] text-[var(--text-ghost)] font-mono py-8 text-center">

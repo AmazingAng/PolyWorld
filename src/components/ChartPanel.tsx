@@ -224,7 +224,7 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
             retryCount.current++;
             setTimeout(() => { if (!cancelled) setChartData((prev) => ({ ...prev!, key: "" })); }, delay);
           } else {
-            setError("加载失败");
+            setError("load failed");
           }
         }
       }
@@ -496,6 +496,38 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
               </button>
             ))}
           </div>
+          {/* Indicators */}
+          {selectedMarket?.indicators && (
+            <>
+              <div className="w-px h-3 bg-[#2a2a2a]" />
+              <div className="flex items-center gap-2 text-[9px] tabular-nums">
+                {selectedMarket.indicators.momentum !== null && (
+                  <span title="Momentum: price change acceleration">
+                    <span className="text-[#555]">Mtm </span>
+                    <span style={{ color: selectedMarket.indicators.momentum > 0.01 ? "#22c55e" : selectedMarket.indicators.momentum < -0.01 ? "#ff4444" : "#888" }}>
+                      {selectedMarket.indicators.momentum > 0 ? "+" : ""}{(selectedMarket.indicators.momentum * 100).toFixed(2)}%
+                    </span>
+                  </span>
+                )}
+                {selectedMarket.indicators.volatility !== null && (
+                  <span title="Volatility: 24h prob standard deviation">
+                    <span className="text-[#555]">Vol{"\u03C3"} </span>
+                    <span style={{ color: selectedMarket.indicators.volatility > 0.05 ? "#f59e0b" : "#888" }}>
+                      {(selectedMarket.indicators.volatility * 100).toFixed(1)}%
+                    </span>
+                  </span>
+                )}
+                {selectedMarket.indicators.orderFlowImbalance !== null && (
+                  <span title="Order flow imbalance: (smart buys - sells) / total">
+                    <span className="text-[#555]">Flow </span>
+                    <span style={{ color: selectedMarket.indicators.orderFlowImbalance > 0.1 ? "#22c55e" : selectedMarket.indicators.orderFlowImbalance < -0.1 ? "#ff4444" : "#888" }}>
+                      {selectedMarket.indicators.orderFlowImbalance > 0 ? "+" : ""}{(selectedMarket.indicators.orderFlowImbalance * 100).toFixed(0)}%
+                    </span>
+                  </span>
+                )}
+              </div>
+            </>
+          )}
           {!isMulti && !lineOnly && (
             <>
               <div className="w-px h-3 bg-[#2a2a2a]" />
@@ -573,7 +605,7 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
         )}
         {error && !loading && (
           <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: "#0d0d0d99" }}>
-            <div className="text-[11px] text-[var(--red)] font-mono text-center">
+            <div className="text-[11px] text-[var(--red)] font-mono text-center" aria-live="polite">
               {error} <button onClick={() => { retryCount.current = 0; setChartData(null); }} className="ml-2 underline">retry</button>
             </div>
           </div>
@@ -595,5 +627,6 @@ export default memo(ChartPanelInner, (prev, next) => {
   if (prev.lineOnly !== next.lineOnly) return false;
   if (prev.selectedMarket?.id !== next.selectedMarket?.id) return false;
   if (prev.selectedMarket?.prob !== next.selectedMarket?.prob) return false;
+  if (prev.selectedMarket?.indicators !== next.selectedMarket?.indicators) return false;
   return true;
 });

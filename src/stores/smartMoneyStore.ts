@@ -24,7 +24,6 @@ interface SmartMoneyActions {
   setTraderPanelWallet: (addr: string | null) => void;
   setTraderWalletName: (name: string | null) => void;
   setTraderAddrInput: (input: string) => void;
-  selectWallet: (addr: string, name?: string | null) => void;
 }
 
 export const useSmartMoneyStore = create<SmartMoneyState & SmartMoneyActions>((set) => ({
@@ -34,8 +33,8 @@ export const useSmartMoneyStore = create<SmartMoneyState & SmartMoneyActions>((s
   smartTrades: [],
   lastSync: null,
   walletFilter: null,
-  traderPanelWallet: null,
-  traderWalletName: null,
+  traderPanelWallet: typeof window !== "undefined" ? localStorage.getItem("pw:traderWallet") : null,
+  traderWalletName: typeof window !== "undefined" ? localStorage.getItem("pw:traderWalletName") : null,
   traderAddrInput: "",
 
   setLeaderboard: (leaderboard) => set({ leaderboard }),
@@ -44,11 +43,19 @@ export const useSmartMoneyStore = create<SmartMoneyState & SmartMoneyActions>((s
   setSmartTrades: (smartTrades) => set({ smartTrades }),
   setLastSync: (lastSync) => set({ lastSync }),
   setWalletFilter: (walletFilter) => set({ walletFilter }),
-  setTraderPanelWallet: (traderPanelWallet) => set({ traderPanelWallet }),
-  setTraderWalletName: (traderWalletName) => set({ traderWalletName }),
+  setTraderPanelWallet: (traderPanelWallet) => {
+    set({ traderPanelWallet });
+    try {
+      if (traderPanelWallet) localStorage.setItem("pw:traderWallet", traderPanelWallet);
+      else localStorage.removeItem("pw:traderWallet");
+    } catch {}
+  },
+  setTraderWalletName: (traderWalletName) => {
+    set({ traderWalletName });
+    try {
+      if (traderWalletName) localStorage.setItem("pw:traderWalletName", traderWalletName);
+      else localStorage.removeItem("pw:traderWalletName");
+    } catch {}
+  },
   setTraderAddrInput: (traderAddrInput) => set({ traderAddrInput }),
-  selectWallet: (addr, name) => set({
-    traderPanelWallet: addr,
-    traderWalletName: name ?? null,
-  }),
 }));

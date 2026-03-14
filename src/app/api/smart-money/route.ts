@@ -4,10 +4,36 @@ import { fetchMarketTrades } from "@/lib/smartMoney";
 import type { SmartWallet, WhaleTrade } from "@/types";
 import { SingleCache } from "@/lib/apiCache";
 import { apiError } from "@/lib/apiError";
+import { aggregateFlowByCategory, type CategoryFlow } from "@/lib/flowAnalysis";
+
+interface LeaderboardRow {
+  address: string;
+  username: string | null;
+  pnl: number;
+  volume: number;
+  rank: number;
+  profile_image: string | null;
+}
+
+interface WhaleTradeRow {
+  wallet: string;
+  condition_id: string;
+  event_id: string | null;
+  side: string;
+  size: number;
+  price: number;
+  usdc_size: number;
+  outcome: string;
+  title: string;
+  slug: string;
+  timestamp: string;
+  is_smart_wallet: number;
+}
 
 export const dynamic = "force-dynamic";
 
 const tradeCache = new SingleCache<{ whaleTrades: WhaleTrade[]; smartTrades: WhaleTrade[] }>(30_000);
+const flowCache = new SingleCache<CategoryFlow[]>(120_000); // 2 min cache
 let bgFetchInProgress = false;
 
 function mapApiTrade(
@@ -96,26 +122,26 @@ function readTradesFromDb(
        ORDER BY timestamp DESC
        LIMIT 200`
     )
-    .all() as Array<Record<string, unknown>>;
+    .all() as WhaleTradeRow[];
 
   const whaleTrades: WhaleTrade[] = [];
   const smartTrades: WhaleTrade[] = [];
 
   for (const r of dbRows) {
     const t: WhaleTrade = {
-      wallet: r.wallet as string,
-      username: usernameMap.get((r.wallet as string).toLowerCase()) || undefined,
-      conditionId: r.condition_id as string,
-      eventId: (r.event_id as string) || null,
+      wallet: r.wallet,
+      username: usernameMap.get(r.wallet.toLowerCase()) || undefined,
+      conditionId: r.condition_id,
+      eventId: r.event_id || null,
       side: r.side as "BUY" | "SELL",
-      size: r.size as number,
-      price: r.price as number,
-      usdcSize: r.usdc_size as number,
-      outcome: r.outcome as string,
-      title: r.title as string,
-      slug: r.slug as string,
-      timestamp: r.timestamp as string,
-      isSmartWallet: (r.is_smart_wallet as number) === 1,
+      size: r.size,
+      price: r.price,
+      usdcSize: r.usdc_size,
+      outcome: r.outcome,
+      title: r.title,
+      slug: r.slug,
+      timestamp: r.timestamp,
+      isSmartWallet: r.is_smart_wallet === 1,
     };
     if (t.usdcSize >= 5000) whaleTrades.push(t);
     if (t.isSmartWallet) smartTrades.push(t);
@@ -131,6 +157,17 @@ export async function GET(request: Request) {
   try {
     const db = getDb();
     const { searchParams } = new URL(request.url);
+
+    // Flow view: category-level aggregation of whale trades
+    if (searchParams.get("view") === "flow") {
+      let flows = flowCache.get();
+      if (!flows) {
+        flows = aggregateFlowByCategory(db, 24);
+        flowCache.set(flows);
+      }
+      return NextResponse.json({ flows });
+    }
+
     const period = searchParams.get("period") || "all";
 
     // Read leaderboard from cache (all periods stored in DB: day/week/month/all)
@@ -140,17 +177,17 @@ export async function GET(request: Request) {
         `SELECT address, username, pnl, volume, rank, profile_image
          FROM leaderboard_cache WHERE time_period = ? ORDER BY rank ASC LIMIT 50`
       )
-      .all(timePeriod) as Array<Record<string, unknown>>;
+      .all(timePeriod) as LeaderboardRow[];
 
     let leaderboard: SmartWallet[];
     if (lbRows.length > 0) {
       leaderboard = lbRows.map((r) => ({
-        address: r.address as string,
-        username: (r.username as string) || null,
-        pnl: r.pnl as number,
-        volume: r.volume as number,
-        rank: r.rank as number,
-        profileImage: (r.profile_image as string) || null,
+        address: r.address,
+        username: r.username || null,
+        pnl: r.pnl,
+        volume: r.volume,
+        rank: r.rank,
+        profileImage: r.profile_image || null,
       }));
     } else {
       // Fallback to smart_wallets if cache not yet populated
@@ -159,14 +196,14 @@ export async function GET(request: Request) {
           `SELECT address, username, pnl, volume, rank, profile_image
            FROM smart_wallets ORDER BY rank ASC LIMIT 50`
         )
-        .all() as Array<Record<string, unknown>>;
+        .all() as LeaderboardRow[];
       leaderboard = topRows.map((r) => ({
-        address: r.address as string,
-        username: (r.username as string) || null,
-        pnl: r.pnl as number,
-        volume: r.volume as number,
-        rank: r.rank as number,
-        profileImage: (r.profile_image as string) || null,
+        address: r.address,
+        username: r.username || null,
+        pnl: r.pnl,
+        volume: r.volume,
+        rank: r.rank,
+        profileImage: r.profile_image || null,
       }));
     }
 

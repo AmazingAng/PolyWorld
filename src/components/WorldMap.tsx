@@ -11,6 +11,7 @@ import type { ImpactLevel } from "@/types";
 import { formatVolume, formatPct, formatChange } from "@/lib/format";
 import { REGIONAL_VIEWS } from "@/lib/regions";
 import { topojsonFeature } from "@/lib/topojson";
+import { getCountryFlag, marketMatchesCountry } from "@/lib/countries";
 import type { TimeRange } from "./TimeRangeFilter";
 import MapToolbar from "./MapToolbar";
 
@@ -224,7 +225,7 @@ function WorldMapInner({
 }: WorldMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const popupRef = useRef<maplibregl.Popup | null>(null);
+
   const [mapReady, setMapReady] = useState(false);
   const [currentTier, setCurrentTier] = useState(() => zoomToTier(1.2));
   const marketsLookup = useRef<Map<string, ProcessedMarket>>(new Map());
@@ -244,6 +245,10 @@ function WorldMapInner({
   const [hoverMarket, setHoverMarket] = useState<ProcessedMarket | null>(null);
   const [hoverPos, setHoverPos] = useState<{ top: number; left: number } | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Country hover popup state
+  const [hoverCountry, setHoverCountry] = useState<{ name: string; x: number; y: number } | null>(null);
+  const countryHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const PREVIEW_W = 480;
   const PREVIEW_MAX_H = 520;
@@ -912,7 +917,7 @@ function WorldMapInner({
       }
     });
 
-    // Click individual → popup + callback
+    // Click individual → callback only (no popup)
     map.on("click", "unclustered-point", (e) => {
       if (!e.features?.length) return;
       const props = e.features[0].properties;
@@ -920,14 +925,6 @@ function WorldMapInner({
       if (!props || geom.type !== "Point") return;
       const market = marketsLookup.current.get(props.marketId);
       if (!market) return;
-      // Clear hover preview
-      clearHoverPopup();
-      if (popupRef.current) popupRef.current.remove();
-      popupRef.current = new maplibregl.Popup({ offset: 15, maxWidth: "320px" })
-        .setLngLat(geom.coordinates as [number, number])
-        .setHTML(buildPopupHtml(market))
-        .addTo(map);
-      // Notify parent about market selection
       if (onMarketClick) onMarketClick(market);
     });
 
@@ -945,8 +942,10 @@ function WorldMapInner({
         if (props?.marketId) {
           const market = marketsLookup.current.get(props.marketId);
           if (market) {
-            // Clear any pending timer
+            // Clear any pending timers (market + country)
             if (hoverTimer.current) clearTimeout(hoverTimer.current);
+            if (countryHoverTimer.current) clearTimeout(countryHoverTimer.current);
+            setHoverCountry(null);
             hoverTimer.current = setTimeout(() => {
               const point = e.point;
               const canvas = map.getCanvas().getBoundingClientRect();
@@ -1089,10 +1088,17 @@ function WorldMapInner({
         map.on("mousemove", "country-fills", (e) => {
           const feat = e.features?.[0];
           const name = feat?.properties?.name as string | undefined;
+          // Clear any lingering market hover popup
+          clearHoverPopup();
           if (name && name !== hoveredName) {
             hoveredName = name;
             map.setFilter("country-hover", ["==", ["get", "name"], name]);
             map.setFilter("country-hover-border", ["==", ["get", "name"], name]);
+            if (countryHoverTimer.current) clearTimeout(countryHoverTimer.current);
+            const { x, y } = e.point;
+            countryHoverTimer.current = setTimeout(() => {
+              setHoverCountry({ name, x, y });
+            }, 800);
           }
         });
 
@@ -1100,6 +1106,8 @@ function WorldMapInner({
           hoveredName = null;
           map.setFilter("country-hover", ["==", ["get", "name"], ""]);
           map.setFilter("country-hover-border", ["==", ["get", "name"], ""]);
+          if (countryHoverTimer.current) clearTimeout(countryHoverTimer.current);
+          setHoverCountry(null);
         });
 
         // Country click → callback
@@ -1109,77 +1117,30 @@ function WorldMapInner({
           if (name && onCountryClick) {
             onCountryClick(name);
           }
+
+          // Zoom to the clicked country's bounding box
+          if (feat?.geometry) {
+            const bounds = new maplibregl.LngLatBounds();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const addRing = (ring: any[]) => {
+              for (const c of ring) bounds.extend([c[0] as number, c[1] as number]);
+            };
+            const geom = feat.geometry as { type: string; coordinates: unknown[] };
+            if (geom.type === "Polygon") {
+              for (const ring of geom.coordinates as number[][][]) addRing(ring);
+            } else if (geom.type === "MultiPolygon") {
+              for (const poly of geom.coordinates as number[][][][])
+                for (const ring of poly) addRing(ring);
+            }
+            if (!bounds.isEmpty()) {
+              map.fitBounds(bounds, { padding: 48, duration: 1200, maxZoom: 6 });
+            }
+          }
         });
       })
       .catch((err) => console.warn("Failed to load country boundaries:", err));
   }
 
-  // Build popup HTML
-  const buildPopupHtml = useCallback((market: ProcessedMarket) => {
-    const color = CATEGORY_COLORS[market.category] || CATEGORY_COLORS.Other;
-    const mks = market.markets.slice(0, 3);
-    let marketsHtml = "";
-
-    if (mks.length > 0) {
-      for (const m of mks) {
-        let mp = null;
-        try {
-          mp = m.outcomePrices
-            ? Array.isArray(m.outcomePrices)
-              ? m.outcomePrices
-              : JSON.parse(m.outcomePrices)
-            : null;
-        } catch { /* skip malformed */ }
-        const mProb = mp ? parseFloat(mp[0]) : market.prob;
-        const mChg = formatChange(
-          m.oneDayPriceChange !== undefined
-            ? parseFloat(String(m.oneDayPriceChange))
-            : market.change
-        );
-        const question = m.question || market.title;
-        marketsHtml += `
-          <div style="padding:4px 0;border-top:1px solid #2a2a2a;">
-            <div style="font-size:12px;color:#a0a0a0;margin-bottom:2px;">${escapeHtml(question)}</div>
-            <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;">
-              <span style="color:#d4d4d4">${mProb !== null ? formatPct(mProb) : "—"}</span>
-              <span style="${
-                mChg.cls === "up"
-                  ? "color:#22c55e"
-                  : mChg.cls === "down"
-                  ? "color:#ff4444"
-                  : "color:#777"
-              }">${mChg.text}</span>
-            </div>
-          </div>`;
-      }
-    } else {
-      const chg = formatChange(market.change);
-      marketsHtml = `
-        <div style="padding:4px 0;">
-          <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;">
-            <span style="color:#d4d4d4">${market.prob !== null ? formatPct(market.prob) : "—"}</span>
-            <span style="color:${chg.cls === "up" ? "#22c55e" : chg.cls === "down" ? "#ff4444" : "#777"}">${chg.text}</span>
-          </div>
-        </div>`;
-    }
-
-    const watched = isWatched?.(market.id);
-    const starFill = watched ? "#f59e0b" : "none";
-    const starStroke = watched ? "#f59e0b" : "#666";
-    const starLabel = watched ? "★" : "☆";
-
-    return `
-      <div style="font-family:'JetBrains Mono','SF Mono',monospace;min-width:200px;max-width:280px;font-size:13px;">
-        <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:3px;">
-          <div style="font-size:13px;color:#f0f0f0;line-height:1.4;flex:1;">${escapeHtml(market.title)}</div>
-          <button data-watch-market="${market.id}" style="background:none;border:none;cursor:pointer;padding:2px;font-size:14px;color:${starStroke};flex-shrink:0;" title="${watched ? "Remove from watchlist" : "Add to watchlist"}">${starLabel}</button>
-        </div>
-        <div style="font-size:11px;color:#8a8a8a;margin-bottom:2px;text-transform:lowercase;">${escapeHtml(market.location || market.category)}</div>
-        ${marketsHtml}
-        <div style="font-size:11px;color:#777;margin-top:3px;">vol ${formatVolume(market.volume)} · 24h ${formatVolume(market.volume24h)}</div>
-        <a href="https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;font-size:11px;color:#a0a0a0;text-decoration:none;">polymarket →</a>
-      </div>`;
-  }, [isWatched]);
 
   // Update GeoJSON source when data/filters change
   useEffect(() => {
@@ -1462,6 +1423,50 @@ function WorldMapInner({
         onColorModeChange={onColorModeChange}
       />
       {/* Hover preview popup — portal to body */}
+      {hoverCountry && (() => {
+        const all = markets;
+        const ms = all.filter((m) => marketMatchesCountry(m.location, hoverCountry.name));
+        const active = ms.filter((m) => !m.closed);
+        const vol = ms.reduce((s, m) => s + m.volume, 0);
+        const vol24h = ms.reduce((s, m) => s + (m.volume24h || 0), 0);
+        const flag = getCountryFlag(hoverCountry.name);
+        const POP_W = 200;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const left = Math.min(hoverCountry.x + 16, vw - POP_W - 8);
+        const top = Math.min(hoverCountry.y + 16, vh - 160);
+        return createPortal(
+          <div
+            className="fixed z-[9998] bg-[var(--bg)] border border-[var(--border)] rounded-md font-mono pointer-events-none"
+            style={{ top, left, width: POP_W, padding: "10px 12px", boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }}
+          >
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-[16px] leading-none">{flag}</span>
+              <span className="text-[11px] text-[var(--text)]">{hoverCountry.name}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+              <span className="text-[var(--text-faint)]">markets</span>
+              <span className="text-[var(--text-secondary)] tabular-nums">{ms.length}</span>
+              <span className="text-[var(--text-faint)]">active</span>
+              <span className="text-[var(--text-secondary)] tabular-nums">{active.length}</span>
+              <span className="text-[var(--text-faint)]">volume</span>
+              <span className="text-[var(--text-secondary)] tabular-nums">{formatVolume(vol)}</span>
+              <span className="text-[var(--text-faint)]">24h vol</span>
+              <span className="text-[var(--text-secondary)] tabular-nums">{formatVolume(vol24h)}</span>
+            </div>
+            {active.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-[var(--border-subtle)]">
+                <div className="text-[9px] text-[var(--text-faint)] uppercase tracking-wider mb-0.5">top market</div>
+                <div className="text-[10px] text-[var(--text-dim)] line-clamp-2 leading-snug">
+                  {active.sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))[0].title}
+                </div>
+              </div>
+            )}
+          </div>,
+          document.body
+        );
+      })()}
+
       {hoverMarket && hoverPos && createPortal(
         <div
           className="fixed z-[9999] bg-[var(--bg)] border border-[var(--border)] rounded-md overflow-y-auto pointer-events-none"

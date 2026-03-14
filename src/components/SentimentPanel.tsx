@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { SentimentIndex } from "@/types";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 function scoreColor(v: number): string {
   if (v < 20) return "#ef4444";
@@ -177,7 +178,7 @@ export default function SentimentPanel() {
         retryCount.current++;
         setTimeout(fetchSentiment, delay);
       } else {
-        setError("加载失败");
+        setError("load failed");
       }
     } finally {
       setLoading(false);
@@ -186,9 +187,9 @@ export default function SentimentPanel() {
 
   useEffect(() => {
     fetchSentiment();
-    const iv = setInterval(fetchSentiment, 45_000);
-    return () => clearInterval(iv);
   }, [fetchSentiment]);
+
+  useVisibilityPolling(fetchSentiment, 45_000);
 
   if (loading && !data) {
     return (
@@ -200,7 +201,7 @@ export default function SentimentPanel() {
 
   if (error && !data) {
     return (
-      <div className="text-[11px] text-[var(--red)] font-mono py-2 text-center">
+      <div className="text-[11px] text-[var(--red)] font-mono py-2 text-center" aria-live="polite">
         {error} <button onClick={() => { retryCount.current = 0; setLoading(true); fetchSentiment(); }} className="ml-2 underline">retry</button>
       </div>
     );

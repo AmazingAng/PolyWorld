@@ -7,7 +7,7 @@ import type { ProcessedMarket } from "@/types";
 
 interface HeaderProps {
   lastRefresh: string | null;
-  dataMode: "live" | "proxy" | "sample";
+  dataMode: "live" | "sample";
   loading: boolean;
   onRefresh: () => void;
   marketCount: number;
@@ -16,7 +16,6 @@ interface HeaderProps {
   onOpenSettings: () => void;
   watchedCount?: number;
   alertUnreadCount?: number;
-  whaleTradeCount?: number;
   autoRefresh?: boolean;
   refreshError?: boolean;
   // Alert manager props
@@ -86,7 +85,6 @@ export default function Header({
   onOpenAlertManager,
   onCloseAlertManager,
   alertProps,
-  whaleTradeCount = 0,
   autoRefresh = false,
   refreshError = false,
 }: HeaderProps) {
@@ -139,18 +137,10 @@ export default function Header({
 
       {/* Right: Watchlist + Alerts + Status pill + sync info + refresh */}
       <div className="flex items-center gap-1.5 text-[11px]">
-        {/* Smart money indicator */}
-        {mounted && whaleTradeCount > 0 && (
-          <span className="flex items-center gap-1 text-[#f59e0b] text-[11px]" title={`${whaleTradeCount} recent whale trades`}>
-            <span className="smart-money-badge">$</span>
-            {whaleTradeCount}
-          </span>
-        )}
-
         {/* Watchlist count */}
         {mounted && watchedCount > 0 && (
           <span className="flex items-center gap-1 text-[#f59e0b] text-[11px]">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="1.5">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="2" strokeLinejoin="round">
               <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
             </svg>
             {watchedCount}
@@ -207,7 +197,7 @@ export default function Header({
         )}
 
         {/* Sync time / stale warning */}
-        {syncInfo ? (
+        {mounted && syncInfo ? (
           <span
             className={`hidden sm:inline text-[11px] ${
               syncInfo.stale ? "text-[#ffaa00]" : "text-[var(--text-faint)]"
