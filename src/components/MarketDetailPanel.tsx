@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
+import dynamic from "next/dynamic";
 import { ProcessedMarket, PolymarketMarket, SmartMoneyFlow } from "@/types";
 import { CATEGORY_COLORS } from "@/lib/categories";
 import { formatVolume, formatPct, formatChange } from "@/lib/format";
 import { makeAbbrev, extractLabels } from "@/lib/marketLabels";
 import ChartPanel from "./ChartPanel";
+
+const OrderForm = dynamic(() => import("./OrderForm"), { ssr: false });
 
 interface MarketDetailPanelProps {
   market: ProcessedMarket;
@@ -67,9 +70,12 @@ function MarketDetailPanelInner({
   const [rulesExpanded, setRulesExpanded] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  // Reset AI summary when market changes
+  // -1 = none expanded; 0..n = which multi-binary row has its trade strip open
+  const [selectedOrderOutcomeIdx, setSelectedOrderOutcomeIdx] = useState(0);
+  // Reset everything when market changes
   useEffect(() => {
     setAiSummary(null);
+    setSelectedOrderOutcomeIdx(0);
   }, [market.id]);
 
   const fetchAiSummary = useCallback(async () => {
@@ -258,48 +264,74 @@ function MarketDetailPanelInner({
     return maxLen > 20;
   }, [parsedOutcomes]);
 
-  // --- Multi-binary outcomes: compact Polymarket-style list ---
+  // --- Multi-binary outcomes: rows with inline trade strips ---
   const multiBinaryContent = multiBinary && (
-    <div className="space-y-0">
-      {parsedOutcomes.map(({ m, idx, yesPrice, entity, abbr, mChg, isWinner }) => {
+    <div>
+      {parsedOutcomes.map(({ m, idx, yesPrice, entity, abbr, mChg, isWinner }, i) => {
         const pct = yesPrice * 100;
         const barColor = "#22c55e";
-        const vol24h = parseFloat(String(m.volume_24hr || m.volume || 0));
+        const isOpen = i === Math.min(selectedOrderOutcomeIdx, parsedOutcomes.length - 1);
+        const ids: string[] = m.clobTokenIds
+          ? Array.isArray(m.clobTokenIds) ? m.clobTokenIds as string[]
+            : (() => { try { return JSON.parse(m.clobTokenIds as unknown as string) as string[]; } catch { return []; } })()
+          : [];
+        const tokenId = ids[0] ? String(ids[0]) : (m.id ?? "");
         return (
-          <div
-            key={m.id || idx}
-            className="flex items-center gap-1.5 px-1.5 py-[3px] hover:bg-[var(--surface)] transition-colors border-b border-[var(--border-subtle)] last:border-0"
-            title={entity}
-          >
-            <span
-              className={`text-[10px] shrink-0 truncate ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-secondary)]"}`}
-              style={{ width: labelColWidth }}
+          <div key={m.id || idx} className={`border-b border-[var(--border-subtle)] last:border-0 ${isOpen ? "bg-[#22c55e]/[0.03]" : ""}`}>
+            {/* Outcome row — click to toggle trade strip */}
+            <div
+              onClick={() => setSelectedOrderOutcomeIdx(isOpen ? -1 : i)}
+              className={`group flex items-center gap-1.5 py-[3px] cursor-pointer transition-colors ${
+                isOpen
+                  ? "border-l-2 border-l-[#22c55e]/60 pl-[4px] pr-1.5"
+                  : "hover:bg-[var(--surface)] border-l-2 border-l-transparent px-1.5"
+              }`}
+              title={entity}
             >
-              {abbr}
-            </span>
-            <div className="flex-1 h-3 bg-[var(--bg)] rounded-sm relative overflow-hidden">
-              <div
-                className="h-full rounded-sm transition-all duration-500 ease-out"
-                style={{ width: `${Math.max(pct, 1)}%`, background: `linear-gradient(90deg, ${barColor}aa, ${barColor}44)` }}
-              />
+              <span
+                className={`text-[10px] shrink-0 truncate ${isWinner ? "text-[#22c55e] font-bold" : isOpen ? "text-[var(--text)]" : "text-[var(--text-secondary)]"}`}
+                style={{ width: labelColWidth }}
+              >
+                {abbr}
+              </span>
+              <div className="flex-1 h-3 bg-[var(--bg)] rounded-sm relative overflow-hidden">
+                <div
+                  className="h-full rounded-sm transition-all duration-500 ease-out"
+                  style={{ width: `${Math.max(pct, 1)}%`, background: `linear-gradient(90deg, ${barColor}aa, ${barColor}44)` }}
+                />
+              </div>
+              <span className={`text-[10px] w-10 text-right tabular-nums shrink-0 ${isWinner ? "text-[#22c55e] font-bold" : isOpen ? "text-[#22c55e]" : "text-[var(--text-dim)]"}`}>
+                {pct.toFixed(1)}%
+              </span>
+              <span className={`text-[9px] w-10 text-right tabular-nums shrink-0 ${mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
+                {mChg.text}
+              </span>
+              {/* trade indicator */}
+              <span className={`text-[8px] px-1 shrink-0 transition-colors ${
+                isOpen
+                  ? "text-[#22c55e]"
+                  : "text-transparent group-hover:text-[var(--text-faint)]"
+              }`}>
+                {isOpen ? "▾" : "▸"}
+              </span>
             </div>
-            <span className={`text-[10px] w-10 text-right tabular-nums shrink-0 ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-dim)]"}`}>
-              {pct.toFixed(1)}%
-            </span>
-            <span className={`text-[9px] w-10 text-right tabular-nums shrink-0 ${mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
-              {mChg.text}
-            </span>
-            <span className="text-[9px] w-8 text-right tabular-nums shrink-0 text-[var(--text-faint)]">
-              {formatVolume(vol24h)}
-            </span>
+            {/* Inline compact trade strip */}
+            {isOpen && tokenId && (
+              <div className="px-2 py-1.5 border-t border-[#22c55e]/10">
+                <OrderForm
+                  key={tokenId}
+                  tokenId={tokenId}
+                  currentPrice={yesPrice}
+                  outcomeName={abbr}
+                  negRisk={!!market.negRisk}
+                  defaultSide="BUY"
+                  compact
+                />
+              </div>
+            )}
           </div>
         );
       })}
-      <div className="flex justify-end px-1.5 pt-1">
-        <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors">
-          trade {"\u2192"}
-        </a>
-      </div>
     </div>
   );
 
@@ -362,13 +394,58 @@ function MarketDetailPanelInner({
               <span className={mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}>{mChg.text}</span>
             </div>
           )}
+          {/* Per-outcome inline trade strips */}
+          {prices.length > 0 && (() => {
+            const allIds: string[] = m.clobTokenIds
+              ? Array.isArray(m.clobTokenIds) ? m.clobTokenIds as string[]
+                : (() => { try { return JSON.parse(m.clobTokenIds as unknown as string) as string[]; } catch { return []; } })()
+              : [];
+            if (allIds.length === 0) return (
+              <div className="mt-1 pt-1 border-t border-[var(--border-subtle)] flex justify-end">
+                <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors">
+                  trade {"\u2192"}
+                </a>
+              </div>
+            );
+            return (
+              <div className="mt-1.5 space-y-1">
+                {outcomeLabels.slice(0, allIds.length).map((label, j) => {
+                  const p = prices[j] ?? 0;
+                  const isYes = label === "Yes";
+                  const isNo = label === "No";
+                  const accentColor = isYes ? "#22c55e" : isNo ? "#ff4444" : "#a78bfa";
+                  return (
+                    <div key={j} className="flex items-center gap-2 pt-1 border-t border-[var(--border-subtle)]">
+                      <span
+                        className="text-[9px] shrink-0 font-medium tabular-nums"
+                        style={{ color: accentColor, minWidth: 28 }}
+                      >
+                        {label}
+                      </span>
+                      <span className="text-[9px] tabular-nums shrink-0" style={{ color: accentColor }}>
+                        {(p * 100).toFixed(0)}¢
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <OrderForm
+                          key={String(allIds[j])}
+                          tokenId={String(allIds[j])}
+                          currentPrice={p}
+                          outcomeName={label}
+                          negRisk={!!market.negRisk}
+                          defaultSide="BUY"
+                          compact
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
           <div className="flex items-center gap-2 mt-1 pt-1 border-t border-[var(--border-subtle)] text-[9px] text-[var(--text-faint)]">
             {m.volume && <span>{formatVolume(parseFloat(String(m.volume)))}</span>}
             {m.liquidity && <span>liq {formatVolume(parseFloat(String(m.liquidity)))}</span>}
             {mChg.text !== "\u2014" && <span className={mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : ""}>{mChg.text}</span>}
-            <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[var(--text-ghost)] hover:text-[var(--text-dim)] ml-auto transition-colors">
-              trade {"\u2192"}
-            </a>
           </div>
         </div>
         );
@@ -573,6 +650,7 @@ function MarketDetailPanelInner({
           </div>
         </div>
       )}
+
 
       {/* ============ SMART MONEY SECTION ============ */}
       {market.smartMoney && (market.smartMoney.whaleBuys > 0 || market.smartMoney.whaleSells > 0) && (

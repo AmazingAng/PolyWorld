@@ -72,6 +72,31 @@ export async function GET(request: NextRequest) {
       : 0;
     const tickSize = raw.tick_size ? parseFloat(raw.tick_size) : 0.001;
 
+    // Fetch minimum_order_size from CLOB via conditionId (gamma-api lookup)
+    let minimumOrderSize = 5; // fallback default
+    try {
+      const gammaRes = await fetch(
+        `https://gamma-api.polymarket.com/markets?clob_token_ids=${tokenId}`,
+        { signal: AbortSignal.timeout(5_000) },
+      );
+      if (gammaRes.ok) {
+        const gammaData = await gammaRes.json() as { conditionId?: string }[];
+        const conditionId = Array.isArray(gammaData) && gammaData[0]?.conditionId;
+        if (conditionId) {
+          const clobRes = await fetch(
+            `https://clob.polymarket.com/markets/${conditionId}`,
+            { signal: AbortSignal.timeout(5_000) },
+          );
+          if (clobRes.ok) {
+            const clobMarket = await clobRes.json() as { minimum_order_size?: number };
+            if (clobMarket.minimum_order_size != null) {
+              minimumOrderSize = Number(clobMarket.minimum_order_size);
+            }
+          }
+        }
+      }
+    } catch { /* use fallback */ }
+
     const data = {
       bids: bids.slice(0, 15),
       asks: asks.slice(0, 15),
@@ -79,6 +104,7 @@ export async function GET(request: NextRequest) {
       spread,
       midPrice,
       tickSize,
+      minimumOrderSize,
     };
 
     bookCache.set(tokenId, data);

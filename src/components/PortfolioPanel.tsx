@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { fetchTraderPositions, fetchTraderValue, type TraderPosition } from "@/lib/smartMoney";
 import { formatVolume } from "@/lib/format";
 import type { ProcessedMarket } from "@/types";
+import { useWalletStore } from "@/stores/walletStore";
 
 const PORTFOLIO_WALLET_KEY = "pw:portfolioWallet";
 
@@ -46,8 +47,25 @@ interface PositionWithMarket {
 }
 
 export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPanelProps) {
-  const [savedWallet, setSavedWalletState] = useState<string>(() => readSavedWallet());
+  const connectedAddress = useWalletStore((s) => s.address);
+  // Start with "" on both server and client to avoid hydration mismatch,
+  // then load from localStorage + connected wallet in a single effect.
+  const [savedWallet, setSavedWalletState] = useState<string>("");
   const [inputValue, setInputValue] = useState("");
+
+  useEffect(() => {
+    const stored = readSavedWallet();
+    if (stored) {
+      // Respect manually saved wallet — don't overwrite with connected address
+      setSavedWalletState(stored);
+    } else if (connectedAddress) {
+      // No saved wallet yet: use connected address as default (don't persist yet)
+      setSavedWalletState(connectedAddress);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount
+
+  // Do NOT auto-sync on wallet connect — user may be tracking a different wallet
   const [positions, setPositions] = useState<TraderPosition[]>([]);
   const [totalValue, setTotalValue] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -159,11 +177,20 @@ export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPan
           <>
             <input
               className="flex-1 bg-transparent border border-[var(--border)] rounded-sm px-1.5 py-0 text-[10px] text-[var(--text)] placeholder:text-[var(--text-ghost)] leading-[18px] min-w-0"
-              placeholder="0x… your wallet address"
+              placeholder="0x… wallet to track"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             />
+            {connectedAddress && connectedAddress.toLowerCase() !== inputValue.toLowerCase() && (
+              <button
+                onClick={() => setInputValue(connectedAddress)}
+                className="px-1.5 py-0 border border-[var(--border)] rounded-sm text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors leading-[18px] shrink-0"
+                title="Use connected wallet"
+              >
+                mine
+              </button>
+            )}
             <button
               onClick={handleSubmit}
               className="px-1.5 py-0 border border-[var(--border)] rounded-sm text-[9px] text-[var(--text-dim)] hover:text-[var(--text)] transition-colors leading-[18px] shrink-0"

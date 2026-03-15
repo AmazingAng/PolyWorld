@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import AlertManager from "./AlertManager";
+
+const WalletButton = dynamic(() => import("./WalletButton"), { ssr: false });
 import type { AlertConfig, AlertHistoryEntry } from "@/hooks/useAlerts";
 import type { ProcessedMarket } from "@/types";
 
@@ -135,8 +138,9 @@ export default function Header({
 
       <div className="flex-1" />
 
-      {/* Right: Watchlist + Alerts + Status pill + sync info + refresh */}
+      {/* Right: Wallet + Watchlist + Alerts + Status pill + sync info + refresh */}
       <div className="flex items-center gap-1.5 text-[11px]">
+        <WalletButton />
         {/* Watchlist count */}
         {mounted && watchedCount > 0 && (
           <span className="flex items-center gap-1 text-[#f59e0b] text-[11px]">

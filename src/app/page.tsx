@@ -45,6 +45,7 @@ import { usePanelRowSpans } from "@/hooks/usePanelRowSpans";
 import { useMarketStore } from "@/stores/marketStore";
 import { useSmartMoneyStore } from "@/stores/smartMoneyStore";
 import { useUIStore } from "@/stores/uiStore";
+import { useToastStore } from "@/stores/toastStore";
 
 const WorldMap = dynamic(() => import("@/components/WorldMap"), {
   ssr: false,
@@ -87,6 +88,25 @@ export default function Home() {
   const lastSyncTime = useMarketStore((s) => s.lastSyncTime);
   const signals = useMarketStore((s) => s.signals);
   const newMarkets = useMarketStore((s) => s.newMarkets);
+
+  // ─── Toast Store ───
+  const enqueueSignalToasts = useToastStore((s) => s.enqueueSignalToasts);
+  const enqueueNewMarketToasts = useToastStore((s) => s.enqueueNewMarketToasts);
+
+  const prevSignalsRef = useRef<typeof signals>(signals);
+  useEffect(() => {
+    if (signals === prevSignalsRef.current) return;
+    prevSignalsRef.current = signals;
+    enqueueSignalToasts(signals);
+  }, [signals, enqueueSignalToasts]);
+
+  const prevNewMarketsRef = useRef<typeof newMarkets>(newMarkets);
+  useEffect(() => {
+    if (newMarkets === prevNewMarketsRef.current) return;
+    prevNewMarketsRef.current = newMarkets;
+    enqueueNewMarketToasts(newMarkets);
+  }, [newMarkets, enqueueNewMarketToasts]);
+
   const selectedMarket = useMarketStore((s) => s.selectedMarket);
   const selectedCountry = useMarketStore((s) => s.selectedCountry);
   const flyToTarget = useMarketStore((s) => s.flyToTarget);
@@ -1236,7 +1256,7 @@ export default function Home() {
       )}
 
 
-      <ToastContainer signals={signals} newMarkets={newMarkets} onSelectMarket={handleSelectMarketFromPanel} />
+      <ToastContainer onSelectMarket={handleSelectMarketFromPanel} />
     </div>
   );
 }

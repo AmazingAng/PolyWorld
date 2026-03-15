@@ -249,6 +249,11 @@ function MarketsPanelInner({
             )}
           </div>
           <div className="ml-auto flex items-center gap-1.5">
+            {sortedAll && !search && (
+              <span className="text-[10px] text-[var(--text-ghost)] font-mono">
+                {sortOrder === "volume" ? "by volume" : sortOrder === "impact" ? "by impact" : sortOrder === "change" ? "by change" : "newest"}
+              </span>
+            )}
             <FilterDropdown groups={[
               {
                 label: "Category",
@@ -306,8 +311,6 @@ function MarketsPanelInner({
 
         {sortedAll ? (
           <>
-            <SectionLabel title={sortOrder === "volume" ? "By Volume" : sortOrder === "impact" ? "By Impact" : sortOrder === "change" ? "By Change" : "Newest First"} />
-
             {sortedAll.length === 0 ? (
               <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
             ) : (
