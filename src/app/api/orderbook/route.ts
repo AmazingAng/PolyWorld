@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ApiCache } from "@/lib/apiCache";
-import { apiError } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +70,20 @@ export async function GET(request: NextRequest) {
       ? parseFloat(raw.last_trade_price)
       : 0;
     const tickSize = raw.tick_size ? parseFloat(raw.tick_size) : 0.001;
+    let feeRateBps = 0;
+
+    try {
+      const feeRes = await fetch(
+        `https://clob.polymarket.com/fee-rate?token_id=${encodeURIComponent(tokenId)}`,
+        { signal: AbortSignal.timeout(5_000) },
+      );
+      if (feeRes.ok) {
+        const feeData = await feeRes.json() as { base_fee?: number | string };
+        if (feeData.base_fee != null) {
+          feeRateBps = Number(feeData.base_fee);
+        }
+      }
+    } catch { /* use fallback */ }
 
     // Fetch minimum_order_size from CLOB via conditionId (gamma-api lookup)
     let minimumOrderSize = 5; // fallback default
@@ -100,10 +113,13 @@ export async function GET(request: NextRequest) {
     const data = {
       bids: bids.slice(0, 15),
       asks: asks.slice(0, 15),
+      bestBid,
+      bestAsk,
       lastTradePrice,
       spread,
       midPrice,
       tickSize,
+      feeRateBps,
       minimumOrderSize,
     };
 
@@ -111,6 +127,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(data);
   } catch (err) {
-    return apiError("orderbook", "Failed to fetch orderbook", 500, err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn("[orderbook] fetch error:", msg);
+    // Return empty data (not 500) so clients don't log red errors and can retry
+    return NextResponse.json({ bids: [], asks: [], error: msg });
   }
 }

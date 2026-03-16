@@ -138,9 +138,8 @@ export default function Header({
 
       <div className="flex-1" />
 
-      {/* Right: Wallet + Watchlist + Alerts + Status pill + sync info + refresh */}
+      {/* Right: Watchlist + Alerts + Status pill + sync info + refresh + Wallet + Settings */}
       <div className="flex items-center gap-1.5 text-[11px]">
-        <WalletButton />
         {/* Watchlist count */}
         {mounted && watchedCount > 0 && (
           <span className="flex items-center gap-1 text-[#f59e0b] text-[11px]">
@@ -223,6 +222,8 @@ export default function Header({
         >
           refresh
         </button>
+
+        <WalletButton />
 
         <button
           onClick={onOpenSettings}
