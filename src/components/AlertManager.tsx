@@ -5,6 +5,16 @@ import type { AlertConfig, AlertHistoryEntry, AlertType } from "@/hooks/useAlert
 import type { ProcessedMarket, Category } from "@/types";
 import type { SignalType } from "@/lib/smartSignals";
 
+function formatTime(ts: number) {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 const CATEGORIES: Category[] = [
   "Politics", "Crypto", "Sports",
   "Finance", "Tech", "Culture", "Other",
@@ -30,6 +40,14 @@ interface AlertManagerProps {
 type Tab = "alerts" | "history";
 
 export default function AlertManager({
+  prefill,
+  ...props
+}: AlertManagerProps) {
+  const prefillKey = prefill?.marketId ?? "none";
+  return <AlertManagerContent key={prefillKey} prefill={prefill} {...props} />;
+}
+
+function AlertManagerContent({
   open,
   onClose,
   alerts,
@@ -61,18 +79,6 @@ export default function AlertManager({
   const [formMinUsdcSize, setFormMinUsdcSize] = useState("5000");
   const [formHoursBeforeEnd, setFormHoursBeforeEnd] = useState("24");
   const [showForm, setShowForm] = useState(!!prefill);
-
-  // Update when prefill changes
-  useEffect(() => {
-    if (prefill?.marketId) {
-      setFormType("price_cross");
-      setFormMarketSearch(prefill.marketTitle || "");
-      setFormMarketId(prefill.marketId);
-      setFormMarketTitle(prefill.marketTitle || "");
-      setShowForm(true);
-      setActiveTab("alerts");
-    }
-  }, [prefill]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -160,16 +166,6 @@ export default function AlertManager({
     setFormMinUsdcSize("5000");
     setFormHoursBeforeEnd("24");
     setShowForm(false);
-  };
-
-  const formatTime = (ts: number) => {
-    const diff = Date.now() - ts;
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
   };
 
   const unreadCount = history.filter((h) => !h.read).length;

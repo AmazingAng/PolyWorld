@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { ProcessedMarket, OrderBookData, OrderBookLevel } from "@/types";
 import MarketDepthChart from "./MarketDepthChart";
 import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
+import { useMarketStore } from "@/stores/marketStore";
 
 // Brighter colors for better contrast on dark backgrounds
 const BID_COLOR = "#4ade80";
@@ -57,6 +58,7 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
   const retryCount = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const midRef = useRef<HTMLDivElement>(null);
+  const selectedOutcomeTokenId = useMarketStore((s) => s.selectedOutcomeTokenId);
 
   const yesTokenIds = useMemo(() => {
     if (!selectedMarket || selectedMarket.closed) return [];
@@ -143,6 +145,28 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
     setBookSide("YES");
     needsScrollCenter.current = true;
   }, [selectedMarket?.id]);
+
+  // When an outcome is clicked in MarketDetailPanel, switch to that token's book side
+  // and trigger a fresh fetch so the correct token is loaded (noData may be null,
+  // or for multi-binary markets the wrong YES token may be cached).
+  useEffect(() => {
+    if (!selectedOutcomeTokenId) return;
+    if (yesTokenIds.includes(selectedOutcomeTokenId)) {
+      activeYesTokenRef.current = selectedOutcomeTokenId;
+      setBookSide("YES");
+      needsScrollCenter.current = true;
+    } else if (noTokenIds.includes(selectedOutcomeTokenId)) {
+      activeNoTokenRef.current = selectedOutcomeTokenId;
+      setBookSide("NO");
+      needsScrollCenter.current = true;
+    } else {
+      return;
+    }
+    retryCount.current = 0;
+    setLoading(true);
+    fetchBook().finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOutcomeTokenId]);
 
   // Scroll to center mid-price after fresh data renders
   const data = bookSide === "NO" ? noData : yesData;

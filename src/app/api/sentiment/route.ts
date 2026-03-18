@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import type { SentimentIndex, SentimentSubScore } from "@/types";
 import { SingleCache } from "@/lib/apiCache";
-import { apiError } from "@/lib/apiError";
+// import { apiError } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
 

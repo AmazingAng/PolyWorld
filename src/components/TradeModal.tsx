@@ -62,33 +62,49 @@ function timeAgo(ts: number): string {
 interface BookLevel { price: number; size: number; }
 interface BookData { bids: BookLevel[]; asks: BookLevel[]; }
 
+async function loadOrderBook(
+  tokenId: string,
+  signal: AbortSignal,
+): Promise<BookData | null> {
+  const res = await fetch(`/api/orderbook?tokenId=${encodeURIComponent(tokenId)}`, { signal });
+  if (!res.ok) return null;
+  return res.json() as Promise<BookData>;
+}
+
 function MiniOrderBook({ tokenId, currentPrice }: { tokenId: string; currentPrice: number }) {
   const [book, setBook] = useState<BookData | null>(null);
   const [loading, setLoading] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
 
-  const fetchBook = useCallback(async () => {
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
-    try {
-      const res = await fetch(`/api/orderbook?tokenId=${encodeURIComponent(tokenId)}`, { signal: ac.signal });
-      if (!res.ok) return;
-      const d = await res.json();
-      if (!ac.signal.aborted) {
-        setBook(d);
-        setLoading(false);
-      }
-    } catch { /* aborted or network error */ }
-  }, [tokenId]);
-
   useEffect(() => {
-    setLoading(true);
-    setBook(null);
-    fetchBook();
-    const iv = setInterval(fetchBook, 5_000);
-    return () => { clearInterval(iv); abortRef.current?.abort(); };
-  }, [fetchBook]);
+    let cancelled = false;
+
+    const fetchLatest = async () => {
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      try {
+        const data = await loadOrderBook(tokenId, ac.signal);
+        if (!cancelled && !ac.signal.aborted) {
+          setBook(data);
+          setLoading(false);
+        }
+      } catch {
+        // aborted or network error
+      }
+    };
+
+    void fetchLatest();
+    const iv = setInterval(() => {
+      void fetchLatest();
+    }, 5_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+      abortRef.current?.abort();
+    };
+  }, [tokenId]);
 
   // Compute cumulative sizes for depth bars
   const ROWS = 8;
@@ -170,22 +186,25 @@ interface TradeModalProps {
 }
 
 export default function TradeModal({ state, onClose }: TradeModalProps) {
+  const modalKey = [
+    state.tokenId,
+    state.currentPrice,
+    state.outcomeName,
+    state.defaultSide,
+    state.marketTitle,
+  ].join(":");
+
+  return <TradeModalContent key={modalKey} state={state} onClose={onClose} />;
+}
+
+function TradeModalContent({ state, onClose }: TradeModalProps) {
   const hasYesNo = !!(state.yesToken && state.noToken);
 
   const [activeTokenId, setActiveTokenId] = useState(state.tokenId);
   const [activePrice, setActivePrice] = useState(state.currentPrice);
   const [activeName, setActiveName] = useState(state.outcomeName);
   const [orderPlaced, setOrderPlaced] = useState(false);
-  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
-
-  useEffect(() => { setRecentOrders(loadRecentOrders()); }, []);
-
-  useEffect(() => {
-    setActiveTokenId(state.tokenId);
-    setActivePrice(state.currentPrice);
-    setActiveName(state.outcomeName);
-    setOrderPlaced(false);
-  }, [state.tokenId, state.currentPrice, state.outcomeName]);
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>(() => loadRecentOrders());
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); },

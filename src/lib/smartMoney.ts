@@ -1,7 +1,7 @@
 import { fetchWithRetry } from "./retry";
 
 const DATA_API_BASE = "https://data-api.polymarket.com";
-const REQUEST_TIMEOUT = 10_000;
+const REQUEST_TIMEOUT = 15_000;
 const RATE_LIMIT_MS = 200;
 
 let lastRequestTime = 0;
@@ -354,11 +354,10 @@ function parseTraderPosition(p: TraderPositionApiEntry, redeemed: boolean): Trad
 
 export async function fetchTraderPositions(wallet: string): Promise<TraderPosition[]> {
   try {
-    const [openRes, closedRes] = await Promise.all([
-      rateLimitedFetch(`${DATA_API_BASE}/positions?user=${wallet}&sortBy=CURRENT&limit=200`),
-      rateLimitedFetch(`${DATA_API_BASE}/closed-positions?user=${wallet}&limit=200`),
-    ]);
+    // Sequential to respect rate limiter — parallel causes timeout when both queue up
+    const openRes = await rateLimitedFetch(`${DATA_API_BASE}/positions?user=${wallet}&sortBy=CURRENT&limit=200`);
     const openData = openRes.ok ? await openRes.json() : [];
+    const closedRes = await rateLimitedFetch(`${DATA_API_BASE}/closed-positions?user=${wallet}&limit=200`);
     const closedData = closedRes.ok ? await closedRes.json() : [];
     const openArr = Array.isArray(openData) ? openData : openData.positions || openData.data || [];
     const closedArr = Array.isArray(closedData) ? closedData : closedData.positions || closedData.data || [];
@@ -367,7 +366,11 @@ export async function fetchTraderPositions(wallet: string): Promise<TraderPositi
       ...closedArr.map((p: TraderPositionApiEntry) => parseTraderPosition(p, true)),
     ];
   } catch (err) {
-    console.error(`[smartMoney] Trader positions fetch error for ${wallet}:`, err);
+    if (err instanceof DOMException && err.name === "AbortError") {
+      console.warn(`[smartMoney] Trader positions timeout for ${wallet} (slow API)`);
+    } else {
+      console.error(`[smartMoney] Trader positions fetch error for ${wallet}:`, err);
+    }
     return [];
   }
 }

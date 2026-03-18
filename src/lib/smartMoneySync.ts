@@ -1,12 +1,12 @@
 import { getDb } from "./db";
 import { fetchLeaderboard, fetchFullLeaderboard, fetchMarketTrades } from "./smartMoney";
 import type { LeaderboardTimePeriod } from "./smartMoney";
+import { SMART_MONEY_MS, LEADERBOARD_MS } from "./syncIntervals";
 
-const SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
-const FULL_LEADERBOARD_INTERVAL = 60 * 60 * 1000; // 1 hour
+const SYNC_INTERVAL = SMART_MONEY_MS;
+const FULL_LEADERBOARD_INTERVAL = LEADERBOARD_MS;
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let fullLeaderboardTimer: ReturnType<typeof setInterval> | null = null;
-let lastFullSync = 0;
 
 /**
  * Full leaderboard sync: fetch all wallets with PnL >= $100k.
@@ -53,7 +53,6 @@ export async function runFullLeaderboardSync(): Promise<void> {
       }
     })();
 
-    lastFullSync = Date.now();
     console.info(`[smartMoney] Full leaderboard sync complete — ${leaderboard.length} wallets (PnL >= $100k)`);
   } catch (err) {
     console.error("[smartMoney] Full leaderboard sync error:", err);

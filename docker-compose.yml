@@ -1,0 +1,32 @@
+services:
+  polyworld:
+    build: .
+    container_name: polyworld
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - polyworld-data:/app/data
+    env_file:
+      - .env.prod
+    environment:
+      - NODE_ENV=production
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - polyworld
+
+volumes:
+  polyworld-data:
+  caddy-data:
+  caddy-config:

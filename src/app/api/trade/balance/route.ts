@@ -2,15 +2,52 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTradeSession } from "@/lib/tradeSession";
 
 const USDC_E = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
-const RPC_URLS = [
-  "https://rpc.ankr.com/polygon",
-  "https://1rpc.io/matic",
-];
+const BALANCE_CACHE_TTL_MS = 10_000;
+
+declare global {
+  var _balanceCache:
+    | Map<string, { balance: number; expiresAt: number }>
+    | undefined;
+}
+
+const balanceCache =
+  globalThis._balanceCache ?? (globalThis._balanceCache = new Map());
+
+function getRpcUrls(): string[] {
+  const configured = process.env.POLYGON_RPC_URLS
+    ?.split(",")
+    .map((url) => url.trim())
+    .filter(Boolean);
+  return configured?.length ? configured : ["https://rpc.ankr.com/polygon"];
+}
+
+function readCachedBalance(address: string): number | null {
+  const now = Date.now();
+  const key = address.toLowerCase();
+  const entry = balanceCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= now) {
+    balanceCache.delete(key);
+    return null;
+  }
+  return entry.balance;
+}
+
+function writeCachedBalance(address: string, balance: number) {
+  balanceCache.set(address.toLowerCase(), {
+    balance,
+    expiresAt: Date.now() + BALANCE_CACHE_TTL_MS,
+  });
+}
 
 async function getOnChainUsdcBalance(address: string): Promise<number> {
-  // balanceOf(address) selector = 0x70a08231
-  const data = "0x70a08231" + address.slice(2).toLowerCase().padStart(64, "0");
-  for (const rpc of RPC_URLS) {
+  const cached = readCachedBalance(address);
+  if (cached !== null) return cached;
+
+  // balanceOf(address) — ABI-encode the address into 32 bytes (left-pad with zeros)
+  const addr = address.startsWith("0x") ? address.slice(2) : address;
+  const data = "0x70a08231" + addr.toLowerCase().padStart(64, "0");
+  for (const rpc of getRpcUrls()) {
     try {
       const res = await fetch(rpc, {
         method: "POST",
@@ -20,14 +57,31 @@ async function getOnChainUsdcBalance(address: string): Promise<number> {
           params: [{ to: USDC_E, data }, "latest"],
           id: 1,
         }),
+        signal: AbortSignal.timeout(8_000),
       });
-      const json = await res.json();
-      if (json.result) {
-        return parseInt(json.result, 16) / 1e6;
-      }
-    } catch { /* try next */ }
+      const json = await res.json() as { result?: string; error?: unknown };
+      if (json.error || !json.result || json.result === "0x") continue;
+      const raw = BigInt(json.result);
+      const balance = Number(raw) / 1e6;
+      writeCachedBalance(address, balance);
+      return balance;
+    } catch { /* try next RPC */ }
   }
   throw new Error("all RPCs failed");
+}
+
+// GET /api/trade/balance?address=0x... — public on-chain USDC.e balance (no auth required)
+export async function GET(req: NextRequest) {
+  const addr = req.nextUrl.searchParams.get("address") ?? "";
+  if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+    return NextResponse.json({ error: "valid address required" }, { status: 400 });
+  }
+  try {
+    const balance = await getOnChainUsdcBalance(addr);
+    return NextResponse.json({ balance });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "rpc failed" }, { status: 502 });
+  }
 }
 
 export async function POST(req: NextRequest) {

@@ -267,6 +267,7 @@ function MarketsTab({
   loading?: boolean;
 }) {
   const [search, setSearch] = useState("");
+  const [renderNow] = useState(() => Date.now());
 
   const all = [...mapped, ...unmapped];
   const filtered = all.filter((m) => activeCategories.has(m.category));
@@ -280,12 +281,11 @@ function MarketsTab({
       )
     : null;
 
-  const now = Date.now();
   const newMarkets = (searchFiltered || filtered)
     .filter(
       (m) =>
         m.createdAt &&
-        now - new Date(m.createdAt).getTime() < NEW_THRESHOLD_MS
+        renderNow - new Date(m.createdAt).getTime() < NEW_THRESHOLD_MS
     )
     .sort(
       (a, b) =>

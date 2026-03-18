@@ -1,0 +1,80 @@
+---
+title: Overview
+description: PolyWorld — real-time Polymarket visualization dashboard with interactive world map.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+<Callout type="info">
+PolyWorld is a real-time prediction market dashboard built on [Polymarket](https://polymarket.com) data. It visualizes global prediction markets on an interactive map, provides AI-powered signals, smart money tracking, and a full trading interface.
+</Callout>
+
+<Callout type="warn">
+**Want to trade?** Follow the [Trading Guide](/docs/trading) — connect your wallet, fund your account, and start placing orders on Polymarket right from this dashboard.
+</Callout>
+
+## Key Features
+
+<Cards>
+  <Card title="🌍 Interactive World Map">
+    Markets pinned to geographic locations via AI geocoding. Color-coded by category with real-time probability overlays.
+  </Card>
+  <Card title="📊 19 Modular Panels">
+    Fully customizable layout with drag-and-drop reordering. Right sidebar + bottom bar arrangement.
+  </Card>
+  <Card title="🐋 Smart Money Tracking">
+    Whale trades, top PnL wallets, cluster detection. See what the sharpest traders are doing.
+  </Card>
+  <Card title="⚡ AI Signal Engine">
+    7 signal types combining price, volume, news, and wallet data. Ranked by strength and recency.
+  </Card>
+  <Card title="💰 CLOB Trading">
+    Place market/limit orders directly from the dashboard. Full orderbook visualization.
+  </Card>
+  <Card title="📰 News & Sentiment">
+    AI-matched news articles and sentiment summaries per market. Combines multiple data sources.
+  </Card>
+</Cards>
+
+## Architecture
+
+<Tabs items={["Data Flow", "Sync Loops"]}>
+  <Tab value="Data Flow">
+    ```
+    Polymarket Gamma API
+        → fetchEventsFromAPI()
+        → processEvents()
+        → SQLite (local cache)
+            ↓
+        /api/markets → Frontend (45s polling)
+    ```
+  </Tab>
+  <Tab value="Sync Loops">
+    Five background sync loops run server-side via `src/instrumentation.ts`:
+
+    | Loop | File | Interval |
+    |------|------|----------|
+    | **Market data** | `src/lib/sync.ts` | 30s |
+    | **News** | `src/lib/newsSync.ts` | 5min |
+    | **Smart money** | `src/lib/smartMoneySync.ts` | 30s |
+    | **Tweets** | `src/lib/tweetsSync.ts` | 3min |
+    | **Resolution** | `src/lib/resolutionSync.ts` | 2min |
+  </Tab>
+</Tabs>
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Framework** | Next.js 16 (App Router) + React 19 |
+| **State** | Zustand 5 — 3 stores (`marketStore`, `smartMoneyStore`, `uiStore`) |
+| **Map** | MapLibre GL JS — dynamic import, SSR disabled |
+| **Database** | SQLite (better-sqlite3) — local Polymarket data cache |
+| **AI** | Claude API — news matching, geocoding, sentiment |
+| **Styles** | Tailwind CSS 4 + CSS custom properties, dark-only theme |
+
+<Callout type="warn">
+**AI Cost Note:** News/tweet AI matching is the primary cost driver (~$5/hr). Each batch is limited to 50 items, and matched items are flagged with `ai_match_done=1` to prevent re-processing.
+</Callout>

@@ -125,14 +125,16 @@ export default function OrderForm({
   const [side, setSide] = useState<Side>(defaultSide);
   const [price, setPrice] = useState(currentPrice.toFixed(2));
   const [amount, setAmount] = useState("");
-  const [isMarketOrder, setIsMarketOrder] = useState(false);
+  const [limitOnly, setLimitOnly] = useState(false);
+  const isMarketOrder = !limitOnly;
   const [status, setStatus] = useState<"idle" | "authorizing" | "approving" | "signing" | "submitting" | "done" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [minOrderShares, setMinOrderShares] = useState(5);
   const [optimisticSharesHeld, setOptimisticSharesHeld] = useState<number | null>(null);
   const [ctfApprovalFallback, setCtfApprovalFallback] = useState(false);
-  const [quotedMarketPrice, setQuotedMarketPrice] = useState<number | null>(null);
+  const [quotedMarketPrice, setQuotedMarketPrice] = useState<number | null>(null);   // execution price (display)
+  const [quotedLimitPrice, setQuotedLimitPrice] = useState<number | null>(null);     // buffered limit price (order submission)
   const quotedAtRef = useRef<number | null>(null);
   const [quoteRefreshKey, setQuoteRefreshKey] = useState(0);
 
@@ -168,7 +170,7 @@ export default function OrderForm({
   // Debounced market-price pre-fetch for slippage hint
   // (placed after amountNum so it can be referenced in the dependency array)
   useEffect(() => {
-    if (!isMarketOrder || amountNum <= 0) { setQuotedMarketPrice(null); return; }
+    if (!isMarketOrder || amountNum <= 0) { setQuotedMarketPrice(null); setQuotedLimitPrice(null); return; }
     const timer = setTimeout(async () => {
       try {
         const res = await fetch("/api/trade/market-price", {
@@ -177,9 +179,10 @@ export default function OrderForm({
           body: JSON.stringify({ tokenId, side, amount: amountNum }),
         });
         if (!res.ok) return;
-        const data = await res.json() as { limitPrice?: number };
-        if (typeof data.limitPrice === "number") {
-          setQuotedMarketPrice(data.limitPrice);
+        const data = await res.json() as { executionPrice?: number; limitPrice?: number };
+        if (typeof data.executionPrice === "number") {
+          setQuotedMarketPrice(data.executionPrice);
+          setQuotedLimitPrice(data.limitPrice ?? data.executionPrice);
           quotedAtRef.current = Date.now();
         }
       } catch { /* ignore */ }
@@ -247,16 +250,13 @@ export default function OrderForm({
   }, [optimisticSharesHeld, sharesHeld]);
 
   const refreshTradeState = useCallback(async () => {
-    const delays = [0, 1500, 4000, 8000];
+    const delays = [500, 2000, 5000];
+    notifyHeaderBalanceRefresh();
+    await Promise.allSettled([refetchShares(), refetchUsdcBalance()]);
     for (const delay of delays) {
-      if (delay > 0) await sleep(delay);
-      // Skip header balance notification at t=0: on-chain data not yet confirmed,
-      // RPC returns pre-trade balance causing a brief wrong value in the header.
-      if (delay > 0) notifyHeaderBalanceRefresh();
-      await Promise.allSettled([
-        refetchShares(),
-        refetchUsdcBalance(),
-      ]);
+      await sleep(delay);
+      notifyHeaderBalanceRefresh();
+      await Promise.allSettled([refetchShares(), refetchUsdcBalance()]);
     }
   }, [refetchShares, refetchUsdcBalance]);
 
@@ -330,15 +330,16 @@ export default function OrderForm({
             amount: effectiveAmount,
           }),
         });
-        const quoteData = await quoteRes.json() as { limitPrice?: number; error?: string };
+        const quoteData = await quoteRes.json() as { executionPrice?: number; limitPrice?: number; error?: string };
         if (process.env.NODE_ENV !== "production") {
           console.log("[OrderForm] placeOrder:marketQuote", { traceId, ok: quoteRes.ok, status: quoteRes.status, quoteData });
         }
         if (!quoteRes.ok || typeof quoteData.limitPrice !== "number") {
           throw new Error(quoteData.error ?? `HTTP ${quoteRes.status}`);
         }
-        effectivePrice = quoteData.limitPrice;
-        setQuotedMarketPrice(quoteData.limitPrice);
+        effectivePrice = quoteData.limitPrice;  // submit with buffered limit price
+        setQuotedMarketPrice(quoteData.executionPrice ?? quoteData.limitPrice);  // display execution price
+        setQuotedLimitPrice(quoteData.limitPrice);
         quotedAtRef.current = Date.now();
       } else if (priceNum <= 0) {
         return;
@@ -672,13 +673,13 @@ export default function OrderForm({
           </button>
         </div>
         {/* Slippage warning (compact) */}
-        {compactSlippageCents >= 2 && (
+        {compactSlippageCents >= 1 && (
           <div className={`text-[9px] flex items-center justify-between gap-1 ${
             compactSlippageCents >= 5 ? "text-[#ff4444]" : "text-[#f59e0b]"
           }`}>
             <span>{compactSlippageCents >= 5 ? `⚠ ${compactSlippageCents.toFixed(0)}¢ slippage — market moving fast` : `⚠ ${compactSlippageCents.toFixed(0)}¢ slippage`}</span>
             <button
-              onClick={() => { quotedAtRef.current = null; setQuotedMarketPrice(null); setQuoteRefreshKey(k => k + 1); }}
+              onClick={() => { quotedAtRef.current = null; setQuotedMarketPrice(null); setQuotedLimitPrice(null); setQuoteRefreshKey(k => k + 1); }}
               className={`border px-1 py-px transition-colors ${
                 compactSlippageCents >= 5
                   ? "border-[#ff4444]/50 hover:bg-[#ff4444]/15"
@@ -722,7 +723,7 @@ export default function OrderForm({
     if (tag === "INPUT") return;
     if (e.key === "b" || e.key === "B") { e.preventDefault(); setSide("BUY"); }
     if (e.key === "s" || e.key === "S") { e.preventDefault(); setSide("SELL"); }
-    if (e.key === "m" || e.key === "M") { e.preventDefault(); setIsMarketOrder(v => !v); }
+    if (e.key === "m" || e.key === "M") { e.preventDefault(); setLimitOnly(v => !v); }
     if (e.key === "1") { e.preventDefault(); setAmount("5"); }
     if (e.key === "2") { e.preventDefault(); setAmount("20"); }
     if (e.key === "3") { e.preventDefault(); setAmount("50"); }
@@ -754,14 +755,14 @@ export default function OrderForm({
   }
 
   return (
-    <div className="font-mono space-y-3 text-[11px]" tabIndex={-1} onKeyDown={handleFormKey} style={{ outline: "none" }}>
+    <div className="font-mono flex flex-col gap-3 text-[11px]" tabIndex={-1} onKeyDown={handleFormKey} style={{ outline: "none", minHeight: 340 }}>
 
       {/* ── Row 1: Buy / Sell tabs + Balance ── */}
       <div className="flex items-center border-b border-[var(--border-subtle)]">
         {(["BUY", "SELL"] as Side[]).map((s) => (
           <button
             key={s}
-            onClick={() => { setSide(s); setAmount(""); setErrorMsg(null); setIsMarketOrder(false); setCtfApprovalFallback(false); }}
+            onClick={() => { setSide(s); setAmount(""); setErrorMsg(null); setCtfApprovalFallback(false); }}
             className={`px-4 py-1.5 text-[11px] font-bold border-b-2 -mb-px transition-colors ${
               side === s
                 ? s === "BUY"
@@ -839,15 +840,40 @@ export default function OrderForm({
           <span className="text-[9px] text-[var(--text-faint)] uppercase tracking-[0.08em]">
             {side === "BUY" ? "Amount (USDC)" : "Shares"}
           </span>
-          {side === "SELL" && displayedSharesHeld !== null && displayedSharesHeld > 0 && (
+          <div className="flex items-center gap-1.5">
+            {/* Limit Only toggle */}
             <button
-              onClick={() => setAmount(displayedSharesHeld.toFixed(2))}
-              className="text-[9px] text-[#a78bfa] hover:text-[#c4b5fd] transition-colors tabular-nums"
-              title="Sell all"
+              onClick={() => setLimitOnly(v => !v)}
+              className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 border transition-colors ${
+                limitOnly
+                  ? "border-[#f59e0b]/60 text-[#f59e0b] bg-[#f59e0b]/8"
+                  : "border-[var(--border)] text-[var(--text-ghost)] hover:text-[var(--text-faint)] hover:border-[var(--border-subtle)]"
+              }`}
+              title={limitOnly ? "Limit Only: Only Limit Order Allowed" : "Limit Only Off — Market Order Allowed"}
             >
-              {displayedSharesHeld.toFixed(2)} held
+              <svg width="9" height="9" viewBox="0 0 24 24" fill={limitOnly ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              Limit
             </button>
-          )}
+            {/* Max button */}
+            {side === "BUY" && usdcRawBalance !== undefined && (
+              <button
+                onClick={() => setAmount((Number(usdcRawBalance) / 1e6).toFixed(2))}
+                className="text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors"
+              >
+                Max
+              </button>
+            )}
+            {side === "SELL" && displayedSharesHeld !== null && displayedSharesHeld > 0 && (
+              <button
+                onClick={() => setAmount(displayedSharesHeld.toFixed(2))}
+                className="text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[#a78bfa] hover:text-[#c4b5fd] transition-colors"
+              >
+                Max
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <div className="flex-1 relative">
@@ -865,55 +891,42 @@ export default function OrderForm({
               className="w-full bg-transparent border border-[var(--border)] pl-7 pr-2 py-1.5 text-[16px] font-bold text-center text-[var(--text)] tabular-nums outline-none focus:border-[var(--text-faint)]"
             />
           </div>
-          {side === "BUY" && usdcRawBalance !== undefined && (
-            <button
-              onClick={() => setAmount((Number(usdcRawBalance) / 1e6).toFixed(2))}
-              className="text-[9px] px-2 py-1.5 border border-[var(--border)] text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors shrink-0"
-            >
-              Max
-            </button>
-          )}
-          {side === "SELL" && displayedSharesHeld !== null && displayedSharesHeld > 0 && (
-            <button
-              onClick={() => setAmount(displayedSharesHeld.toFixed(2))}
-              className="text-[9px] px-2 py-1.5 border border-[var(--border)] text-[#a78bfa] hover:text-[#c4b5fd] transition-colors shrink-0"
-            >
-              Max
-            </button>
-          )}
         </div>
 
         {/* Presets */}
-        <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+        <div className="grid grid-cols-4 gap-1 mt-1.5">
           {side === "BUY" ? (
-            [5, 20, 50, 100, 500].map((v) => (
+            [50, 100, 500, 1000].map((v) => (
               <button
                 key={v}
                 onClick={() => setAmount((prev) => {
                   const cur = parseFloat(prev) || 0;
-                  return String(cur + v);
+                  return cur === v ? "" : String(cur + v);
                 })}
-                className="text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-faint)] hover:border-[var(--border-subtle)] hover:text-[var(--text-muted)] transition-colors tabular-nums"
+                className={`text-[9px] py-1 border transition-colors tabular-nums ${
+                  amountNum === v
+                    ? "border-[#ff4444]/60 text-[#ff4444] bg-[#ff4444]/8"
+                    : "border-[var(--border)] text-[#ff4444]/60 hover:border-[#ff4444]/40 hover:text-[#ff4444]"
+                }`}
               >
-                +${v}
+                ${v}
               </button>
             ))
           ) : (
             ([10, 25, 50, 100] as const).map((pct) => {
               const shareAmt = displayedSharesHeld ? roundDown(displayedSharesHeld * pct / 100, SIZE_DECIMALS) : null;
-              const label = `${pct}%`;
               return (
                 <button
                   key={pct}
                   onClick={() => { if (shareAmt) setAmount(shareAmt.toFixed(2)); }}
                   disabled={!displayedSharesHeld}
-                  className={`text-[9px] px-1.5 py-0.5 border transition-colors disabled:opacity-30 ${
+                  className={`text-[9px] py-1 border transition-colors disabled:opacity-30 ${
                     shareAmt !== null && Math.abs(amountNum - shareAmt) < 0.01
                       ? "border-[#ff4444]/60 text-[#ff4444] bg-[#ff4444]/8"
                       : "border-[var(--border)] text-[var(--text-faint)] hover:border-[var(--border-subtle)] hover:text-[var(--text-muted)]"
                   }`}
                 >
-                  {label}
+                  {pct}%
                 </button>
               );
             })
@@ -929,15 +942,16 @@ export default function OrderForm({
         const refreshQuote = () => {
           quotedAtRef.current = null;
           setQuotedMarketPrice(null);
+          setQuotedLimitPrice(null);
           setQuoteRefreshKey(k => k + 1);
         };
-        if (slippageCents >= 2) return (
+        if (slippageCents >= 1) return (
           <div className={`text-[9px] border px-2 py-1 flex items-center justify-between gap-2 ${
             slippageCents >= 5
               ? "text-[#ff4444] bg-[rgba(255,68,68,0.08)] border-[#ff4444]/30"
               : "text-[#f59e0b] bg-[rgba(245,158,11,0.08)] border-[#f59e0b]/30"
           }`}>
-            <span>{slippageCents >= 5 ? `⚠ Price moved ${slippageCents.toFixed(0)}¢ from mid — market is moving fast` : `⚠ Price moved ${slippageCents.toFixed(0)}¢ from mid — slippage may be high`}</span>
+            <span>{slippageCents >= 5 ? `⚠ Price moved ${slippageCents.toFixed(0)}¢ from mid — market is moving fast` : `⚠ ${slippageCents.toFixed(0)}¢ from mid`}</span>
             <button
               onClick={refreshQuote}
               className={`text-[9px] border px-1.5 py-0.5 transition-colors shrink-0 ${
@@ -953,31 +967,12 @@ export default function OrderForm({
         return null;
       })()}
 
-      {/* ── Row 4: Market/Limit toggle + position info ── */}
+      {/* ── Row 4: Position info + market order indicator ── */}
       <div className="flex items-center gap-2">
-        <button
-          onClick={() => setIsMarketOrder(!isMarketOrder)}
-          className={`flex items-center gap-1.5 text-[9px] px-2 py-1 border transition-colors ${
-            isMarketOrder
-              ? "border-[#a78bfa]/60 text-[#a78bfa] bg-[#a78bfa]/8"
-              : "border-[var(--border)] text-[var(--text-faint)] hover:border-[var(--border-subtle)] hover:text-[var(--text-muted)]"
-          }`}
-          title={isMarketOrder ? "Market order: fills immediately at best price" : "Limit order: fills at your specified price"}
-        >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-          </svg>
-          {isMarketOrder ? "Market" : "Limit"}
-        </button>
         {isMarketOrder && quotedMarketPrice && (
           <span className="text-[9px] text-[var(--text-faint)] tabular-nums">
             ~{(quotedMarketPrice * 100).toFixed(1)}¢ est. fill
           </span>
-        )}
-        {negRisk && (
-          <div className="text-[9px] text-[#f59e0b] bg-[rgba(245,158,11,0.1)] border border-[#f59e0b]/30 px-2 py-1">
-            ⚠ Mutually exclusive: YES + NO = 100%
-          </div>
         )}
         {side === "BUY" && displayedSharesHeld !== null && displayedSharesHeld > 0 && (
           <button
@@ -1022,6 +1017,9 @@ export default function OrderForm({
           </div>
         )}
       </div>
+
+      {/* Spacer pushes action button to bottom */}
+      <div className="flex-1" />
 
       {/* ── Row 6: Action ── */}
       {!tradeSession ? (
@@ -1077,14 +1075,17 @@ export default function OrderForm({
         </button>
       )}
 
-      {status === "done" && (
-        <div className="text-[11px] text-[#22c55e] text-center">
-          ✓ Order placed{orderId && orderId !== "submitted" ? ` · ${orderId.slice(0, 16)}…` : ""}
-        </div>
-      )}
-      {status === "error" && errorMsg && (
-        <div className="text-[10px] text-[#ff4444] break-all">{errorMsg}</div>
-      )}
+      {/* Status line — fixed height so button doesn't shift */}
+      <div className="h-4 text-center">
+        {status === "done" && (
+          <span className="text-[11px] text-[#22c55e]">
+            ✓ Order placed{orderId && orderId !== "submitted" ? ` · ${orderId.slice(0, 16)}…` : ""}
+          </span>
+        )}
+        {status === "error" && errorMsg && (
+          <span className="text-[10px] text-[#ff4444] break-all">{errorMsg}</span>
+        )}
+      </div>
     </div>
   );
 }

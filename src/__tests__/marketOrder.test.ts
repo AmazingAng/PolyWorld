@@ -47,4 +47,19 @@ describe("bufferMarketPrice", () => {
     expect(bufferMarketPrice("BUY", 0.56, 0.01)).toBe(0.58);
     expect(bufferMarketPrice("SELL", 0.46, 0.01)).toBe(0.44);
   });
+
+  it("clamps BUY result to 0.99 maximum", () => {
+    expect(bufferMarketPrice("BUY", 0.99, 0.01)).toBe(0.99);
+    expect(bufferMarketPrice("BUY", 0.98, 0.01)).toBe(0.99);
+  });
+
+  it("clamps SELL result to 0.01 minimum", () => {
+    expect(bufferMarketPrice("SELL", 0.01, 0.01)).toBe(0.01);
+    expect(bufferMarketPrice("SELL", 0.02, 0.01)).toBe(0.01);
+  });
+
+  it("uses default tick size of 0.01 when not provided", () => {
+    expect(bufferMarketPrice("BUY", 0.50)).toBe(0.52);
+    expect(bufferMarketPrice("SELL", 0.50)).toBe(0.48);
+  });
 });

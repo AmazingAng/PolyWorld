@@ -88,6 +88,26 @@ export default function Sparkline({
   height = 40,
   multiSeries = false,
 }: SparklineProps) {
+  const sparklineKey = `${eventId}:${hours}:${width}:${height}:${multiSeries ? "multi" : "single"}`;
+  return (
+    <SparklineContent
+      key={sparklineKey}
+      eventId={eventId}
+      hours={hours}
+      width={width}
+      height={height}
+      multiSeries={multiSeries}
+    />
+  );
+}
+
+function SparklineContent({
+  eventId,
+  hours = 24,
+  width = 120,
+  height = 40,
+  multiSeries = false,
+}: SparklineProps) {
   const [singleData, setSingleData] = useState<SnapshotRow[]>([]);
   const [multiData, setMultiData] = useState<SeriesData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,7 +117,6 @@ export default function Sparkline({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
 
     const baseUrl = `/api/snapshots?eventId=${encodeURIComponent(eventId)}&hours=${hours}`;
 
@@ -136,15 +155,15 @@ export default function Sparkline({
   const leftPad = showAxes ? 36 : 2;
   const hasMultiData = multiData.length > 0;
   const hasSingleData = singleData.length >= 2;
+  const [renderNow] = useState(() => Date.now());
   const rightPad = showAxes ? (hasMultiData ? 65 : (hasSingleData ? 35 : 6)) : 6;
   const topPad = 6;
   const bottomPad = showAxes ? 18 : 6;
   const chartW = width - leftPad - rightPad;
   const chartH = height - topPad - bottomPad;
 
-  const now = Date.now();
-  const tMin = now - hours * 3600_000;
-  const tMax = now;
+  const tMin = renderNow - hours * 3600_000;
+  const tMax = renderNow;
   const tRange = tMax - tMin;
 
   // Process multi-series data
@@ -158,7 +177,7 @@ export default function Sparkline({
     }).sort((a, b) => b.lastValue - a.lastValue);
 
     // Global Y range across all series (0 to max for probability charts)
-    let vMin = 0;
+    const vMin = 0;
     let vMax = Math.max(...withLatest.map(s => Math.max(...s.pts.map(p => p.v))));
     if (vMax <= 0) vMax = 1;
     // Add a bit of top padding

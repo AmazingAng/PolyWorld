@@ -74,48 +74,42 @@ function UTCClock() {
 }
 
 export default function Header({
-  lastRefresh,
-  dataMode,
+  lastRefresh: _lastRefresh,
+  dataMode: _dataMode,
   loading,
   onRefresh,
   marketCount,
   globalCount,
   lastSyncTime,
   onOpenSettings,
-  watchedCount = 0,
+  watchedCount: _watchedCount = 0,
   alertUnreadCount = 0,
   alertManagerOpen,
   onOpenAlertManager,
   onCloseAlertManager,
   alertProps,
   autoRefresh = false,
-  refreshError = false,
+  refreshError: _refreshError = false,
 }: HeaderProps) {
-  const syncInfo = lastSyncTime ? getRelativeTime(lastSyncTime) : null;
+  void _lastRefresh; void _dataMode; void _watchedCount; void _refreshError;
+  const _syncInfo = lastSyncTime ? getRelativeTime(lastSyncTime) : null;
+  void _syncInfo;
   const bellRef = useRef<HTMLButtonElement>(null);
   const [mounted, setMounted] = useState(false);
-  const [progressKey, setProgressKey] = useState(0);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration guard
   useEffect(() => setMounted(true), []);
-
-  // Reset progress bar animation each time loading finishes (= data refreshed)
-  const prevLoading = useRef(loading);
-  useEffect(() => {
-    if (prevLoading.current && !loading) {
-      setProgressKey((k) => k + 1);
-    }
-    prevLoading.current = loading;
-  }, [loading]);
+  const progressKey = `${loading ? "loading" : "idle"}:${lastSyncTime ?? "none"}`;
 
   return (
     <header className="h-[48px] bg-[var(--bg)] border-b border-[var(--border-subtle)] flex items-center pl-4 pr-3 z-50 shrink-0 font-mono relative">
       {/* Left: Logo + stats */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--status-live)] shrink-0" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--status-live)] shrink-0 w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true">
             <polygon points="22,12 17,3.4 7,3.4 2,12 7,20.6 17,20.6" />
             <path d="M2 12h20M12 3.4L16 12l-4 8.6M12 3.4L8 12l4 8.6" />
           </svg>
-          <span style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 800, letterSpacing: '-0.02em' }} className="text-[17px] text-[var(--text)] whitespace-nowrap">
+          <span style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 800, letterSpacing: '-0.02em' }} className="text-[14px] sm:text-[17px] text-[var(--text)] whitespace-nowrap">
             PolyWorld
           </span>
         </div>
@@ -138,28 +132,18 @@ export default function Header({
 
       <div className="flex-1" />
 
-      {/* Right: Watchlist + Alerts + Status pill + sync info + refresh + Wallet + Settings */}
+      {/* Right: Alerts + Wallet + Settings */}
       <div className="flex items-center gap-1.5 text-[11px]">
-        {/* Watchlist count */}
-        {mounted && watchedCount > 0 && (
-          <span className="flex items-center gap-1 text-[#f59e0b] text-[11px]">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="2" strokeLinejoin="round">
-              <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
-            </svg>
-            {watchedCount}
-          </span>
-        )}
-
         {/* Alert bell + dropdown */}
         {onOpenAlertManager && (
           <div className="relative">
             <button
               ref={bellRef}
               onClick={onOpenAlertManager}
-              className={`relative text-[var(--text-muted)] hover:text-[var(--text)] transition-colors px-1 ${alertManagerOpen ? "text-[var(--text)]" : ""}`}
+              className={`relative flex items-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors px-1 ${alertManagerOpen ? "text-[var(--text)]" : ""}`}
               title="Alerts"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
@@ -172,58 +156,7 @@ export default function Header({
           </div>
         )}
 
-        {/* Status pill */}
-        <span
-          className={`flex items-center gap-1 px-1.5 py-px border text-[11px] uppercase tracking-wide ${
-            dataMode === "live"
-              ? "border-[#22c55e]/30 text-[#22c55e]"
-              : dataMode === "sample"
-              ? "border-[#ffaa00]/30 text-[#ffaa00]"
-              : "border-[#79c0ff]/30 text-[#79c0ff]"
-          }`}
-        >
-          <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              loading
-                ? "bg-[#ffaa00] animate-pulse"
-                : dataMode === "live"
-                ? "bg-[#22c55e]"
-                : "bg-[#ffaa00]"
-            }`}
-          />
-          {dataMode}
-        </span>
-
-        {/* Refresh error indicator */}
-        {refreshError && (
-          <span className="w-2 h-2 rounded-full bg-[#f97316] animate-pulse" title="Refresh failed" />
-        )}
-
-        {/* Sync time / stale warning */}
-        {mounted && syncInfo ? (
-          <span
-            className={`hidden sm:inline text-[11px] ${
-              syncInfo.stale ? "text-[#ffaa00]" : "text-[var(--text-faint)]"
-            }`}
-            title={`Last sync: ${lastSyncTime}`}
-          >
-            {syncInfo.stale && "\u26A0 "}synced {syncInfo.text}
-          </span>
-        ) : (
-          <span className="hidden sm:inline text-[var(--text-faint)] text-[11px]">
-            {lastRefresh || "\u2026"}
-          </span>
-        )}
-
-        <button
-          onClick={onRefresh}
-          disabled={loading}
-          className="text-[var(--text-muted)] px-1.5 py-px text-[11px] border border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-secondary)] transition-colors disabled:opacity-40"
-        >
-          refresh
-        </button>
-
-        <WalletButton />
+        <WalletButton onRefresh={onRefresh} loading={loading} lastSyncTime={lastSyncTime} />
 
         <button
           onClick={onOpenSettings}

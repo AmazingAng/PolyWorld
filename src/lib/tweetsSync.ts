@@ -5,12 +5,13 @@ import { TWEET_SOURCES } from "./tweetSources";
 import { isAiConfigured, matchNewsToMarkets } from "./ai";
 import { extractKeywords } from "./keywords";
 import type { TweetItem } from "@/types";
+import { TWEETS_SYNC_MS } from "./syncIntervals";
 
 const parser = new RssParser({
   timeout: 10_000,
   headers: { "User-Agent": "PolyWorld/1.0" },
 });
-const TWEETS_SYNC_INTERVAL = 180_000; // 3 minutes
+const TWEETS_SYNC_INTERVAL = TWEETS_SYNC_MS;
 
 const MAX_MATCHES_PER_ITEM = 20;
 

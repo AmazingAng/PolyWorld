@@ -104,24 +104,33 @@ function checkRateLimit(
 // ---------------------------------------------------------------------------
 // Security Headers
 // ---------------------------------------------------------------------------
-const SECURITY_HEADERS: Record<string, string> = {
-  "X-Frame-Options": "DENY",
-  "X-Content-Type-Options": "nosniff",
-  "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
-  "Content-Security-Policy": [
+function buildCsp(): string {
+  const isDev = process.env.NODE_ENV !== "production";
+  const scriptSrc = isDev
+    ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
+    : "script-src 'self'";
+
+  return [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+    scriptSrc,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob: https: http:",
     "font-src 'self' data: https://fonts.gstatic.com",
-    "connect-src 'self' https://gamma-api.polymarket.com https://data-api.polymarket.com https://clob.polymarket.com https://rpc.ankr.com https://1rpc.io https://polygon-rpc.com https://*.basemaps.cartocdn.com https://basemaps.cartocdn.com https://cdn.jsdelivr.net https://manifest.googlevideo.com https://*.googlevideo.com",
+    "connect-src 'self' https://gamma-api.polymarket.com https://data-api.polymarket.com https://clob.polymarket.com https://rpc.ankr.com https://*.basemaps.cartocdn.com https://basemaps.cartocdn.com https://cdn.jsdelivr.net https://manifest.googlevideo.com https://*.googlevideo.com",
     "media-src 'self' blob: https://*.googlevideo.com https://*.akamaized.net https://*.amagi.tv https://*.trt.com.tr https://*.nhkworld.jp",
     "worker-src 'self' blob:",
     "child-src 'self' blob:",
     "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
     "frame-ancestors 'none'",
-  ].join("; "),
+  ].join("; ");
+}
+
+const SECURITY_HEADERS: Record<string, string> = {
+  "X-Frame-Options": "DENY",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+  "Content-Security-Policy": buildCsp(),
 };
 
 function applySecurityHeaders(response: NextResponse): void {
@@ -181,5 +190,7 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*", "/"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|js|map|txt|xml)$).*)",
+  ],
 };

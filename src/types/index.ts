@@ -35,6 +35,8 @@ export interface PolymarketMarket {
   outcomePrices?: string[] | string;
   outcomes?: string[];
   volume?: number;
+  volume24hr?: number;
+  /** @deprecated snake_case alias — Gamma API uses camelCase `volume24hr` */
   volume_24hr?: number;
   oneDayPriceChange?: number;
   liquidity?: number;

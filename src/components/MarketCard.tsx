@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo, useEffect, lazy, Suspense } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect, lazy, Suspense, memo } from "react";
 import { createPortal } from "react-dom";
 import { ProcessedMarket, PolymarketMarket } from "@/types";
 import { CATEGORY_COLORS } from "@/lib/categories";
@@ -68,9 +68,10 @@ interface MarketCardProps {
   onToggleWatch?: () => void;
   onLocationHover?: (location: string, rect: DOMRect) => void;
   onLocationLeave?: () => void;
+  onTrade?: (state: import("./TradeModal").TradeModalState) => void;
 }
 
-export default function MarketCard({
+function MarketCardInner({
   market,
   showChange = false,
   onClick,
@@ -78,7 +79,9 @@ export default function MarketCard({
   onToggleWatch,
   onLocationHover,
   onLocationLeave,
+  onTrade,
 }: MarketCardProps) {
+  const [renderNow] = useState(() => Date.now());
   const color = CATEGORY_COLORS[market.category];
   const chg = formatChange(market.change);
   const marketIsNew = isNew(market);
@@ -120,7 +123,10 @@ export default function MarketCard({
     return { top, left };
   }, []);
 
-  const handleMouseEnter = useCallback(() => {
+  const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnter = () => {
+    if (dismissTimer.current) clearTimeout(dismissTimer.current);
     hoverTimer.current = setTimeout(() => {
       const pos = computePosition();
       if (pos) {
@@ -128,18 +134,19 @@ export default function MarketCard({
         setShowPopup(true);
       }
     }, 1000);
-  }, [computePosition]);
+  };
 
-  const handleMouseLeave = useCallback(() => {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    hoverTimer.current = null;
-    setShowPopup(false);
-  }, []);
+  const handleMouseLeave = () => {
+    if (hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null; }
+    // Delay dismiss so cursor can reach the popup
+    dismissTimer.current = setTimeout(() => setShowPopup(false), 300);
+  };
 
   // Clean up timer on unmount
   useEffect(() => {
     return () => {
       if (hoverTimer.current) clearTimeout(hoverTimer.current);
+      if (dismissTimer.current) clearTimeout(dismissTimer.current);
     };
   }, []);
 
@@ -205,7 +212,7 @@ export default function MarketCard({
               new
             </span>
           )}
-          {(market.closed || (market.endDate && new Date(market.endDate).getTime() < Date.now())) && (
+          {(market.closed || (market.endDate && new Date(market.endDate).getTime() < renderNow)) && (
             <span className="text-[10px] text-[#ff4444] border border-[#ff4444]/30 px-1 py-px uppercase">
               closed
             </span>
@@ -282,13 +289,14 @@ export default function MarketCard({
             boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)",
           }}
           onMouseEnter={() => {
-            // Keep popup open when mouse moves into it
+            // Cancel pending dismiss when mouse enters popup
             if (hoverTimer.current) clearTimeout(hoverTimer.current);
+            if (dismissTimer.current) clearTimeout(dismissTimer.current);
           }}
           onMouseLeave={handleMouseLeave}
         >
           <Suspense fallback={<div className="text-[12px] text-[var(--text-faint)] font-mono py-4">loading...</div>}>
-            <MarketPreview market={market} />
+            <MarketPreview market={market} onTrade={onTrade} />
           </Suspense>
         </div>,
         document.body
@@ -296,3 +304,16 @@ export default function MarketCard({
     </div>
   );
 }
+
+const MarketCard = memo(MarketCardInner, (prev, next) => {
+  // Re-render only when data that affects the visible card changes
+  if (prev.market.id !== next.market.id) return false;
+  if (prev.market.prob !== next.market.prob) return false;
+  if (prev.market.change !== next.market.change) return false;
+  if (prev.market.volume24h !== next.market.volume24h) return false;
+  if (prev.isWatched !== next.isWatched) return false;
+  if (prev.onTrade !== next.onTrade) return false;
+  return true;
+});
+
+export default MarketCard;

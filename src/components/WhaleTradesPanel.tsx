@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo } from "react";
 import type { WhaleTrade } from "@/types";
 import { formatVolume } from "@/lib/format";
 
@@ -25,16 +25,13 @@ function timeAgo(ts: string): string {
   return `${Math.floor(hours / 24)}d`;
 }
 
-function tradeKey(t: WhaleTrade): string {
-  return `${t.wallet}-${t.conditionId}-${t.timestamp}`;
-}
-
 export default function WhaleTradesPanel({
   trades,
   onSelectMarket,
   onSelectWallet,
 }: WhaleTradesPanelProps) {
   const [walletFilter, setWalletFilter] = useState<string | null>(null);
+  const [newTradeThreshold] = useState(() => Date.now() - 60_000);
 
   const filteredTrades = useMemo(() => {
     if (!walletFilter) return trades;
@@ -42,22 +39,6 @@ export default function WhaleTradesPanel({
       (t) => t.wallet.toLowerCase() === walletFilter.toLowerCase()
     );
   }, [trades, walletFilter]);
-
-  const seenKeys = useRef<Set<string>>(new Set());
-  const newKeys = useMemo(() => {
-    const fresh = new Set<string>();
-    for (const t of filteredTrades) {
-      const k = tradeKey(t);
-      if (!seenKeys.current.has(k)) fresh.add(k);
-    }
-    return fresh;
-  }, [filteredTrades]);
-
-  useEffect(() => {
-    const next = new Set<string>();
-    for (const t of filteredTrades) next.add(tradeKey(t));
-    seenKeys.current = next;
-  }, [filteredTrades]);
 
   return (
     <div className="font-mono">
@@ -82,11 +63,12 @@ export default function WhaleTradesPanel({
       ) : (
         <div className="space-y-0.5">
           {filteredTrades.map((t, i) => {
-            const k = tradeKey(t);
+            const k = `${t.wallet}-${t.conditionId}-${t.timestamp}`;
+            const isFresh = new Date(t.timestamp).getTime() >= newTradeThreshold;
             return (
               <div
                 key={`${k}-${i}`}
-                className={`smart-money-row${newKeys.has(k) ? " trade-new" : ""}`}
+                className={`smart-money-row${isFresh ? " trade-new" : ""}`}
               >
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-[var(--text-faint)] shrink-0 tabular-nums w-5 text-right">

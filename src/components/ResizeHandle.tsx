@@ -11,13 +11,14 @@ interface ResizeHandleProps {
 export default function ResizeHandle({ direction, onResize, onResizeEnd }: ResizeHandleProps) {
   const dragging = useRef(false);
   const lastPos = useRef(0);
-  // Stable refs to avoid effect re-registration on every render
   const onResizeRef = useRef(onResize);
   const onResizeEndRef = useRef(onResizeEnd);
-  onResizeRef.current = onResize;
-  onResizeEndRef.current = onResizeEnd;
-
   const rafId = useRef(0);
+
+  useEffect(() => {
+    onResizeRef.current = onResize;
+    onResizeEndRef.current = onResizeEnd;
+  }, [onResize, onResizeEnd]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

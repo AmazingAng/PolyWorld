@@ -322,7 +322,8 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
       if (bars.length < 2) { chart.timeScale().fitContent(); return; }
 
       // ── Main price series ──
-      const firstSeries = (() => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _firstSeries = (() => {
         if (effectiveMode === "candle") {
           const s = chart.addSeries(lc.CandlestickSeries, {
             upColor: "#22c55e", downColor: "#ff4444",
@@ -430,7 +431,7 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
     }
 
     chart.timeScale().fitContent();
-  }, [chartData, timeRange, effectiveMode, isMulti, showMA, showMACD, useUTC]);
+  }, [chartData, timeRange, effectiveMode, isMulti, showMA, showMACD, useUTC, lineOnly]);
 
   // Trigger render when data or display options change
   useEffect(() => {

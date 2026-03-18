@@ -48,6 +48,12 @@ export function calculateMarketExecutionPrice(
   throw new Error("insufficient liquidity");
 }
 
+/**
+ * Add a fixed 2-tick slippage buffer to the execution price.
+ * BUY → price + 2 ticks (willing to pay slightly more)
+ * SELL → price − 2 ticks (willing to receive slightly less)
+ * Result is clamped to [0.01, 0.99].
+ */
 export function bufferMarketPrice(side: MarketSide, executionPrice: number, tickSize = 0.01): number {
   const tick = tickSize > 0 ? tickSize : 0.01;
   const buffer = tick * 2;

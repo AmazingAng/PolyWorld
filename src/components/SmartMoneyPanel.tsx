@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import type { WhaleTrade, ProcessedMarket } from "@/types";
 import type { CategoryFlow } from "@/lib/flowAnalysis";
 import { formatVolume } from "@/lib/format";
-import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
-import { detectSignals, type SmartSignal } from "@/lib/smartSignals";
+import { detectSignals } from "@/lib/smartSignals";
 
 interface SmartMoneyPanelProps {
   smartTrades: WhaleTrade[];
@@ -48,6 +47,7 @@ export default function SmartMoneyPanel({
   const [tab, setTab] = useState<SmartMoneyTab>("trades");
   const [flows, setFlows] = useState<CategoryFlow[]>([]);
   const [flowLoading, setFlowLoading] = useState(false);
+  const [newTradeThreshold] = useState(() => Date.now() - 60_000);
 
   const fetchFlows = useCallback(async () => {
     try {
@@ -59,16 +59,21 @@ export default function SmartMoneyPanel({
     setFlowLoading(false);
   }, []);
 
-  // Fetch flows on tab switch
-  useEffect(() => {
-    if (tab === "flow" && flows.length === 0) {
+  const handleTabChange = useCallback((nextTab: SmartMoneyTab) => {
+    setTab(nextTab);
+    if (nextTab === "flow" && flows.length === 0) {
       setFlowLoading(true);
-      fetchFlows();
+      void fetchFlows();
     }
-  }, [tab, flows.length, fetchFlows]);
+  }, [fetchFlows, flows.length]);
 
-  // Auto-refresh flow data every 2 min when on flow tab
-  useVisibilityPolling(fetchFlows, 120_000, tab === "flow");
+  useEffect(() => {
+    if (tab !== "flow") return;
+    const iv = setInterval(() => {
+      void fetchFlows();
+    }, 120_000);
+    return () => clearInterval(iv);
+  }, [fetchFlows, tab]);
 
   const filteredTrades = useMemo(() => {
     if (!walletFilter) return smartTrades;
@@ -77,22 +82,6 @@ export default function SmartMoneyPanel({
     );
   }, [smartTrades, walletFilter]);
 
-  const seenKeys = useRef<Set<string>>(new Set());
-  const newKeys = useMemo(() => {
-    const fresh = new Set<string>();
-    for (const t of filteredTrades) {
-      const k = tradeKey(t);
-      if (!seenKeys.current.has(k)) fresh.add(k);
-    }
-    return fresh;
-  }, [filteredTrades]);
-
-  useEffect(() => {
-    const next = new Set<string>();
-    for (const t of filteredTrades) next.add(tradeKey(t));
-    seenKeys.current = next;
-  }, [filteredTrades]);
-
   return (
     <div className="font-mono">
       {/* Tab bar */}
@@ -100,7 +89,7 @@ export default function SmartMoneyPanel({
         {(["trades", "flow", "signals"] as SmartMoneyTab[]).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => handleTabChange(t)}
             className={`px-2 py-0.5 text-[10px] font-mono transition-colors ${
               tab === t
                 ? "text-[var(--text)] bg-[var(--surface-hover)]"
@@ -143,10 +132,11 @@ export default function SmartMoneyPanel({
             <div className="space-y-0.5">
               {filteredTrades.map((t, i) => {
                 const k = tradeKey(t);
+                const isFresh = new Date(t.timestamp).getTime() >= newTradeThreshold;
                 return (
                   <div
                     key={`${k}-${i}`}
-                    className={`smart-money-row${newKeys.has(k) ? " trade-new" : ""}`}
+                    className={`smart-money-row${isFresh ? " trade-new" : ""}`}
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-[var(--text-faint)] shrink-0 tabular-nums w-5 text-right">

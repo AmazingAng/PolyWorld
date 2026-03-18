@@ -13,13 +13,15 @@ export interface FilterGroup {
 
 interface FilterDropdownProps {
   groups: FilterGroup[];
+  /** Text shown inside the trigger button alongside the filter icon */
+  label?: string;
 }
 
 function isAllSelected(group: FilterGroup) {
   return group.selected.size === 0 || group.selected.size === group.options.length;
 }
 
-export default function FilterDropdown({ groups }: FilterDropdownProps) {
+export default function FilterDropdown({ groups, label }: FilterDropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -60,10 +62,14 @@ export default function FilterDropdown({ groups }: FilterDropdownProps) {
         }}
         title="Filter"
       >
+        {label && <span className="text-[9px]">{label}</span>}
         <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M1 3h14M3 8h10M5 13h6" />
+          {label
+            ? <path d="M4 6l4 4 4-4" />
+            : <path d="M1 3h14M3 8h10M5 13h6" />
+          }
         </svg>
-        {hasFilter && (
+        {!label && hasFilter && (
           <span>{groups.reduce((n, g) => n + (g.exclusive ? g.selected.size : isAllSelected(g) ? 0 : g.selected.size), 0)}</span>
         )}
       </button>

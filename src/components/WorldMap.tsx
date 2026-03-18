@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState, lazy, Suspense, memo } from "react";
+import React, { useEffect, useRef, useCallback, useState, lazy, Suspense, memo } from "react";
 import { createPortal } from "react-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { ProcessedMarket, Category, WhaleTrade } from "@/types";
-import { CATEGORY_COLORS, CATEGORY_SHAPES } from "@/lib/categories";
+import { CATEGORY_COLORS, CATEGORY_SHAPES, CATEGORY_EMOJI, detectSubEmoji, ALL_SUB_EMOJIS } from "@/lib/categories";
 import { IMPACT_COLORS } from "@/lib/impact";
 import type { ImpactLevel } from "@/types";
 import { formatVolume, formatPct, formatChange } from "@/lib/format";
@@ -14,6 +14,7 @@ import { topojsonFeature } from "@/lib/topojson";
 import { getCountryFlag, marketMatchesCountry } from "@/lib/countries";
 import type { TimeRange } from "./TimeRangeFilter";
 import MapToolbar from "./MapToolbar";
+import type { OverlayLayer } from "./MapToolbar";
 
 const MarketPreview = lazy(() => import("./MarketPreview"));
 
@@ -45,6 +46,9 @@ interface WorldMapProps {
   onToggleWatch?: (id: string) => void;
   newMarkets?: ProcessedMarket[];
   whaleTrades?: WhaleTrade[];
+  activeLayers?: Set<OverlayLayer>;
+  onToggleLayer?: (layer: OverlayLayer) => void;
+  onTrade?: (state: import("./TradeModal").TradeModalState) => void;
 }
 
 // ─── 3-Tier Geographic Hierarchy ─────────────────────────────────
@@ -201,6 +205,19 @@ function setsEqual<T>(a?: Set<T>, b?: Set<T>): boolean {
   return true;
 }
 
+// All overlay data is fetched via the local Next.js proxy (/api/overlay?layer=X)
+// which handles external API calls server-side, bypassing the browser CSP connect-src policy.
+async function fetchOverlayData(layer: OverlayLayer): Promise<GeoJSON.FeatureCollection> {
+  try {
+    const res = await fetch(`/api/overlay?layer=${layer}`);
+    if (!res.ok) throw new Error(`overlay proxy ${res.status}`);
+    return res.json() as Promise<GeoJSON.FeatureCollection>;
+  } catch (err) {
+    console.error(`[overlay] fetch failed for "${layer}":`, err);
+    return { type: "FeatureCollection", features: [] };
+  }
+}
+
 function WorldMapInner({
   markets,
   activeCategories,
@@ -222,6 +239,9 @@ function WorldMapInner({
   onToggleWatch,
   newMarkets,
   whaleTrades,
+  activeLayers,
+  onToggleLayer,
+  onTrade,
 }: WorldMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -240,6 +260,29 @@ function WorldMapInner({
   const prevTierRef = useRef<number>(0);
   const closedAnimsRef = useRef<Map<string, { startTime: number; lng: number; lat: number; color: string }>>(new Map());
   const reducedMotionCleanup = useRef<(() => void) | null>(null);
+  const overlayFetched = useRef<Set<OverlayLayer>>(new Set());
+  const overlayBurstRef = useRef<{ lng: number; lat: number; startTime: number; color: string }[]>([]);
+  const [layerAlert, setLayerAlert] = useState<{ emoji: string; label: string; count: number; color: string } | null>(null);
+  const layerAlertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const OVERLAY_META: Partial<Record<OverlayLayer, { emoji: string; label: string; color: string }>> = {
+    conflicts:  { emoji: "💥", label: "conflict zones",   color: "#ef4444" },
+    intel:      { emoji: "🔍", label: "intel hotspots",   color: "#a855f7" },
+    military:   { emoji: "✈️",  label: "military flights", color: "#22d3ee" },
+    weather:    { emoji: "🌩️", label: "weather alerts",   color: "#f59e0b" },
+    natural:    { emoji: "🌍", label: "natural events",   color: "#f97316" },
+    fires:      { emoji: "🔥", label: "fires",            color: "#ff6b35" },
+    elections:  { emoji: "🗳️", label: "elections",        color: "#fbbf24" },
+    outages:    { emoji: "📡", label: "internet outages", color: "#e879f9" },
+    protests:   { emoji: "✊", label: "protests / unrest",color: "#fb7185" },
+    soccer:     { emoji: "⚽", label: "soccer",           color: "#10b981" },
+    basketball: { emoji: "🏀", label: "basketball",       color: "#f97316" },
+    baseball:   { emoji: "⚾", label: "baseball",         color: "#ef4444" },
+    hockey:     { emoji: "🏒", label: "ice hockey",       color: "#38bdf8" },
+    tennis:     { emoji: "🎾", label: "tennis",           color: "#a3e635" },
+    golf:       { emoji: "⛳", label: "golf",             color: "#4ade80" },
+    combat:     { emoji: "🥊", label: "boxing / MMA",     color: "#f43f5e" },
+  };
 
   // Hover preview popup state
   const [hoverMarket, setHoverMarket] = useState<ProcessedMarket | null>(null);
@@ -249,6 +292,16 @@ function WorldMapInner({
   // Country hover popup state
   const [hoverCountry, setHoverCountry] = useState<{ name: string; x: number; y: number } | null>(null);
   const countryHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Overlay layer hover tooltip state
+  const [hoverOverlay, setHoverOverlay] = useState<{
+    layerId: string;
+    color: string;
+    title: string;
+    rows: { label: string; value: string }[];
+    x: number;
+    y: number;
+  } | null>(null);
 
   const PREVIEW_W = 480;
   const PREVIEW_MAX_H = 520;
@@ -292,6 +345,8 @@ function WorldMapInner({
         (l) => l.type === "symbol" && (l as { layout?: { "text-field"?: unknown } }).layout?.["text-field"]
       )?.id;
       generateShapeIcons(map);
+      generateMarketEmojiIcons(map);
+      try { addOverlayLayers(map, labelLayerId); } catch (e) { console.error("[overlay] addOverlayLayers failed:", e); }
       addMarketLayers(map, labelLayerId);
       addCountryInteraction(map);
 
@@ -315,6 +370,17 @@ function WorldMapInner({
 
       let phase = 0;
       const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+      // Only call setPaintProperty when the value has changed enough to matter visually.
+      // This prevents MapLibre from scheduling a GPU redraw every single frame.
+      const PAINT_THRESHOLD = 0.004;
+      const prev: Record<string, number> = {};
+      const setPaint = (layerId: string, prop: string, val: number) => {
+        const key = `${layerId}:${prop}`;
+        if (Math.abs((prev[key] ?? -1) - val) < PAINT_THRESHOLD) return;
+        prev[key] = val;
+        map.setPaintProperty(layerId, prop, val);
+      };
+
       const animatePulse = () => {
         if (prefersReducedMotion) {
           pulseRef.current = requestAnimationFrame(animatePulse);
@@ -323,24 +389,29 @@ function WorldMapInner({
         phase = (phase + 0.04) % (2 * Math.PI);
         const sin = Math.sin(phase);
         if (map.getLayer("signal-glow")) {
-          map.setPaintProperty("signal-glow", "circle-opacity", clamp01(0.15 + 0.1 * sin));
+          setPaint("signal-glow", "circle-opacity", clamp01(0.15 + 0.1 * sin));
         }
         // Outer pulse ring
         if (map.getLayer("signal-pulse-ring")) {
-          map.setPaintProperty("signal-pulse-ring", "circle-stroke-opacity", clamp01(0.08 + 0.06 * Math.sin(phase * 0.7)));
+          setPaint("signal-pulse-ring", "circle-stroke-opacity", clamp01(0.08 + 0.06 * Math.sin(phase * 0.7)));
         }
         // Selected market ring pulse + faint glow fill
         if (map.getLayer("selected-ring")) {
-          map.setPaintProperty("selected-ring", "circle-stroke-opacity", clamp01(0.5 + 0.3 * sin));
-          map.setPaintProperty("selected-ring", "circle-opacity", clamp01(0.08 + 0.04 * sin));
+          setPaint("selected-ring", "circle-stroke-opacity", clamp01(0.5 + 0.3 * sin));
+          setPaint("selected-ring", "circle-opacity", clamp01(0.08 + 0.04 * sin));
         }
         // Selected beacon — half-speed breathing
         if (map.getLayer("selected-beacon")) {
-          map.setPaintProperty("selected-beacon", "circle-stroke-opacity", clamp01(0.10 + 0.08 * Math.sin(phase * 0.5)));
+          setPaint("selected-beacon", "circle-stroke-opacity", clamp01(0.10 + 0.08 * Math.sin(phase * 0.5)));
         }
         // Anomaly amber glow pulse
         if (map.getLayer("anomaly-glow")) {
-          map.setPaintProperty("anomaly-glow", "circle-opacity", clamp01(0.08 + 0.06 * Math.sin(phase * 1.2)));
+          setPaint("anomaly-glow", "circle-opacity", clamp01(0.08 + 0.06 * Math.sin(phase * 1.2)));
+        }
+        // Market breathe glow — slow sine wave
+        if (map.getLayer("market-breathe-glow")) {
+          const breathe = 0.10 + 0.06 * Math.sin(phase * 0.5);
+          setPaint("market-breathe-glow", "circle-opacity", clamp01(breathe));
         }
 
         // Feature 2: new market appearance animations
@@ -424,6 +495,34 @@ function WorldMapInner({
           tradeFlashesRef.current = remaining;
           const tfSrc = map.getSource("trade-flashes") as maplibregl.GeoJSONSource;
           if (tfSrc) tfSrc.setData({ type: "FeatureCollection", features: tfFeatures });
+        }
+
+        // Overlay event burst animations (ripple rings on layer load)
+        const bursts = overlayBurstRef.current;
+        if (bursts.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const burstFeatures: any[] = [];
+          const BDUR = 1600;
+          overlayBurstRef.current = bursts.filter((b) => {
+            const elapsed = now - b.startTime;
+            if (elapsed < 0) { burstFeatures.push(null); return true; } // not started yet
+            if (elapsed > BDUR) return false;
+            const t = elapsed / BDUR;
+            const ease = 1 - Math.pow(1 - t, 2);
+            burstFeatures.push({
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [b.lng, b.lat] },
+              properties: {
+                radius: 3 + ease * 30,
+                opacity: clamp01(0.85 * (1 - t)),
+                strokeWidth: 1.5 * (1 - t * 0.5),
+                color: b.color,
+              },
+            });
+            return true;
+          });
+          const bSrc = map.getSource("overlay-burst") as maplibregl.GeoJSONSource | undefined;
+          if (bSrc) bSrc.setData({ type: "FeatureCollection", features: burstFeatures.filter(Boolean) });
         }
 
         // Closed market cross-star collapse animations
@@ -596,6 +695,155 @@ function WorldMapInner({
     }
   }
 
+  // Rasterize an emoji string onto a canvas and return raw RGBA data for map.addImage()
+  function emojiToSprite(emoji: string, size = 24): { width: number; height: number; data: Uint8Array } {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    ctx.clearRect(0, 0, size, size);
+    ctx.font = `${Math.round(size * 0.72)}px serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(emoji, size / 2, size / 2 + 1);
+    const imgData = ctx.getImageData(0, 0, size, size);
+    return { width: size, height: size, data: new Uint8Array(imgData.data.buffer) };
+  }
+
+  function generateMarketEmojiIcons(map: maplibregl.Map) {
+    // Category emojis
+    for (const [cat, emoji] of Object.entries(CATEGORY_EMOJI)) {
+      const key = `market-emoji-${cat}`;
+      if (map.hasImage(key)) continue;
+      const sprite = emojiToSprite(emoji, 48);
+      map.addImage(key, sprite, { sdf: false, pixelRatio: 2 });
+    }
+    // Sub-category emojis (keyed by emoji itself)
+    for (const emoji of ALL_SUB_EMOJIS) {
+      const key = `market-sub-${emoji}`;
+      if (map.hasImage(key)) continue;
+      const sprite = emojiToSprite(emoji, 48);
+      map.addImage(key, sprite, { sdf: false, pixelRatio: 2 });
+    }
+  }
+
+  // Add overlay GeoJSON sources + emoji sprite layers (all hidden initially)
+  function addOverlayLayers(map: maplibregl.Map, beforeId?: string) {
+    const configs: { id: OverlayLayer; color: string; glowR: number; emoji: string }[] = [
+      { id: "conflicts",  color: "#ef4444", glowR: 28, emoji: "💥" },
+      { id: "intel",      color: "#a855f7", glowR: 22, emoji: "🔍" },
+      { id: "military",   color: "#22d3ee", glowR: 16, emoji: "✈️" },
+      { id: "weather",    color: "#f59e0b", glowR: 26, emoji: "🌩️" },
+      { id: "natural",    color: "#f97316", glowR: 26, emoji: "🌍" },
+      { id: "fires",      color: "#ff6b35", glowR: 20, emoji: "🔥" },
+      { id: "elections",  color: "#fbbf24", glowR: 24, emoji: "🗳️" },
+      { id: "outages",    color: "#e879f9", glowR: 26, emoji: "📡" },
+      { id: "protests",   color: "#fb7185", glowR: 22, emoji: "✊" },
+      { id: "soccer",     color: "#10b981", glowR: 22, emoji: "⚽" },
+      { id: "basketball", color: "#f97316", glowR: 22, emoji: "🏀" },
+      { id: "baseball",   color: "#ef4444", glowR: 20, emoji: "⚾" },
+      { id: "hockey",     color: "#38bdf8", glowR: 20, emoji: "🏒" },
+      { id: "tennis",     color: "#a3e635", glowR: 18, emoji: "🎾" },
+      { id: "golf",       color: "#4ade80", glowR: 18, emoji: "⛳" },
+      { id: "combat",     color: "#f43f5e", glowR: 22, emoji: "🥊" },
+    ];
+
+    const add = (layer: Parameters<typeof map.addLayer>[0]) => map.addLayer(layer, beforeId);
+
+    for (const { id, color, glowR, emoji } of configs) {
+      // Register the emoji as a map image sprite so icon-image can render it in full color
+      const spriteId = `overlay-${id}-icon`;
+      if (!map.hasImage(spriteId)) {
+        map.addImage(spriteId, emojiToSprite(emoji));
+      }
+
+      map.addSource(`overlay-${id}`, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      add({
+        id: `overlay-${id}-glow`,
+        type: "circle",
+        source: `overlay-${id}`,
+        layout: { visibility: "none" },
+        paint: {
+          "circle-color": color,
+          "circle-radius": Math.round(glowR * 0.7),
+          "circle-opacity": 0.08,
+          "circle-blur": 1.8,
+        },
+      });
+      add({
+        id: `overlay-${id}-dot`,
+        type: "symbol",
+        source: `overlay-${id}`,
+        layout: {
+          visibility: "none",
+          "icon-image": spriteId,
+          "icon-size": 0.5,
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          "icon-anchor": "center",
+        } as maplibregl.SymbolLayerSpecification["layout"],
+        paint: { "icon-opacity": 0.55 },
+      });
+
+      // Hover tooltip
+      map.on("mouseenter", `overlay-${id}-dot`, (e) => {
+        map.getCanvas().style.cursor = "pointer";
+        // Suppress country popup while hovering an overlay point
+        if (countryHoverTimer.current) { clearTimeout(countryHoverTimer.current); countryHoverTimer.current = null; }
+        setHoverCountry(null);
+        if (!e.features?.length) return;
+        const props = e.features[0].properties ?? {};
+        const canvas = map.getCanvas().getBoundingClientRect();
+        const rows: { label: string; value: string }[] = [];
+        if (props.date)     rows.push({ label: "date",    value: String(props.date) });
+        if (props.country)  rows.push({ label: "country", value: String(props.country) });
+        if (props.deaths !== undefined && Number(props.deaths) > 0)
+                            rows.push({ label: "deaths",  value: String(props.deaths) });
+        if (props.sport)    rows.push({ label: "sport",   value: String(props.sport) });
+        if (props.venue)    rows.push({ label: "venue",   value: String(props.venue) });
+        if (props.city)     rows.push({ label: "city",    value: String(props.city) });
+        if (props.type && !["soccer","basketball","baseball","hockey","tennis","golf","combat"].includes(id))
+                            rows.push({ label: "type",    value: String(props.type) });
+        if (props.altitude) rows.push({ label: "alt",     value: `${Math.round(Number(props.altitude) / 100) * 100} ft` });
+        if (props.speed)    rows.push({ label: "speed",   value: `${Math.round(Number(props.speed))} kts` });
+        if (props.duration) rows.push({ label: "duration", value: String(props.duration) });
+        setHoverOverlay({
+          layerId: id,
+          color,
+          title: String(props.title || id).slice(0, 80),
+          rows,
+          x: canvas.left + e.point.x,
+          y: canvas.top  + e.point.y,
+        });
+      });
+      map.on("mouseleave", `overlay-${id}-dot`, () => {
+        map.getCanvas().style.cursor = "";
+        setHoverOverlay(null);
+      });
+    }
+
+    // Burst ripple rings — rendered on top of everything (no beforeId)
+    map.addSource("overlay-burst", {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+    });
+    map.addLayer({
+      id: "overlay-burst-ring",
+      type: "circle",
+      source: "overlay-burst",
+      paint: {
+        "circle-color": "transparent",
+        "circle-radius": ["get", "radius"],
+        "circle-stroke-width": ["get", "strokeWidth"],
+        "circle-stroke-color": ["get", "color"],
+        "circle-stroke-opacity": ["get", "opacity"],
+      },
+    });
+  }
+
   // Add GeoJSON source + layers for markets (no MapLibre clustering — we handle it ourselves)
   // beforeId: insert all market layers below this layer (typically the first label layer)
   function addMarketLayers(map: maplibregl.Map, beforeId?: string) {
@@ -676,7 +924,26 @@ function WorldMapInner({
 
     // --- INDIVIDUAL MARKER LAYERS ---
 
-    // Core shape — pre-colored icons with baked-in outlines (non-SDF)
+    // Breathing glow behind market emoji icons
+    add({
+      id: "market-breathe-glow",
+      type: "circle",
+      source: "markets",
+      filter: ["!", ["has", "point_count"]],
+      paint: {
+        "circle-color": ["get", "color"],
+        "circle-radius": [
+          "interpolate", ["linear"], ["zoom"],
+          1.5, 6,
+          4, 10,
+          8, 16,
+        ],
+        "circle-opacity": 0.12,
+        "circle-blur": 1.2,
+      },
+    });
+
+    // Core emoji icon — category-based
     add({
       id: "unclustered-point",
       type: "symbol",
@@ -684,15 +951,16 @@ function WorldMapInner({
       filter: ["!", ["has", "point_count"]],
       layout: {
         "icon-image": [
-          "concat", "icon-",
-          ["slice", ["get", "color"], 1],  // strip '#' from hex
-          "-", ["get", "shape"],
+          "case",
+          ["!=", ["get", "subEmoji"], ""],
+            ["concat", "market-sub-", ["get", "subEmoji"]],
+          ["concat", "market-emoji-", ["get", "category"]],
         ],
         "icon-size": [
           "interpolate", ["linear"], ["zoom"],
-          1.5, ["*", ["get", "radius"], 0.05],
-          4,   ["*", ["get", "radius"], 0.065],
-          8,   ["*", ["get", "radius"], 0.08],
+          1.5, 0.5,
+          4,   0.65,
+          8,   0.8,
         ],
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
@@ -975,9 +1243,12 @@ function WorldMapInner({
         hoveredId = null;
       }
       if (hoverTimer.current) clearTimeout(hoverTimer.current);
-      hoverTimer.current = null;
-      setHoverMarket(null);
-      setHoverPos(null);
+      // Delay dismiss so user can move mouse to the popup
+      hoverTimer.current = setTimeout(() => {
+        hoverTimer.current = null;
+        setHoverMarket(null);
+        setHoverPos(null);
+      }, 800);
     });
     map.on("mouseenter", "clusters", () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", "clusters", () => { map.getCanvas().style.cursor = ""; });
@@ -1088,7 +1359,18 @@ function WorldMapInner({
         map.on("mousemove", "country-fills", (e) => {
           const feat = e.features?.[0];
           const name = feat?.properties?.name as string | undefined;
-          // Clear any lingering market hover popup
+          // If hovering over a market icon, suppress country hover entirely
+          const marketFeatures = map.queryRenderedFeatures(e.point, { layers: ["unclustered-point"] });
+          if (marketFeatures.length > 0) {
+            if (countryHoverTimer.current) clearTimeout(countryHoverTimer.current);
+            setHoverCountry(null);
+            if (hoveredName) {
+              hoveredName = null;
+              map.setFilter("country-hover", ["==", ["get", "name"], ""]);
+              map.setFilter("country-hover-border", ["==", ["get", "name"], ""]);
+            }
+            return;
+          }
           clearHoverPopup();
           if (name && name !== hoveredName) {
             hoveredName = name;
@@ -1110,8 +1392,11 @@ function WorldMapInner({
           setHoverCountry(null);
         });
 
-        // Country click → callback
+        // Country click → callback (skip if a market icon was clicked)
         map.on("click", "country-fills", (e) => {
+          const marketHit = map.queryRenderedFeatures(e.point, { layers: ["unclustered-point"] });
+          if (marketHit.length > 0) return;
+
           const feat = e.features?.[0];
           const name = feat?.properties?.name as string | undefined;
           if (name && onCountryClick) {
@@ -1240,6 +1525,8 @@ function WorldMapInner({
               isAnomaly,
               isSelected,
               shape: CATEGORY_SHAPES[m.category] || "circle",
+              category: m.category || "Other",
+              subEmoji: detectSubEmoji(m.category, m.title, m.description) || "",
             },
           };
         });
@@ -1315,9 +1602,23 @@ function WorldMapInner({
       : [flyToTarget.coords[1], flyToTarget.coords[0]];
     // Raw coords for initial flyTo (close enough to find the cluster)
     const rawCenter: [number, number] = [flyToTarget.coords[1], flyToTarget.coords[0]];
-    const targetZoom = Math.max(map.getZoom(), 5);
+    const currentZoom = map.getZoom();
+    // Only zoom in if viewing from far away; otherwise just pan
+    const targetZoom = currentZoom >= 4 ? currentZoom : 5;
 
-    map.flyTo({ center: rawCenter, zoom: targetZoom, duration: 1500 });
+    // If the target is already near screen center, skip the fly animation
+    const screenPt = map.project(rawCenter);
+    const canvas = map.getCanvas();
+    const cx = canvas.width / (2 * devicePixelRatio);
+    const cy = canvas.height / (2 * devicePixelRatio);
+    const dist = Math.hypot(screenPt.x - cx, screenPt.y - cy);
+    const nearCenter = dist < 120 && Math.abs(targetZoom - currentZoom) < 0.5;
+
+    if (nearCenter) {
+      map.jumpTo({ center: rawCenter, zoom: targetZoom });
+    } else {
+      map.flyTo({ center: rawCenter, zoom: targetZoom, duration: 1500 });
+    }
 
     // After flyTo completes, ensure the bubble is visible and centered
     map.once("moveend", () => {
@@ -1332,8 +1633,10 @@ function WorldMapInner({
         return;
       }
 
-      // Market still in continent cluster — zoom past threshold
-      map.easeTo({ center: bubbleCoords, zoom: Math.max(ZOOM_TIER_THRESHOLDS[0] + 0.5, 5), duration: 800 });
+      // Market still in continent cluster — zoom in just enough to uncluster,
+      // but never zoom OUT from the user's current level
+      const minUncluster = ZOOM_TIER_THRESHOLDS[0] + 0.5;
+      map.easeTo({ center: bubbleCoords, zoom: Math.max(minUncluster, currentZoom), duration: 800 });
     });
   }, [flyToTarget]);
 
@@ -1387,6 +1690,53 @@ function WorldMapInner({
     }
   }, [whaleTrades, markets]);
 
+  // Overlay layer visibility + data fetching
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    const active = activeLayers ?? new Set<OverlayLayer>();
+    const ALL: OverlayLayer[] = ["conflicts", "intel", "military", "weather", "natural", "fires", "elections", "outages", "protests", "soccer", "basketball", "baseball", "hockey", "tennis", "golf", "combat"];
+
+    for (const id of ALL) {
+      const vis = active.has(id) ? "visible" : "none";
+      const glowId = `overlay-${id}-glow`;
+      const dotId  = `overlay-${id}-dot`;
+      if (map.getLayer(glowId)) map.setLayoutProperty(glowId, "visibility", vis);
+      if (map.getLayer(dotId))  map.setLayoutProperty(dotId,  "visibility", vis);
+
+      if (active.has(id) && !overlayFetched.current.has(id)) {
+        overlayFetched.current.add(id);
+        fetchOverlayData(id).then((data) => {
+          const src = mapRef.current?.getSource(`overlay-${id}`) as maplibregl.GeoJSONSource | undefined;
+          if (src) {
+            src.setData(data);
+            const count = data.features.length;
+            if (count > 0) {
+              const meta = OVERLAY_META[id];
+              if (meta) {
+                // Show alert banner
+                if (layerAlertTimerRef.current) clearTimeout(layerAlertTimerRef.current);
+                setLayerAlert({ emoji: meta.emoji, label: meta.label, count, color: meta.color });
+                layerAlertTimerRef.current = setTimeout(() => setLayerAlert(null), 4000);
+                // Queue staggered burst rings at each event point (cap at 40)
+                const t0 = performance.now();
+                data.features.slice(0, 40).forEach((feat, i) => {
+                  const coords = (feat.geometry as GeoJSON.Point).coordinates;
+                  overlayBurstRef.current.push({
+                    lng: coords[0], lat: coords[1],
+                    startTime: t0 + i * 40,
+                    color: meta.color,
+                  });
+                });
+              }
+            }
+          }
+        });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLayers, mapReady]);
+
   // Global click listener for popup star buttons
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -1421,6 +1771,8 @@ function WorldMapInner({
         onRegionChange={onRegionChange}
         colorMode={colorMode}
         onColorModeChange={onColorModeChange}
+        activeLayers={activeLayers}
+        onToggleLayer={onToggleLayer}
       />
       {/* Hover preview popup — portal to body */}
       {hoverCountry && (() => {
@@ -1467,9 +1819,72 @@ function WorldMapInner({
         );
       })()}
 
+      {/* Overlay layer loaded alert */}
+      {layerAlert && (
+        <div
+          className="absolute bottom-14 left-2.5 z-20 font-mono flex items-center gap-2 px-3 py-2 text-[12px] pointer-events-none"
+          style={{
+            background: "rgba(8,8,8,0.92)",
+            border: `1px solid ${layerAlert.color}40`,
+            borderLeft: `3px solid ${layerAlert.color}`,
+            backdropFilter: "blur(6px)",
+            animation: "overlayAlertIn 0.25s ease-out",
+          }}
+        >
+          <span className="text-[15px] leading-none">{layerAlert.emoji}</span>
+          <span className="tabular-nums font-bold" style={{ color: layerAlert.color }}>{layerAlert.count}</span>
+          <span className="text-[#aaa]">{layerAlert.label}</span>
+          <span className="text-[#555]">loaded</span>
+        </div>
+      )}
+
+      {hoverOverlay && createPortal(
+        (() => {
+          const TIP_W = 220;
+          const vw = window.innerWidth;
+          const vh = window.innerHeight;
+          const left = Math.min(hoverOverlay.x + 14, vw - TIP_W - 8);
+          const top  = Math.min(hoverOverlay.y + 14, vh - 160);
+          return (
+            <div
+              className="fixed z-[9998] font-mono pointer-events-none"
+              style={{
+                top, left, width: TIP_W,
+                background: "#0c0c0c",
+                border: `1px solid #2a2a2a`,
+                borderLeft: `2px solid ${hoverOverlay.color}`,
+                boxShadow: `0 4px 20px rgba(0,0,0,0.7), 0 0 0 0 transparent`,
+                padding: "8px 10px",
+              }}
+            >
+              {/* Layer badge */}
+              <div className="text-[9px] uppercase tracking-widest mb-1.5" style={{ color: hoverOverlay.color }}>
+                {hoverOverlay.layerId.replace(/-/g, " ")}
+              </div>
+              {/* Title */}
+              <div className="text-[11px] text-[#ddd] leading-snug mb-1.5 line-clamp-3">
+                {hoverOverlay.title}
+              </div>
+              {/* Key-value rows */}
+              {hoverOverlay.rows.length > 0 && (
+                <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 mt-1 pt-1.5 border-t border-[#222]">
+                  {hoverOverlay.rows.map(({ label, value }) => (
+                    <React.Fragment key={label}>
+                      <span className="text-[9px] text-[#555] uppercase tracking-wider">{label}</span>
+                      <span className="text-[10px] text-[#999] tabular-nums truncate">{value}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })(),
+        document.body
+      )}
+
       {hoverMarket && hoverPos && createPortal(
         <div
-          className="fixed z-[9999] bg-[var(--bg)] border border-[var(--border)] rounded-md overflow-y-auto pointer-events-none"
+          className="fixed z-[9999] bg-[var(--bg)] border border-[var(--border)] rounded-md overflow-y-auto"
           style={{
             top: hoverPos.top,
             left: hoverPos.left,
@@ -1478,9 +1893,18 @@ function WorldMapInner({
             padding: "12px 14px",
             boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)",
           }}
+          onMouseEnter={() => {
+            // Cancel pending dismiss when mouse enters popup
+            if (hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null; }
+          }}
+          onMouseLeave={() => {
+            // Dismiss when mouse leaves popup
+            setHoverMarket(null);
+            setHoverPos(null);
+          }}
         >
           <Suspense fallback={<div className="text-[12px] text-[var(--text-faint)] font-mono py-4">loading...</div>}>
-            <MarketPreview market={hoverMarket} />
+            <MarketPreview market={hoverMarket} onTrade={onTrade} />
           </Suspense>
         </div>,
         document.body
@@ -1509,5 +1933,6 @@ export default memo(WorldMapInner, (prev, next) => {
   if (prev.newMarkets !== next.newMarkets) return false;
   if (prev.whaleTrades !== next.whaleTrades) return false;
   if (prev.isWatched !== next.isWatched) return false;
+  if (!setsEqual(prev.activeLayers, next.activeLayers)) return false;
   return true;
 });

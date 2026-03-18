@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
-import dynamic from "next/dynamic";
 import { ProcessedMarket, PolymarketMarket, SmartMoneyFlow } from "@/types";
+import { useMarketStore } from "@/stores/marketStore";
 import { CATEGORY_COLORS } from "@/lib/categories";
 import { formatVolume, formatPct, formatChange } from "@/lib/format";
 import { makeAbbrev, extractLabels } from "@/lib/marketLabels";
 import ChartPanel from "./ChartPanel";
-
-const OrderForm = dynamic(() => import("./OrderForm"), { ssr: false });
+import TradeModal, { type TradeModalState } from "./TradeModal";
 
 interface MarketDetailPanelProps {
   market: ProcessedMarket;
@@ -70,12 +69,11 @@ function MarketDetailPanelInner({
   const [rulesExpanded, setRulesExpanded] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  // -1 = none expanded; 0..n = which multi-binary row has its trade strip open
-  const [selectedOrderOutcomeIdx, setSelectedOrderOutcomeIdx] = useState(0);
+  const [tradeModal, setTradeModal] = useState<TradeModalState | null>(null);
   // Reset everything when market changes
   useEffect(() => {
     setAiSummary(null);
-    setSelectedOrderOutcomeIdx(0);
+    setTradeModal(null);
   }, [market.id]);
 
   const fetchAiSummary = useCallback(async () => {
@@ -269,64 +267,78 @@ function MarketDetailPanelInner({
     <div>
       {parsedOutcomes.map(({ m, idx, yesPrice, entity, abbr, mChg, isWinner }, i) => {
         const pct = yesPrice * 100;
+        const noPct = (1 - yesPrice) * 100;
         const barColor = "#22c55e";
-        const isOpen = i === Math.min(selectedOrderOutcomeIdx, parsedOutcomes.length - 1);
         const ids: string[] = m.clobTokenIds
           ? Array.isArray(m.clobTokenIds) ? m.clobTokenIds as string[]
             : (() => { try { return JSON.parse(m.clobTokenIds as unknown as string) as string[]; } catch { return []; } })()
           : [];
-        const tokenId = ids[0] ? String(ids[0]) : (m.id ?? "");
+        const yesTokenId = ids[0] ? String(ids[0]) : (m.id ?? "");
+        const noTokenId = ids[1] ? String(ids[1]) : "";
+        const openTrade = (side: "YES" | "NO") => {
+          const tokenId = side === "YES" ? yesTokenId : noTokenId;
+          if (!tokenId) return;
+          setTradeModal({
+            tokenId,
+            currentPrice: side === "YES" ? yesPrice : 1 - yesPrice,
+            outcomeName: side === "YES" ? abbr : `${abbr} No`,
+            marketTitle: market.title,
+            negRisk: !!market.negRisk,
+            defaultSide: "BUY",
+            // Pass both tokens so modal can show YES/NO switcher
+            yesToken: yesTokenId ? { tokenId: yesTokenId, price: yesPrice, name: abbr } : undefined,
+            noToken: noTokenId ? { tokenId: noTokenId, price: 1 - yesPrice, name: `${abbr} No` } : undefined,
+            smartMoney: market.smartMoney,
+          });
+        };
         return (
-          <div key={m.id || idx} className={`border-b border-[var(--border-subtle)] last:border-0 ${isOpen ? "bg-[#22c55e]/[0.03]" : ""}`}>
-            {/* Outcome row — click to toggle trade strip */}
+          <div key={m.id || idx} className="border-b border-[var(--border-subtle)] last:border-0">
             <div
-              onClick={() => setSelectedOrderOutcomeIdx(isOpen ? -1 : i)}
-              className={`group flex items-center gap-1.5 py-[3px] cursor-pointer transition-colors ${
-                isOpen
-                  ? "border-l-2 border-l-[#22c55e]/60 pl-[4px] pr-1.5"
-                  : "hover:bg-[var(--surface)] border-l-2 border-l-transparent px-1.5"
-              }`}
+              className="flex items-center gap-1.5 py-[5px] px-1.5 cursor-pointer hover:bg-[var(--surface-hover)] transition-colors"
               title={entity}
+              onClick={() => yesTokenId && useMarketStore.getState().setSelectedOutcomeTokenId(yesTokenId)}
             >
               <span
-                className={`text-[10px] shrink-0 truncate ${isWinner ? "text-[#22c55e] font-bold" : isOpen ? "text-[var(--text)]" : "text-[var(--text-secondary)]"}`}
+                className={`text-[10px] shrink-0 truncate ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-secondary)]"}`}
                 style={{ width: labelColWidth }}
               >
                 {abbr}
               </span>
-              <div className="flex-1 h-3 bg-[var(--bg)] rounded-sm relative overflow-hidden">
+              <div className="flex-1 h-2 bg-[var(--bg)] rounded-sm relative overflow-hidden">
                 <div
                   className="h-full rounded-sm transition-all duration-500 ease-out"
-                  style={{ width: `${Math.max(pct, 1)}%`, background: `linear-gradient(90deg, ${barColor}aa, ${barColor}44)` }}
+                  style={{ width: `${Math.max(pct, 1)}%`, background: `linear-gradient(90deg, #22c55eaa, #22c55e44)` }}
                 />
               </div>
-              <span className={`text-[10px] w-10 text-right tabular-nums shrink-0 ${isWinner ? "text-[#22c55e] font-bold" : isOpen ? "text-[#22c55e]" : "text-[var(--text-dim)]"}`}>
-                {pct.toFixed(1)}%
-              </span>
-              <span className={`text-[9px] w-10 text-right tabular-nums shrink-0 ${mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
+              <span className={`text-[9px] w-8 text-right tabular-nums shrink-0 ${mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
                 {mChg.text}
               </span>
-              {/* trade indicator */}
-              <span className={`text-[8px] px-1 shrink-0 transition-colors ${
-                isOpen
-                  ? "text-[#22c55e]"
-                  : "text-transparent group-hover:text-[var(--text-faint)]"
-              }`}>
-                {isOpen ? "▾" : "▸"}
-              </span>
+              {/* YES / NO trade buttons — stop propagation so row click doesn't also fire */}
+              {yesTokenId && !market.closed && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); openTrade("YES"); }}
+                  className="shrink-0 text-[9px] font-bold px-2 py-1 transition-colors hover:opacity-80"
+                  style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
+                  title={`Buy YES · ${pct.toFixed(1)}¢`}
+                >
+                  Yes {pct.toFixed(0)}¢
+                </button>
+              )}
+              {noTokenId && !market.closed && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); openTrade("NO"); }}
+                  className="shrink-0 text-[9px] font-bold px-2 py-1 transition-colors hover:opacity-80"
+                  style={{ background: "rgba(255,68,68,0.15)", color: "#ff4444" }}
+                  title={`Buy NO · ${noPct.toFixed(1)}¢`}
+                >
+                  No {noPct.toFixed(0)}¢
+                </button>
+              )}
             </div>
-            {/* Inline compact trade strip */}
-            {isOpen && tokenId && (
-              <div className="px-2 py-1.5 border-t border-[#22c55e]/10">
-                <OrderForm
-                  key={tokenId}
-                  tokenId={tokenId}
-                  currentPrice={yesPrice}
-                  outcomeName={abbr}
-                  negRisk={!!market.negRisk}
-                  defaultSide="BUY"
-                  compact
-                />
+            {(m.volume24hr || m.liquidity) && (
+              <div className="flex items-center gap-2 px-1.5 pb-1 text-[8px] text-[var(--text-ghost)]">
+                {m.volume24hr && <span>24h {formatVolume(parseFloat(String(m.volume24hr)))}</span>}
+                {m.liquidity && <span>liq {formatVolume(parseFloat(String(m.liquidity)))}</span>}
               </div>
             )}
           </div>
@@ -353,7 +365,15 @@ function MarketDetailPanelInner({
         const isSimpleYesNo = outcomeLabels.length === 2 && outcomeLabels[0] === "Yes" && outcomeLabels[1] === "No"
           && (!m.question || m.question === market.title || cardTitle === market.title);
         const maxLabelLen = Math.max(...outcomeLabels.map(l => l.length), 0);
-        const regLabelW = isSimpleYesNo ? 24 : Math.max(28, Math.min(72, maxLabelLen * 6.5 + 4));
+        const regLabelW = isSimpleYesNo ? 24 : Math.max(40, Math.min(120, maxLabelLen * 7 + 4));
+        // Hoist token IDs so outcome rows can set the orderbook focus on click
+        const cardAllIds: string[] = m.clobTokenIds
+          ? Array.isArray(m.clobTokenIds) ? m.clobTokenIds as string[]
+            : (() => { try { return JSON.parse(m.clobTokenIds as unknown as string) as string[]; } catch { return []; } })()
+          : [];
+        const isSimpleYesNoPair = outcomeLabels.length === 2
+          && outcomeLabels[0] === "Yes" && outcomeLabels[1] === "No"
+          && cardAllIds.length >= 2;
         return (
         <div key={m.id || i} className={`border border-[var(--border-subtle)] rounded-sm px-2 ${isSimpleYesNo ? "py-1.5" : "py-2"} text-[11px]`}>
           {!isSimpleYesNo && (
@@ -368,10 +388,16 @@ function MarketDetailPanelInner({
                 const isW = winnerIdx === j;
                 const isYes = label === "Yes";
                 const isNo = label === "No";
-                const barColor = isW ? "#22c55e" : isYes ? "#22c55e" : isNo ? "#ff4444" : j === 0 ? color : "#6b7280";
-                const labelColor = isW ? "#22c55e" : isYes ? "#22c55e" : isNo ? "#ff4444" : "var(--text-dim)";
+                const isTwoOption = outcomeLabels.length === 2;
+                const barColor = isW ? "#22c55e" : isYes ? "#22c55e" : isNo ? "#ff4444" : isTwoOption ? (j === 0 ? "#22c55e" : "#ff4444") : j === 0 ? color : "#6b7280";
+                const labelColor = isW ? "#22c55e" : isYes ? "#22c55e" : isNo ? "#ff4444" : isTwoOption ? (j === 0 ? "#22c55e" : "#ff4444") : "var(--text-dim)";
+                const rowTokenId = cardAllIds[j] ? String(cardAllIds[j]) : null;
                 return (
-                  <div key={j} className="flex items-center gap-1.5">
+                  <div
+                    key={j}
+                    className={`flex items-center gap-1.5 rounded-sm -mx-1 px-1 py-0.5 transition-colors ${rowTokenId && !market.closed ? "cursor-pointer hover:bg-[var(--surface-hover)]" : ""}`}
+                    onClick={() => rowTokenId && useMarketStore.getState().setSelectedOutcomeTokenId(rowTokenId)}
+                  >
                     <span className="text-[10px] shrink-0 truncate font-medium" style={{ color: labelColor, width: regLabelW }} title={label}>
                       {label}
                     </span>
@@ -381,9 +407,31 @@ function MarketDetailPanelInner({
                         style={{ width: `${Math.max(pct, 2)}%`, background: `linear-gradient(90deg, ${barColor}99, ${barColor}44)` }}
                       />
                     </div>
-                    <span className="text-[10px] w-10 text-right tabular-nums shrink-0" style={{ color: labelColor }}>
-                      {pct.toFixed(1)}%
-                    </span>
+                    <div className="flex-1" />
+                    {rowTokenId && !market.closed ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setTradeModal({
+                          tokenId: rowTokenId,
+                          currentPrice: prices[j] ?? 0,
+                          outcomeName: label,
+                          marketTitle: cardTitle,
+                          negRisk: !!market.negRisk,
+                          defaultSide: "BUY",
+                          yesToken: isSimpleYesNoPair ? { tokenId: String(cardAllIds[0]), price: prices[0] ?? 0, name: "Yes" } : undefined,
+                          noToken: isSimpleYesNoPair ? { tokenId: String(cardAllIds[1]), price: prices[1] ?? 0, name: "No" } : undefined,
+                          smartMoney: market.smartMoney,
+                        }); }}
+                        className="shrink-0 text-[11px] font-bold px-3 py-1.5 transition-colors hover:opacity-80"
+                        style={{ background: `${barColor}26`, color: barColor }}
+                        title={`Trade ${label} · ${pct.toFixed(1)}¢`}
+                      >
+                        {pct.toFixed(0)}¢
+                      </button>
+                    ) : (
+                      <span className="text-[10px] w-8 text-right tabular-nums shrink-0" style={{ color: labelColor }}>
+                        {pct.toFixed(1)}%
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -394,56 +442,16 @@ function MarketDetailPanelInner({
               <span className={mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}>{mChg.text}</span>
             </div>
           )}
-          {/* Per-outcome inline trade strips */}
-          {prices.length > 0 && (() => {
-            const allIds: string[] = m.clobTokenIds
-              ? Array.isArray(m.clobTokenIds) ? m.clobTokenIds as string[]
-                : (() => { try { return JSON.parse(m.clobTokenIds as unknown as string) as string[]; } catch { return []; } })()
-              : [];
-            if (allIds.length === 0) return (
-              <div className="mt-1 pt-1 border-t border-[var(--border-subtle)] flex justify-end">
-                <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors">
-                  trade {"\u2192"}
-                </a>
-              </div>
-            );
-            return (
-              <div className="mt-1.5 space-y-1">
-                {outcomeLabels.slice(0, allIds.length).map((label, j) => {
-                  const p = prices[j] ?? 0;
-                  const isYes = label === "Yes";
-                  const isNo = label === "No";
-                  const accentColor = isYes ? "#22c55e" : isNo ? "#ff4444" : "#a78bfa";
-                  return (
-                    <div key={j} className="flex items-center gap-2 pt-1 border-t border-[var(--border-subtle)]">
-                      <span
-                        className="text-[9px] shrink-0 font-medium tabular-nums"
-                        style={{ color: accentColor, minWidth: 28 }}
-                      >
-                        {label}
-                      </span>
-                      <span className="text-[9px] tabular-nums shrink-0" style={{ color: accentColor }}>
-                        {(p * 100).toFixed(0)}¢
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <OrderForm
-                          key={String(allIds[j])}
-                          tokenId={String(allIds[j])}
-                          currentPrice={p}
-                          outcomeName={label}
-                          negRisk={!!market.negRisk}
-                          defaultSide="BUY"
-                          compact
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
+          {/* No-token fallback: external trade link */}
+          {prices.length > 0 && !market.closed && cardAllIds.length === 0 && (
+            <div className="mt-1 pt-1 border-t border-[var(--border-subtle)] flex justify-end">
+              <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors">
+                trade {"\u2192"}
+              </a>
+            </div>
+          )}
           <div className="flex items-center gap-2 mt-1 pt-1 border-t border-[var(--border-subtle)] text-[9px] text-[var(--text-faint)]">
-            {m.volume && <span>{formatVolume(parseFloat(String(m.volume)))}</span>}
+            {m.volume24hr && <span>24h {formatVolume(parseFloat(String(m.volume24hr)))}</span>}
             {m.liquidity && <span>liq {formatVolume(parseFloat(String(m.liquidity)))}</span>}
             {mChg.text !== "\u2014" && <span className={mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : ""}>{mChg.text}</span>}
           </div>
@@ -656,6 +664,11 @@ function MarketDetailPanelInner({
       {market.smartMoney && (market.smartMoney.whaleBuys > 0 || market.smartMoney.whaleSells > 0) && (
         <SmartMoneySection smartMoney={market.smartMoney} />
       )}
+
+      {/* ============ TRADE MODAL ============ */}
+      {tradeModal && (
+        <TradeModal state={tradeModal} onClose={() => setTradeModal(null)} />
+      )}
     </div>
   );
 }
@@ -816,6 +829,7 @@ function ResolutionBanner({ markets }: { markets: ProcessedMarket["markets"] }) 
 
 function ResolutionMonitorBadge({ eventId }: { eventId: string }) {
   const [status, setStatus] = useState<{ sourceType: string; lastCheckedAt: string | null } | null>(null);
+  const [renderNow] = useState(() => Date.now());
 
   useEffect(() => {
     fetch(`/api/resolution-alerts?marketId=${eventId}`)
@@ -829,7 +843,7 @@ function ResolutionMonitorBadge({ eventId }: { eventId: string }) {
   const isMonitored = ["known_feed", "price_feed", "sports_feed"].includes(status.sourceType);
   if (isMonitored) {
     const ago = status.lastCheckedAt
-      ? `${Math.round((Date.now() - new Date(status.lastCheckedAt).getTime()) / 60_000)}m ago`
+      ? `${Math.round((renderNow - new Date(status.lastCheckedAt).getTime()) / 60_000)}m ago`
       : "pending";
     const label = status.sourceType === "price_feed" ? "price" : status.sourceType === "sports_feed" ? "sports" : "rss";
     return (

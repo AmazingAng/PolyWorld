@@ -61,11 +61,8 @@ function NewsPopover({
   onMouseLeave: () => void;
 }) {
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number; direction: "left" | "right" }>({ top: 0, left: 0, direction: "left" });
-
-  useEffect(() => {
+  const pos = useMemo(() => {
     const vw = window.innerWidth;
-    // Try to place to the left of the anchor; if not enough room, place to the right
     const popoverWidth = 340;
     const gap = 6;
     let left: number;
@@ -84,11 +81,10 @@ function NewsPopover({
     // Vertically align to the anchor top, clamp to viewport
     const vh = window.innerHeight;
     let top = anchorRect.top;
-    // We'll estimate max height as 300px for clamping
     if (top + 300 > vh) top = vh - 308;
     if (top < 8) top = 8;
 
-    setPos({ top, left, direction });
+    return { top, left, direction };
   }, [anchorRect]);
 
   return (

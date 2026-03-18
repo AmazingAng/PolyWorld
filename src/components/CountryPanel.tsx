@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { ProcessedMarket } from "@/types";
 import { getCountryFlag, marketMatchesCountry } from "@/lib/countries";
 import { getParentCountry } from "@/lib/geo";
@@ -31,11 +31,13 @@ export default function CountryPanel({
 
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [prevCountry, setPrevCountry] = useState(countryName);
 
-  // Reset summary when region changes
-  useEffect(() => {
+  // Reset summary when region changes (derived state from props)
+  if (prevCountry !== countryName) {
+    setPrevCountry(countryName);
     setAiSummary(null);
-  }, [countryName]);
+  }
 
   const allMarkets = useMemo(() => [...mapped, ...unmapped], [mapped, unmapped]);
 

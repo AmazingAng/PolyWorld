@@ -11,9 +11,10 @@ import {
   getCandleDirection,
   type PriceThreshold,
 } from "./priceMonitor";
+import { RESOLUTION_SYNC_MS } from "./syncIntervals";
 
 const parser = new RssParser({ timeout: 10_000 });
-const RESOLUTION_SYNC_INTERVAL = 120_000; // 2 minutes
+const RESOLUTION_SYNC_INTERVAL = RESOLUTION_SYNC_MS;
 
 /** Generic sport terms that appear in nearly every article of a sport-specific RSS feed */
 const SPORTS_STOP_WORDS = new Set([

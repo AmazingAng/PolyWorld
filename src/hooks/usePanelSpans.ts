@@ -13,23 +13,25 @@ export function usePanelSpans(storageKey: string, defaultSpan: number) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object") {
-          setSpans(parsed);
-        }
+      if (!raw) {
+        hydrated.current = true;
+        return;
       }
-    } catch {}
-    hydrated.current = true;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        setSpans(parsed as Record<string, number>);
+      }
+    } catch {
+      // Ignore malformed persisted layout data.
+    } finally {
+      hydrated.current = true;
+    }
   }, [storageKey]);
 
-  const skipNext = useRef(true);
   useEffect(() => {
-    if (skipNext.current) {
-      skipNext.current = false;
+    if (!hydrated.current) {
       return;
     }
-    if (!hydrated.current) return;
     try {
       localStorage.setItem(storageKey, JSON.stringify(spans));
     } catch {}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { ProcessedMarket, Category } from "@/types";
 import CategoryFilter from "./CategoryFilter";
 import MarketCard from "./MarketCard";
@@ -21,12 +22,12 @@ export default function SidePanel({
   onToggleCategory,
   onFlyTo,
 }: SidePanelProps) {
+  const [renderNow] = useState(() => Date.now());
   const all = [...mapped, ...unmapped];
   const filtered = all.filter((m) => activeCategories.has(m.category));
 
-  const now = Date.now();
   const newMarkets = filtered
-    .filter((m) => m.createdAt && now - new Date(m.createdAt).getTime() < NEW_THRESHOLD_MS)
+    .filter((m) => m.createdAt && renderNow - new Date(m.createdAt).getTime() < NEW_THRESHOLD_MS)
     .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
     .slice(0, 10);
 

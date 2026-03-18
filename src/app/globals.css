@@ -1,4 +1,93 @@
 @import "tailwindcss";
+@import "fumadocs-ui/style.css";
+
+/* Fumadocs dark theme overrides to match PolyWorld */
+:root.dark, .dark {
+  --fd-background: #0a0a0a;
+  --fd-muted: #141414;
+  --fd-card: #111;
+  --fd-border: #2a2a2a;
+  --fd-foreground: #f0f0f0;
+  --fd-muted-foreground: #a0a0a0;
+  --fd-primary: #22c55e;
+  --fd-accent: rgba(34, 197, 94, 0.08);
+  --fd-accent-foreground: #22c55e;
+  --fd-ring: #22c55e;
+}
+
+/* Docs: colored headings */
+#docs-root h2 {
+  color: #22c55e;
+}
+#docs-root h3 {
+  color: #06b6d4;
+}
+
+/* Docs: colored inline code */
+#docs-root :not(pre) > code {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+}
+
+/* Docs: links */
+#docs-root a:not([class]) {
+  color: #3b82f6;
+}
+#docs-root a:not([class]):hover {
+  color: #60a5fa;
+}
+
+/* Docs: table header row */
+#docs-root th {
+  background: rgba(34, 197, 94, 0.08);
+  color: #22c55e;
+  border-bottom: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+/* Docs: table rows subtle stripe */
+#docs-root tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Docs: bold text accent */
+#docs-root strong {
+  color: #f0f0f0;
+}
+
+/* Docs: sidebar active item */
+#docs-root [data-active="true"] {
+  color: #22c55e !important;
+  border-color: #22c55e !important;
+}
+
+/* Docs: card hover glow */
+#docs-root [class*="card"] {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+#docs-root [class*="card"]:hover {
+  border-color: rgba(34, 197, 94, 0.3);
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.06);
+}
+
+/* Fumadocs: full width + fix scroll for docs pages */
+html:has(#docs-root),
+html:has(#docs-root) body {
+  overflow: visible;
+  height: auto;
+}
+
+#docs-root {
+  --fd-layout-width: 100vw;
+}
+
+/* Remove inner max-width caps on docs content */
+#docs-root [style*="max-width"],
+#docs-root .max-w-\[900px\],
+#docs-root .max-w-\[1168px\],
+#docs-root .max-w-\[1200px\] {
+  max-width: 100% !important;
+}
 
 /* === WorldMonitor-aligned Design Tokens === */
 :root {
@@ -41,7 +130,7 @@
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.15);
 
   /* Font */
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Monaco', 'Cascadia Code', 'Fira Code', monospace;
+  --font-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Fira Code', 'DejaVu Sans Mono', 'Liberation Mono', monospace;
 }
 
 @layer base {
@@ -238,6 +327,9 @@ body.resize-active .map-container {
 
 /* Mobile */
 @media (max-width: 768px) {
+  /* Header 压缩为 40px */
+  header { height: 40px !important; }
+
   .panels-grid {
     display: flex !important;
     flex-direction: column;
@@ -245,7 +337,7 @@ body.resize-active .map-container {
     padding: 0;
   }
   .map-section {
-    height: calc(100dvh - 48px - 52px) !important; /* account for mobile tab bar */
+    height: calc(100dvh - 40px - 52px) !important; /* 40px header + 52px tab bar */
     min-height: 50vh !important;
   }
   /* Mobile: single-column cards */
@@ -259,17 +351,38 @@ body.resize-active .map-container {
   /* Mobile panel fullscreen view */
   .mobile-panel-view {
     position: fixed;
-    inset: 36px 0 52px 0; /* below header, above tab bar */
+    inset: 40px 0 52px 0; /* match 40px header, above tab bar */
     z-index: 40;
     background: var(--bg);
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
   .mobile-panel-view .panel {
     flex: 1;
     border: none;
     min-height: 100%;
+  }
+
+  /* Hide desktop resize handles */
+  .resize-handle-vertical,
+  .resize-handle-horizontal,
+  .bottom-panels-grid {
+    display: none !important;
+  }
+
+  /* Panel content inertial scrolling + overscroll containment */
+  .panel-content {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* MapToolbar dropdown constraint */
+  .map-toolbar-dropdown {
+    max-height: 50vh;
+    overflow-y: auto;
   }
 }
 
@@ -282,6 +395,7 @@ body.resize-active .map-container {
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   z-index: 50;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .mobile-tab {
@@ -326,15 +440,17 @@ body.resize-active .map-container {
   background: var(--panel-bg);
   border-top: 1px solid var(--border);
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 1px;
   padding: 4px;
-  max-height: 200px;
+  max-height: 260px;
   overflow-y: auto;
+  padding-bottom: calc(4px + env(safe-area-inset-bottom));
 }
 
 .mobile-more-item {
-  padding: 8px;
+  padding: 12px 8px;
+  min-height: 44px;
   text-align: center;
   font-family: var(--font-mono);
   font-size: 10px;
@@ -400,6 +516,19 @@ body.resize-active .map-container {
 .drag-handle:active {
   cursor: grabbing;
   color: var(--green);
+}
+
+/* During drag: kill all panel transitions + pause expensive rendering */
+body.panel-drag-active .panel {
+  transition: none !important;
+}
+body.panel-drag-active .maplibregl-map,
+body.panel-drag-active .map-container,
+body.panel-drag-active canvas {
+  pointer-events: none !important;
+}
+body.panel-drag-active .panel-content {
+  visibility: hidden;
 }
 
 /* Panel being dragged */
@@ -468,6 +597,8 @@ body.resize-active .map-container {
   display: flex;
   align-items: center;
   gap: 6px;
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .panel-wide {
@@ -1028,6 +1159,11 @@ body.resize-active .map-container {
 
 .animate-fade-in {
   animation: fade-in 0.15s ease;
+}
+
+@keyframes overlayAlertIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes pulse-dot {

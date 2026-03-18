@@ -73,7 +73,7 @@ interface UIActions {
   }) => void;
 }
 
-export const useUIStore = create<UIState & UIActions>((set, get) => ({
+export const useUIStore = create<UIState & UIActions>((set) => ({
   isFullscreen: false,
   settingsOpen: false,
   alertManagerOpen: false,

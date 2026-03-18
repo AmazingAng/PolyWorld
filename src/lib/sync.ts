@@ -7,8 +7,9 @@ import { computeIndicators } from "./indicators";
 import { aiGeocodeBatch, addJitter } from "./aiGeo";
 import { isAiConfigured } from "./ai";
 import { geolocate } from "./geo";
+import { MARKET_SYNC_MS } from "./syncIntervals";
 
-const SYNC_INTERVAL = 30_000;
+const SYNC_INTERVAL = MARKET_SYNC_MS;
 
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let geocodeRunning = false;
@@ -234,7 +235,7 @@ export async function runSync(): Promise<{
 
 export function startSyncLoop() {
   if (syncTimer) return;
-  console.info("[sync] Starting sync loop (30s interval)");
+  console.info(`[sync] Starting sync loop (${SYNC_INTERVAL / 1000}s interval)`);
 
   // Run immediately
   runSync();
@@ -268,7 +269,7 @@ interface TrimmedMarket {
   oneDayPriceChange?: number;
   active?: boolean;
   volume?: number;
-  volume_24hr?: number;
+  volume24hr?: number;
   liquidity?: number;
 }
 
@@ -284,7 +285,7 @@ function trimMarket(m: PolymarketMarket): TrimmedMarket {
     oneDayPriceChange: m.oneDayPriceChange,
     active: m.active,
     volume: m.volume,
-    volume_24hr: m.volume_24hr,
+    volume24hr: m.volume24hr ?? m.volume_24hr,
     liquidity: m.liquidity,
   };
 }

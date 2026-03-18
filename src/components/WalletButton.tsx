@@ -19,6 +19,21 @@ import {
 } from "@/lib/tradeAuth";
 import { useApproveProxy } from "@/hooks/useApproveProxy";
 
+interface WalletButtonProps {
+  onRefresh?: () => void;
+  loading?: boolean;
+  lastSyncTime?: string | null;
+}
+
+function getRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  return `${Math.floor(mins / 60)}h ago`;
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -36,7 +51,7 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export default function WalletButton() {
+export default function WalletButton({ onRefresh, loading, lastSyncTime }: WalletButtonProps) {
   const { address, isConnected, connector } = useAccount();
   const chainId = useChainId();
   const { connect, connectors } = useConnect();
@@ -47,10 +62,12 @@ export default function WalletButton() {
   const [authorizing, setAuthorizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [polyBalance, setPolyBalance] = useState<number | null>(null);
+  const [portfolioValue, setPortfolioValue] = useState<number | null>(null);
   const { approve, status: approveStatus, error: approveError, markDone } = useApproveProxy();
   const allConnectors = useConnectors();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Proxy wallet lookup state
   const [resolvedProxy, setResolvedProxy] = useState<string | null>(null);
@@ -60,24 +77,38 @@ export default function WalletButton() {
 
   const isPolygon = chainId === polygon.id;
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  const handleMouseEnter = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setOpen(true);
+  };
+  const handleMouseLeave = () => {
+    closeTimer.current = setTimeout(() => setOpen(false), 200);
+  };
 
   // Sync wagmi → walletStore; restore persisted session on connect
+  // Validates the saved session is still alive on the server side
   useEffect(() => {
     if (isConnected && address && isPolygon) {
       setWallet(address, chainId);
       const saved = loadTradeSession(address);
-      if (saved) setTradeSession(saved);
+      if (saved) {
+        // Verify session is still valid on the server
+        fetch("/api/trade/balance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionToken: saved.sessionToken }),
+        }).then((res) => {
+          if (res.ok) {
+            setTradeSession(saved);
+          } else {
+            // Session expired on server — clear stale token
+            clearSavedTradeSession(address);
+          }
+        }).catch(() => {
+          // Network error — still load optimistically
+          setTradeSession(saved);
+        });
+      }
     } else {
       clearWallet();
     }
@@ -105,34 +136,49 @@ export default function WalletButton() {
     });
   }, [isConnected, address, isPolygon]);
 
-  // Fetch USDC.e balance of proxy wallet
+  // Fetch USDC.e balance + portfolio value — works with or without tradeSession
+  // Uses resolvedProxy or tradeSession.proxyAddress (whichever is available)
+  const effectiveProxy = tradeSession?.proxyAddress ?? resolvedProxy;
+
   useEffect(() => {
-    if (!tradeSession?.sessionToken) { setPolyBalance(null); return; }
+    if (!effectiveProxy) { setPolyBalance(null); setPortfolioValue(null); return; }
+    const proxyAddr = effectiveProxy;
     let cancelled = false;
     let seq = 0;
+
     const fetchBal = async () => {
       const mySeq = ++seq;
       try {
-        const res = await fetch("/api/trade/balance", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionToken: tradeSession.sessionToken }),
-        });
-        if (res.status === 401 || res.status === 404) {
-          if (!cancelled && address) clearSavedTradeSession(address);
-          if (!cancelled) useWalletStore.getState().clearTradeSession();
-          return;
-        }
+        // Public GET endpoint — no auth required, reads on-chain USDC.e balance
+        const res = await fetch(`/api/trade/balance?address=${proxyAddr}`);
+        if (!res.ok) return;
         const data = await res.json();
         if (!cancelled && mySeq === seq && data.balance !== undefined) setPolyBalance(data.balance);
       } catch { /* ignore */ }
     };
+
+    const fetchPortfolio = async () => {
+      try {
+        const res = await fetch(
+          `https://data-api.polymarket.com/value?user=${proxyAddr}`,
+          { signal: AbortSignal.timeout(8_000) }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const val = Array.isArray(data)
+          ? data.reduce((s: number, p: { currentValue?: number; value?: number }) => s + (p.currentValue ?? p.value ?? 0), 0)
+          : (data.portfolioValue ?? data.value ?? null);
+        if (!cancelled && typeof val === "number") setPortfolioValue(val);
+      } catch { /* ignore */ }
+    };
+
     fetchBal();
-    const iv = setInterval(fetchBal, 30_000);
-    const onRefresh = () => { void fetchBal(); };
-    window.addEventListener("polyworld:refresh-header-balance", onRefresh);
-    return () => { cancelled = true; clearInterval(iv); window.removeEventListener("polyworld:refresh-header-balance", onRefresh); };
-  }, [tradeSession, address]);
+    fetchPortfolio();
+    const iv = setInterval(() => { void fetchBal(); void fetchPortfolio(); }, 30_000);
+    const onRefreshEv = () => { void fetchBal(); void fetchPortfolio(); };
+    window.addEventListener("polyworld:refresh-header-balance", onRefreshEv);
+    return () => { cancelled = true; clearInterval(iv); window.removeEventListener("polyworld:refresh-header-balance", onRefreshEv); };
+  }, [effectiveProxy]);
 
   // Restore approval state from localStorage
   useEffect(() => {
@@ -159,6 +205,7 @@ export default function WalletButton() {
     disconnect();
     clearWallet();
     setPolyBalance(null);
+    setPortfolioValue(null);
     setResolvedProxy(null);
     setProxyNotFound(false);
     lookupDoneRef.current = null;
@@ -248,14 +295,13 @@ export default function WalletButton() {
     return null;
   })();
 
-  // Effective wallet key: prefer explicit name, fall back to window detection
   const walletKey = (() => {
     const n = walletName.toLowerCase();
     if (n.includes("okx")) return "okx";
     if (n.includes("metamask")) return "metamask";
     if (n.includes("rabby")) return "rabby";
     if (n.includes("coinbase")) return "coinbase";
-    return detectedWallet; // "Injected" fallback to window sniff
+    return detectedWallet;
   })();
 
   const OKXIcon = () => (
@@ -289,18 +335,49 @@ export default function WalletButton() {
     return <span className="text-[10px] font-mono text-[var(--text-dim)]">{initials}</span>;
   })();
 
+  const syncText = lastSyncTime ? getRelativeTime(lastSyncTime) : null;
+
   return (
-    <div className="relative flex items-center gap-2" ref={dropdownRef}>
-      {/* Balance — visible when authorized */}
-      {polyBalance !== null && (
-        <span className="text-[11px] tabular-nums text-[var(--text-dim)]">
-          ${polyBalance.toFixed(2)}
-        </span>
+    <div
+      className="relative flex items-center gap-2"
+      ref={dropdownRef}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Balances — visible when proxy wallet is known (no auth required) */}
+      {(portfolioValue !== null || polyBalance !== null) && (
+        <div
+          className="flex items-center gap-2.5 px-2.5 py-1 text-[11px] tabular-nums border border-[var(--border-subtle)]"
+          style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.4)" }}
+        >
+          {portfolioValue !== null && (
+            <span className="flex items-center gap-1">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--text-faint)] shrink-0">
+                <rect x="2" y="7" width="20" height="14" rx="2"/>
+                <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+                <line x1="12" y1="12" x2="12" y2="16"/>
+                <line x1="10" y1="14" x2="14" y2="14"/>
+              </svg>
+              <span className="text-[var(--text-secondary)] font-bold">${portfolioValue.toFixed(2)}</span>
+            </span>
+          )}
+          {portfolioValue !== null && polyBalance !== null && (
+            <span className="text-[var(--border)] select-none">|</span>
+          )}
+          {polyBalance !== null && (
+            <span className="flex items-center gap-1">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--text-faint)] shrink-0">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v2M12 16v2M9 9.5c0-1 1.5-1.5 3-1.5s3 .5 3 2-1.5 2-3 2-3 1-3 2 1.5 2 3 2 3-.5 3-1.5"/>
+              </svg>
+              <span className="text-[var(--text-secondary)] font-bold">${polyBalance.toFixed(2)}</span>
+            </span>
+          )}
+        </div>
       )}
 
       {/* Wallet icon button */}
       <button
-        onClick={() => setOpen((v) => !v)}
         className={`relative flex items-center justify-center w-7 h-7 border transition-colors overflow-hidden ${
           open
             ? "border-[var(--text-faint)] bg-[var(--border-subtle)]"
@@ -323,7 +400,7 @@ export default function WalletButton() {
       {/* Dropdown */}
       {open && (
         <div
-          className="absolute right-0 top-full mt-1.5 w-[220px] bg-[var(--bg)] border border-[var(--border)] z-[200] py-1 font-mono text-[11px]"
+          className="absolute right-0 top-full mt-1 w-[220px] bg-[var(--bg)] border border-[var(--border)] z-[200] py-1 font-mono text-[11px]"
           style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
         >
           {/* Wallet name */}
@@ -413,6 +490,22 @@ export default function WalletButton() {
               </button>
             )}
           </div>
+
+          {/* Refresh + sync info */}
+          {onRefresh && (
+            <div className="px-3 py-2 flex items-center justify-between border-b border-[var(--border-subtle)]">
+              <span className="text-[10px] text-[var(--text-ghost)]">
+                {syncText ? `synced ${syncText}` : "—"}
+              </span>
+              <button
+                onClick={() => { onRefresh(); setOpen(false); }}
+                disabled={loading}
+                className="text-[10px] px-2 py-0.5 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-ghost)] transition-colors disabled:opacity-40"
+              >
+                {loading ? "refreshing…" : "refresh"}
+              </button>
+            </div>
+          )}
 
           {/* Disconnect */}
           <button

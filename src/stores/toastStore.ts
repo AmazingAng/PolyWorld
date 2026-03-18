@@ -5,6 +5,7 @@ export type TradeToastType = "submitting" | "success" | "error";
 
 export interface TradeToast {
   id: string;
+  scopeKey?: string;
   type: TradeToastType;
   label: string;  // explicit display label, e.g. "order matched" / "order placed"
   title: string;
@@ -27,7 +28,7 @@ const MARKET_TOAST_TTL = 5_000;
 interface ToastState {
   tradeToasts: TradeToast[];
   marketToasts: MarketToast[];
-  addTradeToast: (type: TradeToastType, label: string, title: string, detail?: string) => void;
+  addTradeToast: (type: TradeToastType, label: string, title: string, detail?: string, scopeKey?: string) => void;
   dismissTradeToast: (id: string) => void;
   enqueueSignalToasts: (markets: ProcessedMarket[]) => void;
   enqueueNewMarketToasts: (markets: ProcessedMarket[]) => void;
@@ -38,16 +39,19 @@ export const useToastStore = create<ToastState>((set) => ({
   tradeToasts: [],
   marketToasts: [],
 
-  addTradeToast: (type, label, title, detail) => {
+  addTradeToast: (type, label, title, detail, scopeKey) => {
     const toast: TradeToast = {
       id: `trade-${Date.now()}-${Math.random()}`,
+      scopeKey,
       type,
       label,
       title,
       detail,
       timestamp: Date.now(),
     };
-    set((s) => ({ tradeToasts: [...s.tradeToasts, toast].slice(-6) }));
+    set((s) => ({
+      tradeToasts: [...s.tradeToasts.filter((t) => !scopeKey || t.scopeKey !== scopeKey), toast].slice(-6),
+    }));
     // Auto-dismiss after 5s (success/error), 30s (submitting)
     const ttl = type === "submitting" ? 30_000 : 5_000;
     setTimeout(() => {

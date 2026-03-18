@@ -20,10 +20,10 @@ const DEAD_ZONE = 20;
 export function useSpanResize({ axis, span, onChange, maxSpan }: SpanResizeOptions) {
   const effectiveMax = maxSpan ?? (axis === "col" ? 2 : 4);
   const spanRef = useRef(span);
-  spanRef.current = span;
+  useEffect(() => { spanRef.current = span; }, [span]);
 
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   const dragging = useRef(false);
   const startPos = useRef(0);

@@ -60,5 +60,8 @@ debug-*.mjs
 test-qa*.mjs
 test-results/
 
+# fumadocs generated
+.source/
+
 # reference files
 .worldmonitor-ref/

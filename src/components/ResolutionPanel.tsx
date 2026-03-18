@@ -40,6 +40,7 @@ const STRENGTH_BG: Record<string, string> = {
 export function useResolutionData() {
   const [alerts, setAlerts] = useState<ResolutionAlertInput[]>([]);
   const retryRef = useRef(0);
+  const fetchAlertsRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
   const fetchAlerts = useCallback(async () => {
     try {
@@ -65,13 +66,16 @@ export function useResolutionData() {
     } catch {
       if (retryRef.current < 2) {
         retryRef.current++;
-        setTimeout(fetchAlerts, 3000);
+        setTimeout(() => fetchAlertsRef.current?.(), 3000);
       }
     }
   }, []);
 
   useEffect(() => {
-    fetchAlerts();
+    fetchAlertsRef.current = fetchAlerts;
+    queueMicrotask(() => {
+      void fetchAlerts();
+    });
     const iv = setInterval(fetchAlerts, 120_000);
     return () => clearInterval(iv);
   }, [fetchAlerts]);

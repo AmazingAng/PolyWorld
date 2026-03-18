@@ -11,6 +11,7 @@ interface MarketState {
   signals: ProcessedMarket[];
   newMarkets: ProcessedMarket[];
   selectedMarket: ProcessedMarket | null;
+  selectedOutcomeTokenId: string | null;
   selectedCountry: string | null;
   flyToTarget: { coords: [number, number]; marketId: string } | null;
 }
@@ -25,6 +26,7 @@ interface MarketActions {
   setSignals: (signals: ProcessedMarket[]) => void;
   setNewMarkets: (markets: ProcessedMarket[]) => void;
   selectMarket: (market: ProcessedMarket | null) => void;
+  setSelectedOutcomeTokenId: (tokenId: string | null) => void;
   selectCountry: (country: string | null) => void;
   setFlyToTarget: (target: MarketState["flyToTarget"]) => void;
 }
@@ -39,6 +41,7 @@ export const useMarketStore = create<MarketState & MarketActions>((set) => ({
   signals: [],
   newMarkets: [],
   selectedMarket: null,
+  selectedOutcomeTokenId: null,
   selectedCountry: null,
   flyToTarget: null,
 
@@ -50,8 +53,9 @@ export const useMarketStore = create<MarketState & MarketActions>((set) => ({
   setLastSyncTime: (lastSyncTime) => set({ lastSyncTime }),
   setSignals: (signals) => set({ signals }),
   setNewMarkets: (newMarkets) => set({ newMarkets }),
+  setSelectedOutcomeTokenId: (tokenId) => set({ selectedOutcomeTokenId: tokenId }),
   selectMarket: (market) => {
-    set({ selectedMarket: market });
+    set({ selectedMarket: market, selectedOutcomeTokenId: null });
     try {
       if (market) sessionStorage.setItem("pw:selectedMarket", market.id);
       else sessionStorage.removeItem("pw:selectedMarket");

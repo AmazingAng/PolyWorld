@@ -44,9 +44,7 @@ function TweetPopover({
   onMouseLeave: () => void;
 }) {
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-
-  useEffect(() => {
+  const pos = useMemo(() => {
     const vw = window.innerWidth;
     const popoverWidth = 340;
     const gap = 6;
@@ -64,7 +62,7 @@ function TweetPopover({
     if (top + 300 > vh) top = vh - 308;
     if (top < 8) top = 8;
 
-    setPos({ top, left });
+    return { top, left };
   }, [anchorRect]);
 
   return (

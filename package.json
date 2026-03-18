@@ -9,7 +9,7 @@
     "url": "https://github.com/AmazingAng/PolyWorld.git"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "WATCHPACK_POLLING=true next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -22,8 +22,12 @@
     "@polymarket/builder-signing-sdk": "^1.0.0",
     "@polymarket/clob-client": "^5.8.0",
     "@tanstack/react-query": "^5.90.21",
+    "@types/mdx": "^2.0.13",
     "better-sqlite3": "^12.6.2",
     "ethers": "^6.16.0",
+    "fumadocs-core": "^16.6.17",
+    "fumadocs-mdx": "^14.2.10",
+    "fumadocs-ui": "^16.6.17",
     "hls.js": "^1.6.15",
     "lightweight-charts": "^5.1.0",
     "maplibre-gl": "^4.7.1",

@@ -5,9 +5,10 @@ import { NEWS_SOURCES } from "./newsSources";
 import { isAiConfigured, matchNewsToMarkets } from "./ai";
 import { extractKeywords } from "./keywords";
 import type { NewsItem } from "@/types";
+import { NEWS_SYNC_MS } from "./syncIntervals";
 
 const parser = new RssParser({ timeout: 10_000 });
-const NEWS_SYNC_INTERVAL = 300_000; // 5 minutes
+const NEWS_SYNC_INTERVAL = NEWS_SYNC_MS;
 
 const MAX_MATCHES_PER_ITEM = 20; // limit matches per news/tweet to prevent explosion
 

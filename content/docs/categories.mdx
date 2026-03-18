@@ -1,0 +1,69 @@
+---
+title: Categories
+description: Market classification system used in PolyWorld.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+Markets are automatically classified into categories using keyword matching in `src/lib/categories.ts`. Each category has a primary emoji and optional sub-category markers.
+
+## Category List
+
+<Cards>
+  <Card title="🏛️ Politics">
+    Elections, legislation, diplomacy, conflicts, legal proceedings.
+
+    Sub-categories: 🗳️ ⚔️ 📜 🤝 ⚖️
+  </Card>
+  <Card title="₿ Crypto">
+    Bitcoin, Ethereum, DeFi, token prices, blockchain events.
+  </Card>
+  <Card title="🏆 Sports">
+    All major sports leagues and competitions worldwide.
+
+    Sub-categories: ⚽ 🏀 ⚾ 🏒 🎾 ⛳ 🏎️ 🥊 🏈 🏏 🥇
+  </Card>
+  <Card title="📈 Finance">
+    Stock markets, interest rates, economic indicators, corporate earnings.
+  </Card>
+  <Card title="💻 Tech">
+    Product launches, AI developments, company milestones, platform updates.
+  </Card>
+  <Card title="🎭 Culture">
+    Entertainment, awards, media events, social trends.
+  </Card>
+  <Card title="🌐 Other">
+    Weather, science, health, and everything else.
+
+    Sub-categories: 🌡️
+  </Card>
+</Cards>
+
+## How Classification Works
+
+<Callout type="info">
+The `categorizeMarket()` function scans the market **title and description** against keyword lists. Markets that don't match any specific category fall into "Other".
+</Callout>
+
+```ts title="src/lib/categories.ts"
+// Simplified example of keyword matching
+function categorizeMarket(title: string, description: string): Category {
+  const text = `${title} ${description}`.toLowerCase();
+
+  if (POLITICS_KEYWORDS.some(k => text.includes(k))) return 'Politics';
+  if (CRYPTO_KEYWORDS.some(k => text.includes(k)))   return 'Crypto';
+  if (SPORTS_KEYWORDS.some(k => text.includes(k)))    return 'Sports';
+  // ...
+  return 'Other';
+}
+```
+
+## Where Categories Are Used
+
+| Feature | How |
+|---------|-----|
+| **Map markers** | Color-coded dots by category — politics blue, crypto orange, sports green |
+| **Markets panel** | Category filter chips for quick filtering |
+| **UI Store** | `uiStore.categoryFilter` tracks active filters |
+| **Signals** | Category context included in signal descriptions |

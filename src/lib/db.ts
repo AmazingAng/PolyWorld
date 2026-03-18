@@ -2,15 +2,15 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 
-const DB_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DB_DIR, "polyworld.db");
+const DEFAULT_DATA_DIR = path.resolve(process.cwd(), "..", "data");
 
 let db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (db) return db;
 
-  const dbPath = process.env.DB_PATH || DB_PATH;
+  const dataDir = process.env.DATA_DIR || DEFAULT_DATA_DIR;
+  const dbPath = process.env.DB_PATH || path.join(dataDir, "polyworld.db");
   const dbDir = path.dirname(dbPath);
   fs.mkdirSync(dbDir, { recursive: true });
 

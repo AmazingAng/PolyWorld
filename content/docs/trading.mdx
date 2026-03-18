@@ -1,0 +1,185 @@
+---
+title: Trading Guide
+description: How to connect your wallet and trade on Polymarket through PolyWorld.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+<Callout type="warn">
+**Real money trading.** PolyWorld connects to the live Polymarket exchange. Orders are irreversible once filled. Start small until you're comfortable with the flow.
+</Callout>
+
+## What You Need
+
+<Cards>
+  <Card title="🦊 A Browser Wallet">
+    MetaMask, Rabby, OKX Wallet, or Coinbase Wallet. If you don't have one, install [MetaMask](https://metamask.io) first.
+  </Card>
+  <Card title="💵 USDC on Polygon">
+    You'll need USDC.e on the Polygon network. You can bridge from Ethereum or buy directly through your wallet's onramp.
+  </Card>
+</Cards>
+
+## Step-by-Step
+
+<Steps>
+  <Step>
+    ### Register on Polymarket
+
+    If you've never used Polymarket before, go to [polymarket.com](https://polymarket.com) and **sign in with your wallet**. This creates your **proxy wallet** (a Gnosis Safe smart contract on Polygon) — Polymarket needs this to hold your funds and positions.
+
+    <Callout type="info">
+    **Why a proxy wallet?** Polymarket doesn't trade directly from your MetaMask. Instead, it creates a special smart contract wallet (Gnosis Safe) tied to your address. All your USDC and positions live in this proxy wallet. This is standard for all Polymarket users.
+    </Callout>
+
+    Once you've logged in on polymarket.com at least once, your proxy wallet is created and PolyWorld can detect it automatically.
+  </Step>
+
+  <Step>
+    ### Deposit Funds
+
+    Your proxy wallet needs USDC.e on Polygon. Two ways to fund it:
+
+    <Tabs items={["Via Polymarket (Easiest)", "Manual Bridge"]}>
+      <Tab value="Via Polymarket (Easiest)">
+        1. Go to [polymarket.com](https://polymarket.com) → click **Deposit**
+        2. Choose your funding method (card, crypto, bank transfer)
+        3. Polymarket handles the bridging and deposits into your proxy wallet
+      </Tab>
+      <Tab value="Manual Bridge">
+        1. Send USDC to your **proxy wallet address** on Polygon
+        2. You can find your proxy address in the PolyWorld wallet panel after connecting
+        3. Use the [Polygon Bridge](https://wallet.polygon.technology/bridge) or any cross-chain bridge
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step>
+    ### Connect Wallet in PolyWorld
+
+    Click the **wallet icon** (top-right of the dashboard). Select your wallet from the popup.
+
+    - If you're not on Polygon, PolyWorld will prompt you to **switch network** — just confirm in your wallet
+    - Once connected, your address and USDC balance appear in the header
+    - PolyWorld automatically finds your Polymarket proxy wallet
+
+    <Callout type="info">
+    **Proxy not found?** If auto-detection fails (rare), click the wallet icon and manually paste your proxy wallet address. You can find it on polymarket.com under your profile settings.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Authorize Trading
+
+    Click **"Authorize Trading"** in the wallet panel. Your wallet will ask you to **sign a message** (not a transaction — no gas fee).
+
+    This proves you own the wallet and creates a temporary trading session.
+
+    - A **green dot** appears on the wallet icon when authorized
+    - Sessions last **30 minutes** of inactivity (auto-refreshes while you trade)
+    - Maximum **8 hours** per session, then re-authorize
+  </Step>
+
+  <Step>
+    ### Approve Tokens (First Time Only)
+
+    If this is your first trade through PolyWorld, click **"Approve Tokens"**.
+
+    You'll sign one message that approves the Polymarket exchange to use your USDC and trade tokens. This is:
+    - **Gasless** — submitted through Polymarket's relayer, no ETH/MATIC needed
+    - **One-time** — you only need to do this once per proxy wallet
+    - **Standard** — same approval that polymarket.com requests
+
+    After approval, the button disappears and you're ready to trade.
+  </Step>
+
+  <Step>
+    ### Place a Trade
+
+    1. **Find a market** — browse the Markets panel, click the map, or use search
+    2. **Open the trade form** — click **Trade** on any market to open the order form
+    3. **Choose your side** — **BUY** (you think Yes) or **SELL** (you think No / exit position)
+    4. **Enter amount and price** — pick a preset or type a custom amount
+
+    <Tabs items={["Market Order", "Limit Order"]}>
+      <Tab value="Market Order">
+        Fills **instantly** at the best available price.
+
+        - **BUY:** enter how much USD you want to spend
+        - **SELL:** enter how many shares to sell
+        - Includes automatic slippage protection (±$0.02)
+        - Unfilled portion is cancelled (no partial hanging orders)
+
+        Best for: getting in or out quickly.
+      </Tab>
+      <Tab value="Limit Order">
+        Sets **your price** — order sits on the book until someone takes it.
+
+        - Set price with the slider or type it in
+        - Order stays open until filled or you cancel it
+        - Visible in the orderbook immediately
+        - Cancel anytime from the order panel
+
+        Best for: getting a better price when you're not in a rush.
+      </Tab>
+    </Tabs>
+
+    5. Click **Submit** — confirm in your wallet if prompted
+    6. Done! Your position appears in the **Portfolio** panel
+  </Step>
+</Steps>
+
+## Managing Your Positions
+
+Once you have open positions:
+
+| Action | How |
+|--------|-----|
+| **View positions** | Open the **Portfolio** panel — shows all your open positions with current P&L |
+| **Sell / exit** | Click any position → **Trade** → switch to **SELL** tab |
+| **Check orders** | Open orders appear in the **Orderbook** panel for that market |
+| **Cancel order** | Click the ✕ next to any open limit order |
+| **Track balance** | Your USDC balance updates every 30 seconds in the header |
+
+## FAQ
+
+<Cards>
+  <Card title="Do I need ETH/MATIC for gas?">
+    **No.** All approvals go through Polymarket's gasless relayer. Order signing uses off-chain signatures — no on-chain transactions from your wallet.
+  </Card>
+  <Card title="Is this the same as trading on polymarket.com?">
+    **Yes.** PolyWorld connects to the same Polymarket CLOB exchange. Your positions, balances, and orders are identical whether you trade from polymarket.com or PolyWorld.
+  </Card>
+  <Card title="What wallets are supported?">
+    Any injected Ethereum wallet: **MetaMask**, **Rabby**, **OKX Wallet**, **Coinbase Wallet**. WalletConnect is not supported yet.
+  </Card>
+  <Card title="Why did my session expire?">
+    Sessions time out after **30 minutes** of inactivity or **8 hours** total. Just click "Authorize Trading" again — it takes 2 seconds.
+  </Card>
+</Cards>
+
+## Troubleshooting
+
+<Cards>
+  <Card title="❌ 'Session expired'">
+    Click **Authorize Trading** again. Sessions expire after inactivity.
+  </Card>
+  <Card title="❌ 'Token approval missing'">
+    Click **Approve Tokens** in the wallet panel. One-time setup, no gas required.
+  </Card>
+  <Card title="❌ 'Not enough USDC'">
+    Your proxy wallet needs more USDC.e on Polygon. Deposit via polymarket.com or bridge manually.
+  </Card>
+  <Card title="❌ 'Proxy wallet not found'">
+    Sign in on [polymarket.com](https://polymarket.com) first to create your proxy wallet, then reconnect in PolyWorld.
+  </Card>
+  <Card title="❌ 'Order rejected by exchange'">
+    Price moved too fast. Try again — market orders have built-in slippage protection. For volatile markets, use limit orders instead.
+  </Card>
+  <Card title="❌ Wrong network">
+    Click the network warning in the wallet panel — PolyWorld will auto-switch you to Polygon.
+  </Card>
+</Cards>

@@ -9,10 +9,13 @@ export interface TradeSession {
 
 interface TradeSessionRecord extends TradeSession {
   creds: L2Creds;
+  createdAt: number;
+  lastAccessedAt: number;
   expiresAt: number;
 }
 
-const SESSION_TTL_MS = 30 * 60_000;
+const SESSION_IDLE_TTL_MS = 30 * 60_000; // 30 minutes idle timeout
+const SESSION_ABSOLUTE_TTL_MS = 8 * 60 * 60_000; // 8 hours absolute max lifetime
 
 // Survive Next.js hot reloads by storing on globalThis
 declare global { var _tradeSessions: Map<string, TradeSessionRecord> | undefined; }
@@ -21,7 +24,8 @@ const sessions: Map<string, TradeSessionRecord> =
 
 function cleanupExpiredSessions(now: number) {
   for (const [token, session] of sessions) {
-    if (session.expiresAt <= now) {
+    const absoluteExpiresAt = session.createdAt + SESSION_ABSOLUTE_TTL_MS;
+    if (session.expiresAt <= now || absoluteExpiresAt <= now) {
       sessions.delete(token);
     }
   }
@@ -41,7 +45,9 @@ export function createTradeSession(input: {
     address: input.address,
     proxyAddress: input.proxyAddress,
     creds: input.creds,
-    expiresAt: now + SESSION_TTL_MS,
+    createdAt: now,
+    lastAccessedAt: now,
+    expiresAt: now + SESSION_IDLE_TTL_MS,
   });
 
   return {
@@ -51,18 +57,28 @@ export function createTradeSession(input: {
   };
 }
 
-export function getTradeSession(sessionToken: string): TradeSessionRecord | null {
+export function getTradeSession(
+  sessionToken: string,
+  options?: { extend?: boolean }
+): TradeSessionRecord | null {
   const now = Date.now();
   cleanupExpiredSessions(now);
 
   const session = sessions.get(sessionToken);
   if (!session) return null;
-  if (session.expiresAt <= now) {
+  const absoluteExpiresAt = session.createdAt + SESSION_ABSOLUTE_TTL_MS;
+  if (session.expiresAt <= now || absoluteExpiresAt <= now) {
     sessions.delete(sessionToken);
     return null;
   }
 
-  session.expiresAt = now + SESSION_TTL_MS;
+  session.lastAccessedAt = now;
+  if (options?.extend) {
+    session.expiresAt = Math.min(
+      session.createdAt + SESSION_ABSOLUTE_TTL_MS,
+      now + SESSION_IDLE_TTL_MS
+    );
+  }
   return session;
 }
 

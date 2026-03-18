@@ -30,6 +30,7 @@ test.describe("Sentiment Panel", () => {
           Object.defineProperty(fakeGL, "canvas", { get: () => this });
           return fakeGL as unknown as WebGLRenderingContext;
         }
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
         return (origGetContext as Function).call(this, type, ...rest);
       } as typeof origGetContext;
 

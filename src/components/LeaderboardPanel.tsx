@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import Image from "next/image";
+import { useState, useRef, useCallback } from "react";
 import type { SmartWallet } from "@/types";
 import { formatVolume } from "@/lib/format";
 
@@ -22,13 +23,21 @@ export default function LeaderboardPanel({
   leaderboard,
   onSelectWallet,
 }: LeaderboardPanelProps) {
-  const [visible, setVisible] = useState(PAGE_SIZE);
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  const leaderboardKey = `${leaderboard.length}:${leaderboard.slice(0, 5).map((w) => w.address).join("|")}`;
+  return (
+    <LeaderboardPanelContent
+      key={leaderboardKey}
+      leaderboard={leaderboard}
+      onSelectWallet={onSelectWallet}
+    />
+  );
+}
 
-  // Reset visible count when data changes (e.g. period switch)
-  useEffect(() => {
-    setVisible(PAGE_SIZE);
-  }, [leaderboard]);
+function LeaderboardPanelContent({
+  leaderboard,
+  onSelectWallet,
+}: LeaderboardPanelProps) {
+  const [visible, setVisible] = useState(PAGE_SIZE);
 
   // Intersection observer for infinite scroll
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -73,9 +82,12 @@ export default function LeaderboardPanel({
               #{w.rank}
             </span>
             {w.profileImage ? (
-              <img
+              <Image
                 src={w.profileImage}
                 alt=""
+                width={16}
+                height={16}
+                unoptimized
                 className="w-4 h-4 rounded-full shrink-0"
               />
             ) : (

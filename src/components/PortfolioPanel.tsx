@@ -122,11 +122,11 @@ export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPan
     }
   }, []);
 
-  // Load on wallet change + auto-refresh every 5 min
+  // Load on wallet change + auto-refresh every 60s
   useEffect(() => {
     if (!savedWallet) { setPositions([]); setTotalValue(0); return; }
     load(savedWallet);
-    const iv = setInterval(() => load(savedWallet), 300_000);
+    const iv = setInterval(() => load(savedWallet), 60_000);
     return () => { cancelRef.current = true; clearInterval(iv); };
   }, [savedWallet, load]);
 
@@ -203,8 +203,20 @@ export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPan
 
       {/* Body */}
       {!savedWallet ? (
-        <div className="flex-1 flex items-center justify-center text-[var(--text-muted)] text-center px-4 leading-relaxed">
-          Enter your wallet address to track your positions and PnL
+        <div className="flex-1 flex flex-col items-center justify-center text-[var(--text-muted)] text-center px-4 leading-relaxed gap-3">
+          {connectedAddress ? (
+            <>
+              <button
+                onClick={() => setSavedWallet(connectedAddress)}
+                className="text-[11px] px-3 py-1.5 border border-[#22c55e]/40 text-[#22c55e] hover:border-[#22c55e]/70 hover:bg-[#22c55e]/5 transition-colors"
+              >
+                load my positions
+              </button>
+              <span className="text-[10px] text-[var(--text-faint)]">or enter any address above</span>
+            </>
+          ) : (
+            <span>Enter your wallet address to track your positions and PnL</span>
+          )}
         </div>
       ) : loading ? (
         <div className="flex-1 flex items-center justify-center gap-2 text-[var(--text-muted)]">

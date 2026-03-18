@@ -1,0 +1,95 @@
+---
+title: Panels
+description: Reference for all 19 panels available in the PolyWorld dashboard.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+PolyWorld uses a modular panel system. Each panel can be shown/hidden, reordered via drag-and-drop, and resized. Panels are arranged in a **right sidebar** (max 2 columns) and a **bottom bar** (max 3 columns).
+
+## Panel Reference
+
+<Cards>
+  <Card title="📋 Markets">
+    Browse all tracked Polymarket events with probability, volume, and category filters.
+  </Card>
+  <Card title="🔍 Market Detail">
+    Deep-dive into a single market: price chart, orderbook, news, and trading interface.
+  </Card>
+  <Card title="💎 Smart Money">
+    Leaderboard of top PnL wallets. Click any wallet to see their positions and recent trades.
+  </Card>
+  <Card title="🐋 Whale Trades">
+    Real-time feed of large trades ($500+) across all markets, filterable by wallet.
+  </Card>
+  <Card title="⚡ Signal">
+    AI-generated signals from 7 detection algorithms, ranked by strength and recency.
+  </Card>
+  <Card title="📰 News">
+    Matched news articles from RSS feeds, linked to relevant markets by AI.
+  </Card>
+  <Card title="📈 Chart">
+    Price history chart for the selected market with configurable timeframes.
+  </Card>
+  <Card title="🧠 Sentiment">
+    AI-powered sentiment summary combining news, social, and smart money data.
+  </Card>
+  <Card title="📊 Orderbook">
+    Live CLOB orderbook for the selected market with bid/ask spread visualization.
+  </Card>
+  <Card title="💼 Portfolio">
+    Your open positions, P&L, and trade history when a wallet is connected.
+  </Card>
+  <Card title="🗺️ Country">
+    Markets filtered by selected country on the map.
+  </Card>
+  <Card title="⏰ Resolution">
+    Monitors markets approaching resolution with alert triggers.
+  </Card>
+  <Card title="⭐ Watchlist">
+    Your saved markets for quick access.
+  </Card>
+  <Card title="🔴 Live">
+    Real-time trade ticker showing all trades as they happen.
+  </Card>
+</Cards>
+
+## Adding a New Panel
+
+<Callout type="warn">
+Registering a new panel requires synchronized changes across **6 files**. Missing any step will cause runtime errors or invisible panels.
+</Callout>
+
+<Steps>
+  <Step>
+    ### Update Store
+
+    `src/stores/uiStore.ts` — Add to `DEFAULT_PANEL_VISIBILITY`, `DEFAULT_PANEL_ORDER`, and the `hydrateFromPrefs` migration logic.
+  </Step>
+  <Step>
+    ### Update Settings Modal
+
+    `src/components/SettingsModal.tsx` — Add to the `PanelVisibility` interface and `PANEL_LABELS` map.
+  </Step>
+  <Step>
+    ### Update Preferences
+
+    `src/hooks/usePreferences.ts` — Add default value in `DEFAULT_PREFERENCES` and include in `panelOrder`.
+  </Step>
+  <Step>
+    ### Register in Page
+
+    `src/app/page.tsx` — Import the component, add to `DEFAULT_COL_SPANS`, `panelHandlers` ids array, and `renderPanel` switch case.
+  </Step>
+</Steps>
+
+## Layout System
+
+| Zone | Max Columns | Typical Usage |
+|------|------------|---------------|
+| **Right sidebar** | 2 | Market Detail, Smart Money, Portfolio |
+| **Bottom bar** | 3 | Charts, Orderbook, Whale Trades, Signals |
+
+Panels are identified by `data-panel` DOM attributes for drag-and-drop sorting. Column spans are configurable per-panel via `DEFAULT_COL_SPANS`.

@@ -28,6 +28,7 @@ interface MarketsPanelProps {
   onRowSpanChange?: (span: number) => void;
   onRowSpanReset?: () => void;
   maxColSpan?: number;
+  onTrade?: (state: import("./TradeModal").TradeModalState) => void;
 }
 
 type SortOrder = "sections" | "volume" | "impact" | "change" | "new";
@@ -51,14 +52,20 @@ function MarketsPanelInner({
   onRowSpanChange,
   onRowSpanReset,
   maxColSpan,
+  onTrade,
 }: MarketsPanelProps) {
   const [search, setSearch] = useState("");
+  const [renderNow] = useState(() => Date.now());
   const [localCategoryFilter, setLocalCategoryFilter] = useState<Set<string>>(new Set());
   const [localSortSet, setLocalSortSet] = useState<Set<string>>(new Set(["impact"]));
 
   // Sync external search (e.g. tag click from detail panel)
   useEffect(() => {
-    if (externalSearch !== undefined) setSearch(externalSearch);
+    if (externalSearch === undefined) return;
+    const timer = window.setTimeout(() => {
+      setSearch(externalSearch);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [externalSearch]);
   const [expanded, setExpanded] = useState(false);
 
@@ -96,21 +103,20 @@ function MarketsPanelInner({
     );
   }, [filtered, search]);
 
-  const now = Date.now();
   const newMarkets = useMemo(
     () =>
       (searchFiltered || filtered)
         .filter(
           (m) =>
             m.createdAt &&
-            now - new Date(m.createdAt).getTime() < NEW_THRESHOLD_MS
+            renderNow - new Date(m.createdAt).getTime() < NEW_THRESHOLD_MS
         )
         .sort(
           (a, b) =>
             new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
         )
         .slice(0, 10),
-    [searchFiltered, filtered, now]
+    [searchFiltered, filtered, renderNow]
   );
 
   const movers = useMemo(
@@ -200,9 +206,8 @@ function MarketsPanelInner({
       ? { isWatched: isWatched(m.id), onToggleWatch: () => onToggleWatch(m.id) }
       : {};
 
-  const locationProps = { onLocationHover: handleLocationHover, onLocationLeave: handleLocationLeave };
+  const locationProps = { onLocationHover: handleLocationHover, onLocationLeave: handleLocationLeave, onTrade };
 
-  const totalCount = searchFiltered ? searchFiltered.length : filtered.length;
   const { onMouseDown: handleResizeStart } = useColResize(colSpan ?? 2, onColSpanChange, maxColSpan);
   const { onMouseDown: handleRowResizeStart } = useRowResize(rowSpan ?? 2, onRowSpanChange);
 
@@ -222,7 +227,6 @@ function MarketsPanelInner({
             </svg>
           </span>
           <span className="panel-title">Markets</span>
-          <span className="panel-count">{totalCount}</span>
           {/* Search input */}
           <div className="relative w-[110px] shrink-0">
             <svg
@@ -249,12 +253,9 @@ function MarketsPanelInner({
             )}
           </div>
           <div className="ml-auto flex items-center gap-1.5">
-            {sortedAll && !search && (
-              <span className="text-[10px] text-[var(--text-ghost)] font-mono">
-                {sortOrder === "volume" ? "by volume" : sortOrder === "impact" ? "by impact" : sortOrder === "change" ? "by change" : "newest"}
-              </span>
-            )}
-            <FilterDropdown groups={[
+            <FilterDropdown
+              label={sortOrder === "volume" ? "Volume" : sortOrder === "impact" ? "Impact" : sortOrder === "change" ? "Change" : sortOrder === "new" ? "Newest" : "Sections"}
+              groups={[
               {
                 label: "Category",
                 options: CATEGORIES.map((cat) => ({ key: cat, label: cat, color: CATEGORY_COLORS[cat] })),

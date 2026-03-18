@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { ProcessedMarket, Category } from "@/types";
+import { ProcessedMarket } from "@/types";
+import type { OverlayLayer } from "@/components/MapToolbar";
 import { processEvents, getSampleData } from "@/lib/polymarket";
 import { findSimilarMarkets } from "@/lib/correlation";
 import Header from "@/components/Header";
@@ -35,10 +36,13 @@ import TraderPanel from "@/components/TraderPanel";
 import ArbitragePanel from "@/components/ArbitragePanel";
 import CalendarPanel from "@/components/CalendarPanel";
 import SignalPanel from "@/components/SignalPanel";
+import TradeModal, { type TradeModalState } from "@/components/TradeModal";
 import ResolutionPanel from "@/components/ResolutionPanel";
 import PortfolioPanel from "@/components/PortfolioPanel";
 import FilterDropdown from "@/components/FilterDropdown";
 import { detectSignals } from "@/lib/smartSignals";
+import OnboardingModal from "@/components/OnboardingModal";
+import Footer from "@/components/Footer";
 import PanelErrorBoundary from "@/components/PanelErrorBoundary";
 import { usePanelColSpans } from "@/hooks/usePanelColSpans";
 import { usePanelRowSpans } from "@/hooks/usePanelRowSpans";
@@ -108,8 +112,34 @@ export default function Home() {
   }, [newMarkets, enqueueNewMarketToasts]);
 
   const selectedMarket = useMarketStore((s) => s.selectedMarket);
+  const selectedOutcomeTokenId = useMarketStore((s) => s.selectedOutcomeTokenId);
   const selectedCountry = useMarketStore((s) => s.selectedCountry);
   const flyToTarget = useMarketStore((s) => s.flyToTarget);
+
+  // Derive human-readable outcome label for the orderbook header
+  const orderbookOutcomeName = useMemo(() => {
+    if (!selectedMarket || !selectedOutcomeTokenId) return null;
+    for (const m of selectedMarket.markets) {
+      if (m.active === false) continue;
+      const raw = m.clobTokenIds;
+      if (!raw) continue;
+      try {
+        const ids: string[] = Array.isArray(raw) ? raw : JSON.parse(raw as unknown as string);
+        const label = m.groupItemTitle || m.question || "";
+        if (ids[0] === selectedOutcomeTokenId) return label ? `${label} · Yes` : "Yes";
+        if (ids[1] === selectedOutcomeTokenId) return label ? `${label} · No`  : "No";
+      } catch { /* skip */ }
+    }
+    return null;
+  }, [selectedMarket, selectedOutcomeTokenId]);
+
+  const defaultOrderbookOutcomeName = useMemo(() => {
+    if (!selectedMarket) return null;
+    const m = selectedMarket.markets.find((m) => m.active !== false);
+    if (!m) return null;
+    const label = m.groupItemTitle || "";
+    return label ? `${label} · Yes` : "Yes";
+  }, [selectedMarket]);
 
   // ─── Smart Money Store ───
   const smartMoneyLeaderboard = useSmartMoneyStore((s) => s.leaderboard);
@@ -149,6 +179,32 @@ export default function Home() {
   const setColorMode = useUIStore((s) => s.setColorMode);
   const setRegion = useUIStore((s) => s.setRegion);
   const togglePanelVisibility = useUIStore((s) => s.togglePanelVisibility);
+
+  // ─── Map overlay layers (persisted to localStorage) ───
+  const [activeLayers, setActiveLayers] = useState<Set<OverlayLayer>>(new Set());
+  const [traderPrefsReady, setTraderPrefsReady] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("polyworld:activeLayers");
+      if (saved) {
+        setActiveLayers(new Set(JSON.parse(saved) as OverlayLayer[]));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  useEffect(() => {
+    useSmartMoneyStore.getState().hydrateTraderPrefs();
+    setTraderPrefsReady(true);
+  }, []);
+  const toggleOverlayLayer = useCallback((layer: OverlayLayer) => {
+    setActiveLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(layer)) next.delete(layer); else next.add(layer);
+      try { localStorage.setItem("polyworld:activeLayers", JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
 
   // ─── Panel filter state ───
   const [sigStrFilter, setSigStrFilter] = useState<Set<string>>(new Set());
@@ -388,13 +444,18 @@ export default function Home() {
       const urlParams = new URLSearchParams(window.location.search);
       const urlMarketId = urlParams.get("m");
       const cachedMarketId = urlMarketId || sessionStorage.getItem("pw:selectedMarket");
+      const all = [...mapped, ...unmapped];
       if (cachedMarketId) {
-        const all = [...mapped, ...unmapped];
         const found = all.find(m => m.id === cachedMarketId);
         if (found) {
           useMarketStore.getState().selectMarket(found);
           if (found.location) useMarketStore.getState().selectCountry(found.location);
         }
+      } else if (all.length > 0) {
+        // Default to highest impact market
+        const top = all.reduce((best, m) => (m.impactScore || 0) > (best.impactScore || 0) ? m : best, all[0]);
+        useMarketStore.getState().selectMarket(top);
+        if (top.location) useMarketStore.getState().selectCountry(top.location);
       }
       const cachedCountry = sessionStorage.getItem("pw:selectedCountry");
       if (cachedCountry && !useMarketStore.getState().selectedCountry) {
@@ -534,6 +595,47 @@ export default function Home() {
     if (found) handleSelectMarketFromPanel(found);
   }, [handleSelectMarketFromPanel]);
 
+  const [quickTradeModal, setQuickTrade] = useState<TradeModalState | null>(null);
+
+  const handleSignalOpenTrade = useCallback((slug: string, direction: "bullish" | "bearish") => {
+    const all = [...useMarketStore.getState().mapped, ...useMarketStore.getState().unmapped];
+    const market = all.find(m => m.slug === slug);
+    if (!market) return;
+    const m = market.markets[0];
+    if (!m) return;
+    const ids: string[] = m.clobTokenIds
+      ? Array.isArray(m.clobTokenIds) ? m.clobTokenIds as string[]
+        : (() => { try { return JSON.parse(m.clobTokenIds as unknown as string) as string[]; } catch { return []; } })()
+      : [];
+    const prices: number[] = m.outcomePrices
+      ? Array.isArray(m.outcomePrices)
+        ? (m.outcomePrices as string[]).map(Number)
+        : (() => { try { return (JSON.parse(m.outcomePrices as unknown as string) as string[]).map(Number); } catch { return []; } })()
+      : [];
+    const yesTokenId = ids[0] ? String(ids[0]) : "";
+    // Use prices[1] directly (not 1 - yesPrice) to handle negRisk markets correctly
+    const noTokenId = ids[1] ? String(ids[1]) : "";
+    const yesPrice = prices[0] ?? (market.prob ?? 0.5);
+    const noPrice = prices[1] ?? (1 - yesPrice);
+    const isBullish = direction === "bullish";
+    const tokenId = isBullish ? yesTokenId : noTokenId;
+    if (!tokenId) return;
+    // For multi-outcome markets (>2 tokens), don't expose YES/NO switcher —
+    // the signal refers to the event level, not a specific binary pair.
+    const isBinary = ids.length === 2;
+    setQuickTrade({
+      tokenId,
+      currentPrice: isBullish ? yesPrice : noPrice,
+      outcomeName: isBullish ? "Yes" : "No",
+      marketTitle: market.title,
+      negRisk: !!market.negRisk,
+      defaultSide: "BUY",
+      yesToken: isBinary && yesTokenId ? { tokenId: yesTokenId, price: yesPrice, name: "Yes" } : undefined,
+      noToken: isBinary && noTokenId ? { tokenId: noTokenId, price: noPrice, name: "No" } : undefined,
+      smartMoney: market.smartMoney,
+    });
+  }, []);
+
   const STRENGTH_OPTIONS = [
     { key: "strong", label: "Strong", color: "#ff4444" },
     { key: "moderate", label: "Moderate", color: "#f59e0b" },
@@ -641,6 +743,7 @@ export default function Home() {
             {...panelHandlers["markets"]}
             rowSpan={rowSpanFor("markets")}
             maxColSpan={maxColSpan}
+            onTrade={setQuickTrade}
           />
         );
       case "country":
@@ -774,6 +877,7 @@ export default function Home() {
               onSelectMarket={handleSelectMarketFromPanel}
               isWatched={isWatched}
               onToggleWatch={toggleWatch}
+              onTrade={setQuickTrade}
             />
           </Panel>
         );
@@ -885,8 +989,8 @@ export default function Home() {
             maxColSpan={maxColSpan}
             headerRight={
               selectedMarket ? (
-                <span className="text-[10px] font-mono truncate max-w-[200px] text-[var(--text-dim)]" title={selectedMarket.title}>
-                  {selectedMarket.title}
+                <span className="text-[10px] font-mono truncate max-w-[200px] text-[var(--text-dim)]" title={orderbookOutcomeName ?? defaultOrderbookOutcomeName ?? selectedMarket.title}>
+                  {orderbookOutcomeName ?? defaultOrderbookOutcomeName ?? selectedMarket.title}
                 </span>
               ) : undefined
             }
@@ -915,7 +1019,7 @@ export default function Home() {
             maxColSpan={maxColSpan}
             headerRight={
               <div className="flex items-center gap-1">
-                {traderPanelWallet ? (
+                {traderPrefsReady && traderPanelWallet ? (
                   <>
                     <span className="text-[10px] font-mono text-[var(--text-dim)]" title={traderPanelWallet}>
                       {traderWalletName || `${traderPanelWallet.slice(0, 6)}\u2026${traderPanelWallet.slice(-4)}`}
@@ -946,7 +1050,7 @@ export default function Home() {
             }
           >
             <TraderPanel
-              selectedWallet={traderPanelWallet}
+              selectedWallet={traderPrefsReady ? traderPanelWallet : null}
             />
           </Panel>
         );
@@ -1043,8 +1147,10 @@ export default function Home() {
               leaderboard={smartMoneyLeaderboard}
               onSelectWallet={handleSmartMoneySelectWallet}
               onSelectMarket={handleSmartMoneySelectMarket}
+              onOpenTrade={handleSignalOpenTrade}
               categoryFilter={sigCatFilter}
               strengthFilter={sigStrFilter}
+              onTrade={setQuickTrade}
             />
           </Panel>
         );
@@ -1177,6 +1283,9 @@ export default function Home() {
               onToggleWatch={toggleWatch}
               newMarkets={newMarkets}
               whaleTrades={smartMoneyTrades}
+              activeLayers={activeLayers}
+              onToggleLayer={toggleOverlayLayer}
+              onTrade={setQuickTrade}
             />
           </div>
           {/* Horizontal resize handle + bottom panels (hidden in map fullscreen) */}
@@ -1218,7 +1327,20 @@ export default function Home() {
 
         {/* Mobile: single panel fullscreen view */}
         {!isFullscreen && isMobile && activeMobilePanel && (
-          <div className="mobile-panel-view" ref={panelsRef}>
+          <div
+            className="mobile-panel-view"
+            ref={panelsRef}
+            onTouchStart={(e) => {
+              (e.currentTarget as HTMLDivElement).dataset.touchStartY = String(e.touches[0].clientY);
+            }}
+            onTouchEnd={(e) => {
+              const startY = Number((e.currentTarget as HTMLDivElement).dataset.touchStartY || 0);
+              const endY = e.changedTouches[0].clientY;
+              if (endY - startY > 80 && e.currentTarget.scrollTop <= 0) {
+                useUIStore.getState().setActiveMobilePanel(null);
+              }
+            }}
+          >
             <PanelErrorBoundary panelName={activeMobilePanel}>
               {renderPanel(activeMobilePanel)}
             </PanelErrorBoundary>
@@ -1235,6 +1357,8 @@ export default function Home() {
           )}
         />
       )}
+
+      {!isMobile && <Footer />}
 
       {settingsOpen && (
         <SettingsModal
@@ -1256,7 +1380,11 @@ export default function Home() {
       )}
 
 
+      <OnboardingModal />
       <ToastContainer onSelectMarket={handleSelectMarketFromPanel} />
+      {quickTradeModal && (
+        <TradeModal state={quickTradeModal} onClose={() => setQuickTrade(null)} />
+      )}
     </div>
   );
 }
@@ -1269,7 +1397,7 @@ const MOBILE_TABS: Array<{ id: string; label: string; icon: string }> = [
   { id: "more", label: "More", icon: "\u2026" },
 ];
 
-const MORE_PANELS = ["detail", "country", "tweets", "live", "watchlist", "leaderboard", "whaleTrades", "orderbook", "trader", "sentiment", "chart"];
+const MORE_PANELS = ["detail", "country", "tweets", "live", "watchlist", "leaderboard", "whaleTrades", "orderbook", "trader", "sentiment", "chart", "signals", "resolution", "portfolio", "arbitrage", "calendar"];
 
 function MobileTabBar({ activePanel, onSelect }: { activePanel: string | null; onSelect: (id: string) => void }) {
   const [showMore, setShowMore] = useState(false);
@@ -1304,7 +1432,11 @@ function MobileTabBar({ activePanel, onSelect }: { activePanel: string | null; o
                 if (tab.id === "more") {
                   setShowMore((v) => !v);
                 } else if (tab.id === "map") {
-                  onSelect("map"); // null will close panel view
+                  onSelect("map");
+                  setShowMore(false);
+                } else if (activePanel === tab.id) {
+                  // Toggle: tap active tab again → return to map
+                  onSelect("map");
                   setShowMore(false);
                 } else {
                   onSelect(tab.id);

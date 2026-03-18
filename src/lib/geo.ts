@@ -301,7 +301,7 @@ function getRegex(key: string): RegExp {
 
 export function geolocate(
   title: string,
-  description?: string
+  _description?: string // eslint-disable-line @typescript-eslint/no-unused-vars
 ): GeoResult | null {
   // Only use title for geo matching (description often contains noise)
   const text = title || "";

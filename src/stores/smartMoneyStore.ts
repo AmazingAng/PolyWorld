@@ -24,6 +24,7 @@ interface SmartMoneyActions {
   setTraderPanelWallet: (addr: string | null) => void;
   setTraderWalletName: (name: string | null) => void;
   setTraderAddrInput: (input: string) => void;
+  hydrateTraderPrefs: () => void;
 }
 
 export const useSmartMoneyStore = create<SmartMoneyState & SmartMoneyActions>((set) => ({
@@ -33,8 +34,8 @@ export const useSmartMoneyStore = create<SmartMoneyState & SmartMoneyActions>((s
   smartTrades: [],
   lastSync: null,
   walletFilter: null,
-  traderPanelWallet: typeof window !== "undefined" ? localStorage.getItem("pw:traderWallet") : null,
-  traderWalletName: typeof window !== "undefined" ? localStorage.getItem("pw:traderWalletName") : null,
+  traderPanelWallet: null,
+  traderWalletName: null,
   traderAddrInput: "",
 
   setLeaderboard: (leaderboard) => set({ leaderboard }),
@@ -58,4 +59,14 @@ export const useSmartMoneyStore = create<SmartMoneyState & SmartMoneyActions>((s
     } catch {}
   },
   setTraderAddrInput: (traderAddrInput) => set({ traderAddrInput }),
+  hydrateTraderPrefs: () => {
+    try {
+      set({
+        traderPanelWallet: localStorage.getItem("pw:traderWallet"),
+        traderWalletName: localStorage.getItem("pw:traderWalletName"),
+      });
+    } catch {
+      set({ traderPanelWallet: null, traderWalletName: null });
+    }
+  },
 }));

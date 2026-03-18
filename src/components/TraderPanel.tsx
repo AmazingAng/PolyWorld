@@ -30,40 +30,62 @@ function truncAddr(addr: string): string {
 export default function TraderPanel({
   selectedWallet,
 }: TraderPanelProps) {
+  if (!selectedWallet) {
+    return (
+      <TraderPanelContent
+        key="empty"
+        selectedWallet={null}
+      />
+    );
+  }
+
+  return (
+    <TraderPanelContent
+      key={selectedWallet}
+      selectedWallet={selectedWallet}
+    />
+  );
+}
+
+function TraderPanelContent({
+  selectedWallet,
+}: TraderPanelProps) {
   const [tab, setTab] = useState<"positions" | "activity">("positions");
   const [positions, setPositions] = useState<TraderPosition[]>([]);
   const [activity, setActivity] = useState<TraderActivity[]>([]);
   const [totalValue, setTotalValue] = useState<number>(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(selectedWallet));
 
   useEffect(() => {
-    if (!selectedWallet) {
-      setPositions([]);
-      setActivity([]);
-      setTotalValue(0);
-      return;
-    }
+    if (!selectedWallet) return;
+    const wallet = selectedWallet;
     let cancelled = false;
-    setLoading(true);
-    Promise.all([
-      fetchTraderPositions(selectedWallet),
-      fetchTraderActivity(selectedWallet),
-      fetchTraderValue(selectedWallet),
-    ]).then(([pos, act, val]) => {
-      if (cancelled) return;
-      setPositions(pos);
-      setActivity(act);
-      setTotalValue(val);
-      setLoading(false);
-    }).catch(() => {
-      if (!cancelled) setLoading(false);
-    });
+    async function loadTraderData() {
+      try {
+        const [pos, act, val] = await Promise.all([
+          fetchTraderPositions(wallet),
+          fetchTraderActivity(wallet),
+          fetchTraderValue(wallet),
+        ]);
+        if (cancelled) return;
+        setPositions(pos);
+        setActivity(act);
+        setTotalValue(val);
+        setLoading(false);
+      } catch {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    loadTraderData();
     return () => { cancelled = true; };
   }, [selectedWallet]);
 
-  const openPositions = positions.filter((p) => !p.redeemed);
-  const closedPositions = positions.filter((p) => p.redeemed);
-  const totalPnl = positions.reduce((s, p) => s + p.cashPnl, 0);
+  const displayedPositions = selectedWallet ? positions : [];
+  const displayedActivity = selectedWallet ? activity : [];
+  const displayedValue = selectedWallet ? totalValue : 0;
+  const openPositions = displayedPositions.filter((p) => !p.redeemed);
+  const closedPositions = displayedPositions.filter((p) => p.redeemed);
+  const totalPnl = displayedPositions.reduce((s, p) => s + p.cashPnl, 0);
 
   return (
     <div className="flex flex-col h-full font-mono text-[11px]">
@@ -85,7 +107,7 @@ export default function TraderPanel({
           <div className="flex items-center gap-3 px-2 py-1.5 border-b border-[var(--border)] text-[10px] tabular-nums">
             <div>
               <span className="text-[var(--text-muted)]">VALUE </span>
-              <span className="text-[var(--text)]">{formatVolume(totalValue)}</span>
+              <span className="text-[var(--text)]">{formatVolume(displayedValue)}</span>
             </div>
             <div>
               <span className="text-[var(--text-muted)]">PNL </span>
@@ -141,14 +163,14 @@ export default function TraderPanel({
                     ))}
                   </>
                 )}
-                {positions.length === 0 && (
+                {displayedPositions.length === 0 && (
                   <div className="px-2 py-4 text-center text-[var(--text-muted)]">no positions</div>
                 )}
               </div>
             ) : (
               <div>
-                {activity.length > 0 ? (
-                  activity.map((a, i) => <ActivityRow key={i} activity={a} />)
+                {displayedActivity.length > 0 ? (
+                  displayedActivity.map((a, i) => <ActivityRow key={i} activity={a} />)
                 ) : (
                   <div className="px-2 py-4 text-center text-[var(--text-muted)]">no activity</div>
                 )}

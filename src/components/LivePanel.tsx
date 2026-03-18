@@ -152,32 +152,46 @@ export function LiveChannelDropdown({
 }
 
 interface LivePanelProps {
-  activeStream: StreamSource | null;
+  activeStream?: StreamSource | null;
 }
 
-export default function LivePanel({ activeStream }: LivePanelProps) {
+export default function LivePanel({ activeStream = null }: LivePanelProps) {
+  if (!activeStream) {
+    return (
+      <div
+        className="w-full bg-[var(--bg)] border border-[var(--border-subtle)] flex items-center justify-center font-mono"
+        style={{ aspectRatio: "16/9" }}
+      >
+        <span className="text-[11px] text-[var(--text-faint)]">
+          select a channel ↗
+        </span>
+      </div>
+    );
+  }
+
+  return <LivePanelContent key={activeStream.id} activeStream={activeStream} />;
+}
+
+function LivePanelContent({ activeStream }: { activeStream: StreamSource }) {
   const [mode, setMode] = useState<StreamMode>("hls");
   const [liveInfo, setLiveInfo] = useState<LiveInfo>({
     videoId: null,
     hlsUrl: null,
-    loading: false,
+    loading: true,
   });
-  const fetchingRef = useRef(false);
 
   useEffect(() => {
-    if (!activeStream) return;
     let cancelled = false;
-    fetchingRef.current = true;
-    setLiveInfo({ videoId: null, hlsUrl: null, loading: true });
-
-    fetchLiveInfo(activeStream.handle).then((info) => {
+    const loadInfo = async () => {
+      const info = await fetchLiveInfo(activeStream.handle);
       if (cancelled) return;
-      fetchingRef.current = false;
       setLiveInfo({ ...info, loading: false });
       if (activeStream.hlsUrl) setMode("hls");
       else if (info.hlsUrl) setMode("yt-hls");
       else setMode("embed");
-    });
+    };
+
+    void loadInfo();
 
     return () => { cancelled = true; };
   }, [activeStream]);
@@ -193,19 +207,6 @@ export default function LivePanel({ activeStream }: LivePanelProps) {
     if (!vid) return null;
     return `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1`;
   }, [activeStream, liveInfo.videoId]);
-
-  if (!activeStream) {
-    return (
-      <div
-        className="w-full bg-[var(--bg)] border border-[var(--border-subtle)] flex items-center justify-center font-mono"
-        style={{ aspectRatio: "16/9" }}
-      >
-        <span className="text-[11px] text-[var(--text-faint)]">
-          select a channel ↗
-        </span>
-      </div>
-    );
-  }
 
   return (
     <div className="border border-[var(--border)] overflow-hidden">

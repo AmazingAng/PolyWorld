@@ -12,6 +12,7 @@ interface WatchlistPanelProps {
   onSelectMarket: (market: ProcessedMarket) => void;
   isWatched: (id: string) => boolean;
   onToggleWatch: (id: string) => void;
+  onTrade?: (state: import("./TradeModal").TradeModalState) => void;
 }
 
 export default function WatchlistPanel({
@@ -22,6 +23,7 @@ export default function WatchlistPanel({
   onSelectMarket,
   isWatched,
   onToggleWatch,
+  onTrade,
 }: WatchlistPanelProps) {
   const watchedMarkets = useMemo(() => {
     if (watchedIds.size === 0) return [];
@@ -56,6 +58,7 @@ export default function WatchlistPanel({
           onClick={() => onSelectMarket(m)}
           isWatched={isWatched(m.id)}
           onToggleWatch={() => onToggleWatch(m.id)}
+          onTrade={onTrade}
         />
       ))}
 

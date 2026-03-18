@@ -8,14 +8,40 @@ import {
   Chain,
   SignatureType,
 } from "@polymarket/clob-client";
+import { BuilderConfig } from "@polymarket/builder-signing-sdk";
 
 const CLOB_HOST = "https://clob.polymarket.com";
 const CHAIN_ID = Chain.POLYGON;
+let cachedBuilderConfig: BuilderConfig | null | undefined;
 
 export interface L2Creds {
   apiKey: string;
   secret: string;
   passphrase: string;
+}
+
+function getBuilderConfig(): BuilderConfig | undefined {
+  if (cachedBuilderConfig !== undefined) {
+    return cachedBuilderConfig ?? undefined;
+  }
+
+  const key = process.env.POLY_BUILDER_API_KEY;
+  const secret = process.env.POLY_BUILDER_SECRET;
+  const passphrase = process.env.POLY_BUILDER_PASSPHRASE;
+
+  if (!key || !secret || !passphrase) {
+    cachedBuilderConfig = null;
+    return undefined;
+  }
+
+  cachedBuilderConfig = new BuilderConfig({
+    localBuilderCreds: {
+      key,
+      secret,
+      passphrase,
+    },
+  });
+  return cachedBuilderConfig;
 }
 
 /**
@@ -111,7 +137,10 @@ export function createAuthenticatedClient(
     signerAddress.toLowerCase() === proxyAddress.toLowerCase()
       ? SignatureType.EOA
       : SignatureType.POLY_GNOSIS_SAFE,
-    proxyAddress  // funderAddress: order maker = proxy wallet
+    proxyAddress,  // funderAddress: order maker = proxy wallet
+    undefined,
+    false,
+    getBuilderConfig(),
   );
 }
 

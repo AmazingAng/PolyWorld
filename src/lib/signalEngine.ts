@@ -1,5 +1,4 @@
 import type { WhaleTrade, ProcessedMarket, SmartWallet, NewsItem } from "@/types";
-import type { SmartSignal } from "./smartSignals";
 import { detectSignals } from "./smartSignals";
 
 export type UnifiedSignalType =
@@ -18,6 +17,10 @@ export interface UnifiedSignal {
   market: { title: string; slug: string; prob: number | null };
   wallets: Array<{ address: string; username: string | null; rank?: number; pnl?: number }>;
   direction: "bullish" | "bearish";
+  /** The outcome name being bought/sold (e.g. "Trump", "Yes", "Over 50k") */
+  outcomeName?: string;
+  /** Sub-market question title when event has multiple markets (e.g. "Man City to advance?") */
+  subMarketTitle?: string;
   summary: string;
   timestamp: number;
   details: {
@@ -28,6 +31,40 @@ export interface UnifiedSignal {
     newsTitle?: string;
     newsSource?: string;
   };
+}
+
+/** Find the most common outcome name from a set of trades */
+function dominantOutcome(trades: WhaleTrade[]): string | undefined {
+  if (trades.length === 0) return undefined;
+  const counts = new Map<string, number>();
+  for (const t of trades) {
+    if (t.outcome) counts.set(t.outcome, (counts.get(t.outcome) || 0) + t.usdcSize);
+  }
+  let best = "";
+  let bestVol = 0;
+  for (const [name, vol] of counts) {
+    if (vol > bestVol) { best = name; bestVol = vol; }
+  }
+  return best || undefined;
+}
+
+/** Find the dominant sub-market title (WhaleTrade.title) by volume.
+ *  Returns undefined if all trades share the same title as the parent event. */
+function dominantSubMarket(trades: WhaleTrade[], parentTitle: string): string | undefined {
+  if (trades.length === 0) return undefined;
+  const counts = new Map<string, number>();
+  for (const t of trades) {
+    if (t.title && t.title !== parentTitle) {
+      counts.set(t.title, (counts.get(t.title) || 0) + t.usdcSize);
+    }
+  }
+  if (counts.size === 0) return undefined;
+  let best = "";
+  let bestVol = 0;
+  for (const [name, vol] of counts) {
+    if (vol > bestVol) { best = name; bestVol = vol; }
+  }
+  return best || undefined;
 }
 
 const SIGNAL_ICONS: Record<UnifiedSignalType, string> = {
@@ -123,8 +160,9 @@ function detectTopWalletEntries(
       seenWallets.add(addr);
 
       const wallet = topWallets.get(addr)!;
-      const vol = slugTrades.filter((x) => x.wallet.toLowerCase() === addr).reduce((s, x) => s + x.usdcSize, 0);
-      const tradeCount = slugTrades.filter((x) => x.wallet.toLowerCase() === addr).length;
+      const walletTrades = slugTrades.filter((x) => x.wallet.toLowerCase() === addr);
+      const vol = walletTrades.reduce((s, x) => s + x.usdcSize, 0);
+      const tradeCount = walletTrades.length;
 
       signals.push({
         id: makeId("top_wallet_entry", slug, addr.slice(0, 8)),
@@ -138,8 +176,10 @@ function detectTopWalletEntries(
           pnl: wallet.pnl,
         }],
         direction: "bullish",
+        outcomeName: dominantOutcome(walletTrades),
+        subMarketTitle: dominantSubMarket(walletTrades, market.title),
         summary: `Top-${wallet.rank} trader ${wallet.username || wallet.address.slice(0, 8)} bought ${market.title} ($${(vol / 1000).toFixed(1)}k)`,
-        timestamp: Math.max(...slugTrades.filter((x) => x.wallet.toLowerCase() === addr).map((x) => new Date(x.timestamp).getTime())),
+        timestamp: Math.max(...walletTrades.map((x) => new Date(x.timestamp).getTime())),
         details: { totalVolume: vol, tradeCount, priceAtSignal: market.prob ?? undefined },
       });
     }
@@ -189,7 +229,7 @@ function detectTopCluster(
     if (!market) continue;
 
     const totalVol = slugTrades.reduce((s, t) => s + t.usdcSize, 0);
-    const walletInfos = Array.from(uniqueWallets.entries()).map(([addr, trade]) => {
+    const walletInfos = Array.from(uniqueWallets.entries()).map(([addr]) => {
       const w = topWallets.get(addr)!;
       return { address: w.address, username: w.username, rank: w.rank, pnl: w.pnl };
     });
@@ -201,6 +241,8 @@ function detectTopCluster(
       market: { title: market.title, slug, prob: market.prob },
       wallets: walletInfos,
       direction: "bullish",
+      outcomeName: dominantOutcome(slugTrades),
+      subMarketTitle: dominantSubMarket(slugTrades, market.title),
       summary: `${uniqueWallets.size} top-50 traders bought ${market.title} in past 1h ($${(totalVol / 1000).toFixed(1)}k total)`,
       timestamp: Math.max(...slugTrades.map((t) => new Date(t.timestamp).getTime())),
       details: { totalVolume: totalVol, tradeCount: slugTrades.length, priceAtSignal: market.prob ?? undefined },
@@ -277,6 +319,8 @@ function detectNewsCatalyst(
       market: { title: market.title, slug, prob: market.prob },
       wallets: Array.from(uniqueWallets.entries()).map(([address, username]) => ({ address, username })),
       direction: direction as "bullish" | "bearish",
+      outcomeName: dominantOutcome(direction === "bullish" ? buys : sells) || dominantOutcome(slugTrades),
+      subMarketTitle: dominantSubMarket(slugTrades, market.title),
       summary: `News "${matchingNews.title.slice(0, 60)}" + smart money ${direction} on ${market.title}`,
       timestamp: Math.max(
         new Date(matchingNews.publishedAt).getTime(),
@@ -332,11 +376,19 @@ export function generateSignals(
 
   // 4. Existing smart signals (whale_accumulation, smart_divergence, cluster_activity, momentum_shift)
   const smartSignals = detectSignals(trades, markets, 6);
-  const converted: UnifiedSignal[] = smartSignals.map((s) => ({
-    ...s,
-    type: s.type as UnifiedSignalType,
-    wallets: s.wallets.map((w) => ({ ...w, rank: undefined, pnl: undefined })),
-  }));
+  const converted: UnifiedSignal[] = smartSignals.map((s) => {
+    const slugTrades = trades.filter((t) => t.slug === s.market.slug);
+    const dirTrades = s.direction === "bullish"
+      ? slugTrades.filter((t) => t.side === "BUY")
+      : slugTrades.filter((t) => t.side === "SELL");
+    return {
+      ...s,
+      type: s.type as UnifiedSignalType,
+      wallets: s.wallets.map((w) => ({ ...w, rank: undefined, pnl: undefined })),
+      outcomeName: dominantOutcome(dirTrades) || dominantOutcome(slugTrades),
+      subMarketTitle: dominantSubMarket(slugTrades, s.market.title),
+    };
+  });
 
   // Combine all
   const all = [...topCluster, ...topEntries, ...newsCatalysts, ...converted];
