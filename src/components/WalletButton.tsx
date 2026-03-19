@@ -443,38 +443,30 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
 
             {!isAuthorized ? (
               <>
-                {proxyNotFound && !manualProxyInput && (
-                  <div className="space-y-1">
-                    <div className="text-[10px] text-[#f59e0b]">No Polymarket proxy found</div>
+                {proxyNotFound ? (
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] text-[#f59e0b]">No Polymarket account found</div>
                     <div className="text-[9px] text-[var(--text-faint)] leading-snug">
-                      You can still authorize with your EOA, or paste your proxy address below if you have one.
+                      You need a Polymarket account to trade. Register and deploy your Safe wallet first.
                     </div>
+                    <a
+                      href="https://polymarket.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full py-1.5 text-center text-[11px] font-bold bg-[#8b5cf6]/10 text-[#8b5cf6] border border-[#8b5cf6]/30 hover:bg-[#8b5cf6]/20 transition-colors"
+                    >
+                      Register on Polymarket
+                    </a>
                   </div>
+                ) : (
+                  <button
+                    onClick={handleAuthorize}
+                    disabled={authorizing}
+                    className="w-full py-1.5 text-center text-[11px] font-bold bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/30 hover:bg-[#22c55e]/15 transition-colors disabled:opacity-40"
+                  >
+                    {authorizing ? "Authorizing…" : "Authorize Trading"}
+                  </button>
                 )}
-                {proxyNotFound && (
-                  <div className="flex items-center gap-1 mt-1">
-                    <input
-                      type="text"
-                      value={manualProxyInput}
-                      onChange={(e) => setManualProxyInput(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleConfirmManualProxy()}
-                      placeholder="0x… proxy (optional)"
-                      className="text-[10px] font-mono px-1 py-px border border-[var(--border)] bg-transparent text-[var(--text)] flex-1 outline-none focus:border-[#f59e0b]/70 placeholder:text-[var(--text-ghost)]"
-                    />
-                    <button
-                      onClick={handleConfirmManualProxy}
-                      disabled={!manualProxyInput.trim()}
-                      className="text-[10px] px-1.5 py-px border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors disabled:opacity-40"
-                    >ok</button>
-                  </div>
-                )}
-                <button
-                  onClick={handleAuthorize}
-                  disabled={authorizing}
-                  className="w-full py-1.5 text-center text-[11px] font-bold bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/30 hover:bg-[#22c55e]/15 transition-colors disabled:opacity-40"
-                >
-                  {authorizing ? "Authorizing…" : "Authorize Trading"}
-                </button>
               </>
             ) : (
               <div className="flex items-center justify-between">
