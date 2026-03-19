@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Fumadocs sources
+        run: npx fumadocs-mdx
+
       - name: Lint
         run: npm run lint
 

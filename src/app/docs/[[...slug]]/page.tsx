@@ -20,6 +20,7 @@ export default async function Page(props: {
   const data = page.data as typeof page.data & {
     body: ComponentType<{ components?: Record<string, ComponentType> }>;
     toc: { depth: number; url: string; title: string }[];
+    full?: boolean;
   };
 
   const MDX = data.body;
@@ -29,7 +30,8 @@ export default async function Page(props: {
       <DocsTitle>{data.title}</DocsTitle>
       <DocsDescription>{data.description}</DocsDescription>
       <DocsBody>
-        <MDX components={getMDXComponents()} />
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <MDX components={getMDXComponents() as any} />
       </DocsBody>
     </DocsPage>
   );

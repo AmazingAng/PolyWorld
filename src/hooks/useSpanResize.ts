@@ -30,6 +30,7 @@ export function useSpanResize({ axis, span, onChange, maxSpan }: SpanResizeOptio
   const startPos = useRef(0);
   const startSpan = useRef(1);
   const lastApplied = useRef(span);
+  // eslint-disable-next-line react-hooks/refs
   const scheduledSpan = useMemo(() => rafSchedule((newSpan: number) => {
     onChangeRef.current?.(newSpan);
   }), []);

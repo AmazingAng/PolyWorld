@@ -17,22 +17,20 @@ test.describe("Sentiment Panel", () => {
       };
 
       const origGetContext = HTMLCanvasElement.prototype.getContext;
-      HTMLCanvasElement.prototype.getContext = function (
-        type: string,
-        ...rest: unknown[]
-      ) {
+      function patchedGetContext(this: HTMLCanvasElement, type: string, ...rest: unknown[]) {
         if (type === "webgl" || type === "webgl2" || type === "experimental-webgl") {
-          // Return a Proxy that returns no-op for every method and safe defaults for properties
           const fakeGL = new Proxy({}, handler);
-          // Set critical properties that maplibre checks
-          Object.defineProperty(fakeGL, "drawingBufferWidth", { get: () => this.width || 300 });
-          Object.defineProperty(fakeGL, "drawingBufferHeight", { get: () => this.height || 150 });
-          Object.defineProperty(fakeGL, "canvas", { get: () => this });
+          // eslint-disable-next-line @typescript-eslint/no-this-alias
+          const ref = this;
+          Object.defineProperty(fakeGL, "drawingBufferWidth", { get() { return ref.width || 300; } });
+          Object.defineProperty(fakeGL, "drawingBufferHeight", { get() { return ref.height || 150; } });
+          Object.defineProperty(fakeGL, "canvas", { get() { return ref; } });
           return fakeGL as unknown as WebGLRenderingContext;
         }
         // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
         return (origGetContext as Function).call(this, type, ...rest);
-      } as typeof origGetContext;
+      }
+      HTMLCanvasElement.prototype.getContext = patchedGetContext as typeof origGetContext;
 
       // Suppress unhandled errors from maplibre
       window.addEventListener("error", (e) => {

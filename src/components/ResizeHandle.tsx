@@ -20,6 +20,7 @@ export default function ResizeHandle({ direction, onResize, onResizeEnd }: Resiz
     onResizeEndRef.current = onResizeEnd;
   }, [onResize, onResizeEnd]);
 
+  // eslint-disable-next-line react-hooks/refs
   const scheduledResize = useMemo(() => rafSchedule((delta: number) => {
     onResizeRef.current(delta);
   }), []);
