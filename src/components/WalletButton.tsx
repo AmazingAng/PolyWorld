@@ -443,8 +443,13 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
 
             {!isAuthorized ? (
               <>
-                {proxyNotFound && (
-                  <div className="text-[10px] text-[#f59e0b]">No Polymarket account found</div>
+                {proxyNotFound && !manualProxyInput && (
+                  <div className="space-y-1">
+                    <div className="text-[10px] text-[#f59e0b]">No Polymarket proxy found</div>
+                    <div className="text-[9px] text-[var(--text-faint)] leading-snug">
+                      You can still authorize with your EOA, or paste your proxy address below if you have one.
+                    </div>
+                  </div>
                 )}
                 {proxyNotFound && (
                   <div className="flex items-center gap-1 mt-1">
@@ -453,7 +458,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
                       value={manualProxyInput}
                       onChange={(e) => setManualProxyInput(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleConfirmManualProxy()}
-                      placeholder="paste 0x… proxy wallet"
+                      placeholder="0x… proxy (optional)"
                       className="text-[10px] font-mono px-1 py-px border border-[var(--border)] bg-transparent text-[var(--text)] flex-1 outline-none focus:border-[#f59e0b]/70 placeholder:text-[var(--text-ghost)]"
                     />
                     <button
