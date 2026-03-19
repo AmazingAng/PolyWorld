@@ -318,16 +318,8 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
     </svg>
   );
   const MetaMaskIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 32 32" fill="none">
-      <path d="M28 4L18 11.2l1.9-4.5L28 4z" fill="#E17726"/>
-      <path d="M4 4l9.9 7.3L12.1 6.7 4 4z" fill="#E27625"/>
-      <path d="M24.3 21.4l-2.7 4.1 5.8 1.6 1.7-5.6-4.8-.1z" fill="#E27625"/>
-      <path d="M2.9 21.5l1.6 5.6 5.8-1.6-2.7-4.1-4.7.1z" fill="#E27625"/>
-      <path d="M10 15.1l-1.6 2.4 5.7.3-.2-6.1-3.9 3.4z" fill="#E27625"/>
-      <path d="M22 15.1l-4-3.5-.1 6.2 5.7-.3L22 15.1z" fill="#E27625"/>
-      <path d="M10.3 25.5l3.4-1.6-2.9-2.3-.5 3.9z" fill="#E27625"/>
-      <path d="M18.3 23.9l3.4 1.6-.5-3.9-2.9 2.3z" fill="#E27625"/>
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="https://images.ctfassets.net/clixtyxoaeas/4rnpEzy1ATWRKVBOLxZ1Fm/a74dc1eed36d23d7ea6030383a4d5163/MetaMask-icon-fox.svg" alt="MetaMask" width={16} height={16} />
   );
 
   const walletFallback = (() => {
