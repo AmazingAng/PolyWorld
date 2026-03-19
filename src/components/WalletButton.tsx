@@ -60,6 +60,7 @@ interface PositionItem {
   avgPrice: number;
   currentPrice: number;
   cashPnl: number;
+  image: string | null;
 }
 
 export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade }: WalletButtonProps) {
@@ -234,6 +235,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
             avgPrice,
             currentPrice: curPrice,
             cashPnl: (curPrice - avgPrice) * size,
+            image: p.image || p.icon || p.marketImage || null,
           };
         });
         if (!cancelled) setPositions(items);
@@ -471,10 +473,10 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
           {/* Portfolio positions dropdown */}
           {portfolioOpen && positions.length > 0 && (
             <div
-              className="absolute right-0 top-full mt-1 w-[300px] max-h-[360px] overflow-y-auto bg-[var(--bg)] border border-[var(--border)] z-[200] font-mono"
+              className="absolute right-0 top-full mt-1 w-[340px] max-h-[400px] overflow-y-auto bg-[var(--bg)] border border-[var(--border)] z-[200] font-mono"
               style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
             >
-              <div className="px-3 py-1.5 text-[9px] text-[var(--text-ghost)] uppercase tracking-[0.1em] border-b border-[var(--border-subtle)] sticky top-0 bg-[var(--bg)]">
+              <div className="px-3 py-2 text-[10px] text-[var(--text-ghost)] uppercase tracking-[0.1em] border-b border-[var(--border-subtle)] sticky top-0 bg-[var(--bg)]">
                 Positions · {positions.length}
               </div>
               {positions.map((p) => (
@@ -493,22 +495,34 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                     }
                     setPortfolioOpen(false);
                   }}
-                  className="w-full px-3 py-2 text-left border-b border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]/20 transition-colors"
+                  className="w-full px-3 py-2.5 text-left border-b border-[var(--border-subtle)] hover:bg-[#22c55e]/5 cursor-pointer transition-colors group"
                 >
-                  <div className="text-[10px] text-[var(--text)] truncate leading-snug">{p.title}</div>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className={`text-[10px] font-bold ${p.outcome.toLowerCase() === "no" ? "text-[#ff4444]" : "text-[#22c55e]"}`}>
-                      {p.outcome}
-                    </span>
-                    <span className="text-[10px] text-[var(--text-secondary)] font-bold tabular-nums">
-                      {p.size.toFixed(2)} shares
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between mt-0.5 text-[9px] tabular-nums text-[var(--text-faint)]">
-                    <span>Avg: {(p.avgPrice * 100).toFixed(1)}¢ · Cur: {(p.currentPrice * 100).toFixed(1)}¢</span>
-                    <span className={p.cashPnl >= 0 ? "text-[#22c55e]" : "text-[#ff4444]"}>
-                      {p.cashPnl >= 0 ? "+" : ""}${p.cashPnl.toFixed(2)}
-                    </span>
+                  <div className="flex items-start gap-2.5">
+                    {p.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.image} alt="" width={28} height={28} className="rounded shrink-0 mt-0.5 object-cover" />
+                    ) : (
+                      <div className="w-7 h-7 rounded shrink-0 mt-0.5 bg-[var(--border-subtle)] flex items-center justify-center text-[10px] text-[var(--text-ghost)]">
+                        {p.title.slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[12px] text-[var(--text-muted)] group-hover:text-[var(--text)] truncate leading-snug transition-colors">{p.title}</div>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className={`text-[11px] font-bold ${p.outcome.toLowerCase() === "no" ? "text-[#ff4444]" : "text-[#22c55e]"}`}>
+                          {p.outcome}
+                        </span>
+                        <span className="text-[11px] text-[var(--text-secondary)] font-bold tabular-nums">
+                          {p.size.toFixed(2)} shares
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mt-0.5 text-[10px] tabular-nums text-[var(--text-faint)]">
+                        <span>Avg: {(p.avgPrice * 100).toFixed(1)}¢ · Cur: {(p.currentPrice * 100).toFixed(1)}¢</span>
+                        <span className={`font-bold ${p.cashPnl >= 0 ? "text-[#22c55e]" : "text-[#ff4444]"}`}>
+                          {p.cashPnl >= 0 ? "+" : ""}${p.cashPnl.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </button>
               ))}
