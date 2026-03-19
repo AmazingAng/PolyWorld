@@ -22,7 +22,7 @@ interface HeaderProps {
   autoRefresh?: boolean;
   refreshError?: boolean;
   onTrade?: (state: import("./TradeModal").TradeModalState) => void;
-  onTradePosition?: (conditionId: string, outcome: string) => void;
+  onTradePosition?: (title: string, outcome: string) => void;
   // Alert manager props
   alertManagerOpen?: boolean;
   onOpenAlertManager?: () => void;

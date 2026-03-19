@@ -24,7 +24,7 @@ interface WalletButtonProps {
   loading?: boolean;
   lastSyncTime?: string | null;
   onTrade?: (state: import("./TradeModal").TradeModalState) => void;
-  onTradePosition?: (conditionId: string, outcome: string) => void;
+  onTradePosition?: (title: string, outcome: string) => void;
 }
 
 function getRelativeTime(iso: string): string {
@@ -484,7 +484,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                 <button
                   key={`${p.conditionId}-${p.outcome}`}
                   onClick={() => {
-                    onTradePosition?.(p.conditionId, p.outcome);
+                    onTradePosition?.(p.title, p.outcome);
                     setPortfolioOpen(false);
                   }}
                   className="w-full px-3 py-2.5 text-left border-b border-[var(--border-subtle)] hover:bg-[#22c55e]/5 cursor-pointer transition-colors group"

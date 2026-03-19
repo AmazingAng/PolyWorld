@@ -1242,17 +1242,16 @@ export default function Home() {
         autoRefresh={autoRefresh}
         refreshError={refreshError}
         onTrade={setQuickTrade}
-        onTradePosition={(conditionId, outcome) => {
-          // Find the market containing this conditionId and build a full TradeModalState
+        onTradePosition={(positionTitle, outcome) => {
+          // Match position to market by title (conditionId formats don't align)
           const allMarkets = [...mapped, ...unmapped];
-          console.log("[onTradePosition] looking for conditionId:", conditionId, "outcome:", outcome);
-          // Log first market's structure for debugging
-          if (allMarkets[0]?.markets[0]) {
-            const sample = allMarkets[0].markets[0];
-            console.log("[onTradePosition] sample market:", { id: sample.id, conditionId: (sample as unknown as Record<string, unknown>).conditionId, clobTokenIds: sample.clobTokenIds });
-          }
+          const needle = positionTitle.toLowerCase().trim();
           for (const ev of allMarkets) {
+            // Match against event title or sub-market question
+            const evMatch = ev.title.toLowerCase().trim() === needle;
             for (const m of ev.markets) {
+              const mMatch = evMatch || (m.question || m.groupItemTitle || "").toLowerCase().trim() === needle;
+              if (!mMatch) continue;
               const ids = (() => {
                 if (!m.clobTokenIds) return [];
                 if (Array.isArray(m.clobTokenIds)) return m.clobTokenIds as string[];
@@ -1263,11 +1262,7 @@ export default function Home() {
                 const raw = Array.isArray(m.outcomePrices) ? m.outcomePrices : JSON.parse(m.outcomePrices as string);
                 return raw.map((p: string) => parseFloat(p));
               })();
-              // Match by sub-market id, condition id, token ids, or event id
-              const match = m.id === conditionId || ev.id === conditionId || ids.includes(conditionId)
-                || (m as unknown as Record<string, unknown>).conditionId === conditionId;
-              if (ids.length >= 2 && match) {
-                console.log("[onTradePosition] MATCHED:", ev.title, "m.id:", m.id, "ids:", ids);
+              if (ids.length >= 2) {
                 const yesTokenId = String(ids[0]);
                 const noTokenId = String(ids[1]);
                 const yesPrice = prices[0] ?? ev.prob ?? 0.5;
