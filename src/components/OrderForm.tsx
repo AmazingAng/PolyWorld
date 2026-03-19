@@ -1065,13 +1065,6 @@ export default function OrderForm({
         >
           {status === "approving" ? "Approving…" : status === "signing" ? "Sign in wallet…" : "Approve & Sell"}
         </button>
-      ) : side === "SELL" && ctfApproved === undefined ? (
-        <button
-          disabled
-          className="w-full py-2.5 bg-[var(--border)] text-[var(--text-faint)] font-bold text-[12px] cursor-not-allowed"
-        >
-          Checking approval…
-        </button>
       ) : needsApproval ? (
         isEOA ? (
           <button
