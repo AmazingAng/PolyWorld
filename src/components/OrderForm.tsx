@@ -200,7 +200,7 @@ export default function OrderForm({
     abi: BALANCE_ABI,
     functionName: "balanceOf",
     args: balanceTarget ? [balanceTarget] : undefined,
-    query: { enabled: isConnected && isPolygon && !!balanceTarget && !compact, refetchInterval: 30_000 },
+    query: { enabled: isConnected && isPolygon && !!balanceTarget, refetchInterval: 30_000 },
   });
   const usdcBalanceDisplay = usdcRawBalance !== undefined
     ? (Number(usdcRawBalance) / 1e6).toFixed(2)
@@ -228,9 +228,11 @@ export default function OrderForm({
 
   const MIN_BUY_USDC = 1;
   const minSellShares = minOrderShares;
+  const usdcBalance = usdcRawBalance !== undefined ? Number(usdcRawBalance) / 1e6 : null;
   const sizeTooSmall = amountNum > 0 && (
     side === "SELL" ? amountNum < minSellShares : amountNum < MIN_BUY_USDC
   );
+  const exceedsBalance = side === "BUY" && amountNum > 0 && usdcBalance !== null && amountNum > usdcBalance;
 
   const { data: shareBalance, refetch: refetchShares } = useReadContract({
     address: CTF_ADDRESS,
@@ -241,6 +243,7 @@ export default function OrderForm({
   });
   const sharesHeld = shareBalance !== undefined ? Number(shareBalance) / 1e6 : null;
   const displayedSharesHeld = optimisticSharesHeld ?? sharesHeld;
+  const exceedsShares = side === "SELL" && amountNum > 0 && displayedSharesHeld !== null && amountNum > displayedSharesHeld;
 
   useEffect(() => {
     if (optimisticSharesHeld === null || sharesHeld === null) return;
@@ -639,8 +642,13 @@ export default function OrderForm({
                 side === "BUY" ? "border-[#22c55e]/25 focus:border-[#22c55e]/45" : "border-[#ff4444]/25 focus:border-[#ff4444]/45"
               }`}
             />
+            {side === "BUY" && usdcBalance !== null && (
+              <span className={`text-[9px] shrink-0 ${exceedsBalance ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
+                / ${usdcBalance.toFixed(2)}
+              </span>
+            )}
             {side === "SELL" && hasSharesToSell && (
-              <span className="text-[9px] text-[var(--text-faint)] shrink-0">
+              <span className={`text-[9px] shrink-0 ${exceedsShares ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
                 / {displayedSharesHeld!.toFixed(2)}
               </span>
             )}
@@ -657,12 +665,14 @@ export default function OrderForm({
               </span>
             )}
             {side === "BUY" && isBuyTooSmall && <span className="text-[10px] text-[#f59e0b]">min $1</span>}
+            {side === "BUY" && exceedsBalance && <span className="text-[10px] text-[#ff4444]">exceeds balance</span>}
             {side === "SELL" && amountNum > 0 && amountNum < minSellShares && <span className="text-[10px] text-[#f59e0b]">min {minSellShares}sh</span>}
+            {side === "SELL" && exceedsShares && <span className="text-[10px] text-[#ff4444]">exceeds position</span>}
             {side === "SELL" && !hasSharesToSell && <span className="text-[10px] text-[var(--text-ghost)]">no shares to sell</span>}
           </div>
           <button
             onClick={() => handlePlaceOrder(side, undefined, true)}
-            disabled={busy || amountNum <= 0 || (side === "BUY" ? isBuyTooSmall : !hasSharesToSell || amountNum < minSellShares)}
+            disabled={busy || amountNum <= 0 || exceedsBalance || exceedsShares || (side === "BUY" ? isBuyTooSmall : !hasSharesToSell || amountNum < minSellShares)}
             className={`px-4 py-1 text-[11px] font-medium border transition-colors disabled:opacity-30 ${
               side === "BUY"
                 ? "border-[#22c55e]/50 text-[#22c55e] hover:border-[#22c55e]/80 hover:bg-[#22c55e]/8 active:bg-[#22c55e]/15"
@@ -1062,7 +1072,7 @@ export default function OrderForm({
       ) : (
         <button
           onClick={() => handlePlaceOrder(undefined, undefined, isMarketOrder)}
-          disabled={busy || amountNum <= 0 || (!isMarketOrder && priceNum <= 0) || sizeTooSmall}
+          disabled={busy || amountNum <= 0 || (!isMarketOrder && priceNum <= 0) || sizeTooSmall || exceedsBalance || exceedsShares}
           className={`w-full py-2.5 font-bold text-[13px] transition-colors disabled:opacity-40 ${
             side === "BUY"
               ? "bg-[#22c55e] text-black hover:bg-[#16a34a] active:bg-[#15803d]"
@@ -1077,6 +1087,12 @@ export default function OrderForm({
 
       {/* Status line — fixed height so button doesn't shift */}
       <div className="h-4 text-center">
+        {exceedsBalance && (
+          <span className="text-[10px] text-[#ff4444]">Insufficient USDC balance (have ${usdcBalance?.toFixed(2)})</span>
+        )}
+        {exceedsShares && (
+          <span className="text-[10px] text-[#ff4444]">Exceeds position ({displayedSharesHeld?.toFixed(2)} shares held)</span>
+        )}
         {status === "done" && (
           <span className="text-[11px] text-[#22c55e]">
             ✓ Order placed{orderId && orderId !== "submitted" ? ` · ${orderId.slice(0, 16)}…` : ""}
