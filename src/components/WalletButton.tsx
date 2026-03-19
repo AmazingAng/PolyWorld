@@ -254,19 +254,18 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
       return true;
     });
 
-    // If only one connector available, show simple button
+    // Single connector — direct connect on click
     if (uniqueConnectors.length <= 1) {
       return (
         <button
           onClick={() => handleConnect()}
-          className="flex items-center justify-center w-7 h-7 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-ghost)] transition-colors"
+          className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold font-mono border border-[#22c55e]/40 text-[#22c55e] hover:border-[#22c55e]/70 hover:bg-[#22c55e]/5 transition-colors"
           title="Connect wallet"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="1" y="6" width="22" height="14" rx="2"/>
-            <path d="M16 14a1 1 0 1 0 2 0 1 1 0 0 0-2 0"/>
-            <path d="M1 10h22"/>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="1" y="6" width="22" height="14" rx="2"/><path d="M1 10h22"/>
           </svg>
+          CONNECT
         </button>
       );
     }
@@ -276,14 +275,13 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
       <div className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
         <button
           onClick={() => handleConnect()}
-          className="flex items-center justify-center w-7 h-7 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-ghost)] transition-colors"
+          className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold font-mono border border-[#22c55e]/40 text-[#22c55e] hover:border-[#22c55e]/70 hover:bg-[#22c55e]/5 transition-colors"
           title="Connect wallet"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="1" y="6" width="22" height="14" rx="2"/>
-            <path d="M16 14a1 1 0 1 0 2 0 1 1 0 0 0-2 0"/>
-            <path d="M1 10h22"/>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="1" y="6" width="22" height="14" rx="2"/><path d="M1 10h22"/>
           </svg>
+          CONNECT
         </button>
         {open && (
           <div className="absolute top-full right-0 mt-1 min-w-[160px] border border-[var(--border)] bg-[var(--panel-bg)] shadow-lg z-[200]">
