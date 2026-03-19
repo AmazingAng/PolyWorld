@@ -1,7 +1,6 @@
 "use client";
 
 import { WagmiProvider, createConfig, http, fallback } from "wagmi";
-import { injected } from "@wagmi/core";
 import { polygon } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode, useState } from "react";
@@ -18,10 +17,9 @@ const wagmiConfig = createConfig({
       PUBLIC_POLYGON_RPC_URLS.map((url) => http(url))
     ),
   },
-  connectors: [
-    injected(),                                        // MetaMask / Rabby / generic EIP-1193
-    injected({ target: "okxWallet" }),                 // OKX Wallet (window.okxwallet)
-  ],
+  // No connectors declared — wagmi auto-discovers wallets via EIP-6963.
+  // All installed browser wallets (MetaMask, OKX, Rabby, Coinbase, etc.)
+  // will appear automatically with their real icons and names.
 });
 
 export default function Providers({ children }: { children: ReactNode }) {

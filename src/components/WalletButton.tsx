@@ -245,9 +245,12 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
 
   // ── Not connected: CONNECT button + modal ──
   if (!isConnected) {
-    // Deduplicate connectors by name
+    // EIP-6963 discovered wallets come with icons and proper names.
+    // Filter out generic "Injected" when real wallets are detected, and deduplicate.
+    const hasNamedWallet = connectors.some((c) => c.name !== "Injected" && c.type === "injected");
     const seen = new Set<string>();
     const uniqueConnectors = connectors.filter((c) => {
+      if (hasNamedWallet && c.name === "Injected") return false;
       const key = c.name.toLowerCase().replace(/\s+wallet$/i, "");
       if (seen.has(key)) return false;
       seen.add(key);
@@ -255,17 +258,10 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
     });
 
     const walletIconFor = (c: typeof connectors[0]) => {
+      // EIP-6963 connectors provide their own icon
       if (c.icon) return (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={c.icon} alt="" width={28} height={28} className="rounded-md" />
-      );
-      const n = c.name.toLowerCase();
-      if (n.includes("metamask")) return (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src="https://images.ctfassets.net/clixtyxoaeas/4rnpEzy1ATWRKVBOLxZ1Fm/a74dc1eed36d23d7ea6030383a4d5163/MetaMask-icon-fox.svg" alt="MetaMask" width={28} height={28} />
-      );
-      if (n.includes("okx")) return (
-        <svg width="28" height="28" viewBox="0 0 32 32" fill="currentColor" className="text-[var(--text)]"><rect x="4" y="4" width="9" height="9" rx="1"/><rect x="19" y="4" width="9" height="9" rx="1"/><rect x="4" y="19" width="9" height="9" rx="1"/><rect x="19" y="19" width="9" height="9" rx="1"/></svg>
       );
       return (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--text-muted)]"><rect x="1" y="6" width="22" height="14" rx="2"/><path d="M1 10h22"/></svg>
@@ -311,11 +307,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
                     {walletIconFor(c)}
                     <div className="text-left">
                       <div className="text-[12px] font-medium text-[var(--text)]">{c.name}</div>
-                      <div className="text-[9px] text-[var(--text-ghost)]">
-                        {c.name.toLowerCase().includes("metamask") ? "Browser extension" :
-                         c.name.toLowerCase().includes("okx") ? "Browser extension" :
-                         "Detected wallet"}
-                      </div>
+                      <div className="text-[9px] text-[var(--text-ghost)]">Detected in browser</div>
                     </div>
                   </button>
                 ))}
@@ -356,58 +348,20 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
   const isEOA = !!(address && tradeSession && tradeSession.proxyAddress.toLowerCase() === address.toLowerCase());
   const needsApprove = isAuthorized && !isEOA && approveStatus !== "done";
 
-  // Resolve live connector (EIP-6963 connectors carry runtime icons)
+  // EIP-6963 connectors provide icon + name; resolve from allConnectors for latest state
   const liveConnector = allConnectors.find((c) => c.id === connector?.id) ?? connector;
   const walletIcon = liveConnector?.icon ?? connector?.icon;
   const walletName = liveConnector?.name ?? connector?.name ?? "";
 
-  // When connector name is generic ("Injected"), sniff the active provider to identify the wallet.
-  // Check the connector's own provider first (most accurate), then fall back to window.ethereum.
-  const detectedWallet = (() => {
-    if (typeof window === "undefined") return null;
-    const w = window as unknown as Record<string, unknown>;
-    const eth = w.ethereum as Record<string, unknown> | undefined;
-    // Order matters: Rabby injects isMetaMask too, so check isRabby first
-    if (eth?.isRabby) return "rabby";
-    if (eth?.isMetaMask) return "metamask";
-    if (eth?.isCoinbaseWallet) return "coinbase";
-    if (w.okxwallet || eth?.isOKExWallet || eth?.isOkxWallet) return "okx";
-    return null;
-  })();
-
-  const walletKey = (() => {
-    // First: trust the connector name from wagmi (most reliable)
-    const n = walletName.toLowerCase();
-    if (n.includes("metamask")) return "metamask";
-    if (n.includes("rabby")) return "rabby";
-    if (n.includes("coinbase")) return "coinbase";
-    if (n.includes("okx")) return "okx";
-    // Fallback: sniff window only when connector name is generic
-    return detectedWallet;
-  })();
-
-  const OKXIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 32 32" fill="currentColor" className="text-[var(--text)]">
-      <rect x="4" y="4" width="9" height="9" rx="1"/><rect x="19" y="4" width="9" height="9" rx="1"/>
-      <rect x="4" y="19" width="9" height="9" rx="1"/><rect x="19" y="19" width="9" height="9" rx="1"/>
-    </svg>
-  );
-  const MetaMaskIcon = () => (
+  const walletFallback = walletIcon ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src="https://images.ctfassets.net/clixtyxoaeas/4rnpEzy1ATWRKVBOLxZ1Fm/a74dc1eed36d23d7ea6030383a4d5163/MetaMask-icon-fox.svg" alt="MetaMask" width={16} height={16} />
+    <img src={walletIcon} alt={walletName} width={16} height={16} className="rounded-sm" />
+  ) : (
+    <span className="text-[10px] font-mono text-[var(--text-dim)]">
+      {walletName.replace(/\s+wallet$/i, "").replace(/^injected$/i, "").slice(0, 2).toUpperCase()
+        || (address ? address.slice(2, 4).toUpperCase() : "??")}
+    </span>
   );
-
-  const walletFallback = (() => {
-    if (walletKey === "okx") return <OKXIcon />;
-    if (walletKey === "metamask") return <MetaMaskIcon />;
-    if (walletKey === "rabby") return <span className="text-[10px] font-mono text-[#a78bfa]">RB</span>;
-    if (walletKey === "coinbase") return (
-      <svg width="16" height="16" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="#0052FF"/><rect x="10" y="13" width="12" height="6" rx="3" fill="white"/></svg>
-    );
-    const initials = walletName.replace(/\s+wallet$/i, "").replace(/^injected$/i, "").slice(0, 2).toUpperCase()
-      || (address ? address.slice(2, 4).toUpperCase() : "??");
-    return <span className="text-[10px] font-mono text-[var(--text-dim)]">{initials}</span>;
-  })();
 
   const syncText = lastSyncTime ? getRelativeTime(lastSyncTime) : null;
 
