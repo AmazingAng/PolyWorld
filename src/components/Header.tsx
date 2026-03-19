@@ -22,6 +22,7 @@ interface HeaderProps {
   autoRefresh?: boolean;
   refreshError?: boolean;
   onTrade?: (state: import("./TradeModal").TradeModalState) => void;
+  onTradePosition?: (conditionId: string, outcome: string) => void;
   // Alert manager props
   alertManagerOpen?: boolean;
   onOpenAlertManager?: () => void;
@@ -92,6 +93,7 @@ export default function Header({
   autoRefresh = false,
   refreshError: _refreshError = false,
   onTrade,
+  onTradePosition,
 }: HeaderProps) {
   void _lastRefresh; void _dataMode; void _watchedCount; void _refreshError;
   const _syncInfo = lastSyncTime ? getRelativeTime(lastSyncTime) : null;
@@ -170,7 +172,7 @@ export default function Header({
           </div>
         )}
 
-        <WalletButton onRefresh={onRefresh} loading={loading} lastSyncTime={lastSyncTime} onTrade={onTrade} />
+        <WalletButton onRefresh={onRefresh} loading={loading} lastSyncTime={lastSyncTime} onTrade={onTrade} onTradePosition={onTradePosition} />
 
         <button
           onClick={onOpenSettings}

@@ -1242,6 +1242,44 @@ export default function Home() {
         autoRefresh={autoRefresh}
         refreshError={refreshError}
         onTrade={setQuickTrade}
+        onTradePosition={(conditionId, outcome) => {
+          // Find the market containing this conditionId and build a full TradeModalState
+          const allMarkets = [...mapped, ...unmapped];
+          for (const ev of allMarkets) {
+            for (const m of ev.markets) {
+              const ids = (() => {
+                if (!m.clobTokenIds) return [];
+                if (Array.isArray(m.clobTokenIds)) return m.clobTokenIds as string[];
+                try { return JSON.parse(m.clobTokenIds as string) as string[]; } catch { return []; }
+              })();
+              const prices = (() => {
+                if (!m.outcomePrices) return [];
+                const raw = Array.isArray(m.outcomePrices) ? m.outcomePrices : JSON.parse(m.outcomePrices as string);
+                return raw.map((p: string) => parseFloat(p));
+              })();
+              // Match: conditionId could be the sub-market id or found in token ids
+              if (ids.length >= 2 && (m.id === conditionId || ids.includes(conditionId))) {
+                const yesTokenId = String(ids[0]);
+                const noTokenId = String(ids[1]);
+                const yesPrice = prices[0] ?? ev.prob ?? 0.5;
+                const noPrice = prices[1] ?? (1 - yesPrice);
+                const isNo = outcome.toLowerCase() === "no";
+                setQuickTrade({
+                  tokenId: isNo ? noTokenId : yesTokenId,
+                  currentPrice: isNo ? noPrice : yesPrice,
+                  outcomeName: isNo ? "No" : "Yes",
+                  marketTitle: ev.title,
+                  negRisk: !!ev.negRisk,
+                  defaultSide: "SELL",
+                  yesToken: { tokenId: yesTokenId, price: yesPrice, name: "Yes" },
+                  noToken: { tokenId: noTokenId, price: noPrice, name: "No" },
+                  smartMoney: ev.smartMoney,
+                });
+                return;
+              }
+            }
+          }
+        }}
         alertManagerOpen={alertManagerOpen}
         onOpenAlertManager={() => useUIStore.getState().setAlertManagerOpen((v) => !v)}
         onCloseAlertManager={() => { const ui = useUIStore.getState(); ui.setAlertManagerOpen(false); ui.setAlertPrefill(undefined); }}
