@@ -186,12 +186,13 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
     if (!isEOA && getApprovedFlag(tradeSession.proxyAddress)) markDone();
   }, [tradeSession, address, markDone]);
 
-  const handleConnect = useCallback(() => {
-    // Prefer the generic injected connector, then any EIP-6963 discovered wallet
-    const injector = connectors.find((c) => c.id === "injected")
-      ?? connectors.find((c) => c.type === "injected")
-      ?? connectors[0];
-    if (injector) connect({ connector: injector });
+  const handleConnect = useCallback((connectorId?: string) => {
+    const target = connectorId
+      ? connectors.find((c) => c.id === connectorId || c.uid === connectorId)
+      : connectors.find((c) => c.id === "injected")
+        ?? connectors.find((c) => c.type === "injected")
+        ?? connectors[0];
+    if (target) connect({ connector: target });
   }, [connect, connectors]);
 
   const handleDisconnect = useCallback(() => {
@@ -242,20 +243,79 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
     }
   }, [address, resolvedProxy, proxyNotFound, signTypedDataAsync, setTradeSession, setWallet, chainId]);
 
-  // ── Not connected: wallet icon button ──
+  // ── Not connected: wallet selector ──
   if (!isConnected) {
+    // Deduplicate connectors by name, prefer EIP-6963 discovered ones
+    const seen = new Set<string>();
+    const uniqueConnectors = connectors.filter((c) => {
+      const key = c.name.toLowerCase().replace(/\s+wallet$/i, "");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // If only one connector available, show simple button
+    if (uniqueConnectors.length <= 1) {
+      return (
+        <button
+          onClick={() => handleConnect()}
+          className="flex items-center justify-center w-7 h-7 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-ghost)] transition-colors"
+          title="Connect wallet"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="1" y="6" width="22" height="14" rx="2"/>
+            <path d="M16 14a1 1 0 1 0 2 0 1 1 0 0 0-2 0"/>
+            <path d="M1 10h22"/>
+          </svg>
+        </button>
+      );
+    }
+
+    // Multiple wallets — show picker dropdown on hover
     return (
-      <button
-        onClick={handleConnect}
-        className="flex items-center justify-center w-7 h-7 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-ghost)] transition-colors"
-        title="Connect wallet"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <rect x="1" y="6" width="22" height="14" rx="2"/>
-          <path d="M16 14a1 1 0 1 0 2 0 1 1 0 0 0-2 0"/>
-          <path d="M1 10h22"/>
-        </svg>
-      </button>
+      <div className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+        <button
+          onClick={() => handleConnect()}
+          className="flex items-center justify-center w-7 h-7 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-ghost)] transition-colors"
+          title="Connect wallet"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="1" y="6" width="22" height="14" rx="2"/>
+            <path d="M16 14a1 1 0 1 0 2 0 1 1 0 0 0-2 0"/>
+            <path d="M1 10h22"/>
+          </svg>
+        </button>
+        {open && (
+          <div className="absolute top-full right-0 mt-1 min-w-[160px] border border-[var(--border)] bg-[var(--panel-bg)] shadow-lg z-[200]">
+            <div className="px-2 py-1 text-[9px] text-[var(--text-ghost)] border-b border-[var(--border-subtle)]">Connect Wallet</div>
+            {uniqueConnectors.map((c) => {
+              const n = c.name.toLowerCase();
+              const isOkx = n.includes("okx");
+              const isMM = n.includes("metamask");
+              return (
+                <button
+                  key={c.uid}
+                  onClick={() => { handleConnect(c.uid); setOpen(false); }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-[11px] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border-subtle)]/30 transition-colors"
+                >
+                  {c.icon ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={c.icon} alt="" width={14} height={14} className="rounded-sm" />
+                  ) : isMM ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src="https://images.ctfassets.net/clixtyxoaeas/4rnpEzy1ATWRKVBOLxZ1Fm/a74dc1eed36d23d7ea6030383a4d5163/MetaMask-icon-fox.svg" alt="MetaMask" width={14} height={14} />
+                  ) : isOkx ? (
+                    <svg width="14" height="14" viewBox="0 0 32 32" fill="currentColor"><rect x="4" y="4" width="9" height="9" rx="1"/><rect x="19" y="4" width="9" height="9" rx="1"/><rect x="4" y="19" width="9" height="9" rx="1"/><rect x="19" y="19" width="9" height="9" rx="1"/></svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="1" y="6" width="22" height="14" rx="2"/><path d="M1 10h22"/></svg>
+                  )}
+                  <span>{c.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     );
   }
 
