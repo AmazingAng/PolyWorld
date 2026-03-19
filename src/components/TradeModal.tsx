@@ -288,29 +288,33 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
               <div className="flex gap-2">
                 <button
                   onClick={() => selectToken(state.yesToken!)}
-                  className={`flex-1 py-2 text-[12px] font-bold transition-colors flex flex-col items-center gap-0.5 ${
+                  className={`flex-1 min-h-[44px] text-[12px] font-bold transition-colors flex flex-col items-center justify-center gap-0.5 ${
                     isYesActive
                       ? "bg-[#22c55e] text-black"
                       : "bg-[#22c55e]/10 text-[#22c55e] hover:bg-[#22c55e]/20"
                   }`}
                 >
                   <span>Yes {(state.yesToken!.price * 100).toFixed(1)}¢</span>
-                  <span className={`text-[9px] font-bold tabular-nums ${isYesActive ? "opacity-70" : "opacity-50"}`}>
-                    {yesSharesNum !== null && yesSharesNum > 0 ? `${yesSharesNum.toFixed(2)} shares` : "\u00A0"}
-                  </span>
+                  {yesSharesNum !== null && yesSharesNum > 0 && (
+                    <span className={`text-[9px] font-bold tabular-nums ${isYesActive ? "opacity-70" : "opacity-50"}`}>
+                      {yesSharesNum.toFixed(2)} shares
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => selectToken(state.noToken!)}
-                  className={`flex-1 py-2 text-[12px] font-bold transition-colors flex flex-col items-center gap-0.5 ${
+                  className={`flex-1 min-h-[44px] text-[12px] font-bold transition-colors flex flex-col items-center justify-center gap-0.5 ${
                     !isYesActive
                       ? "bg-[#ff4444] text-white"
                       : "bg-[#ff4444]/10 text-[#ff4444] hover:bg-[#ff4444]/20"
                   }`}
                 >
                   <span>No {(state.noToken!.price * 100).toFixed(1)}¢</span>
-                  <span className={`text-[9px] font-bold tabular-nums ${!isYesActive ? "opacity-70" : "opacity-50"}`}>
-                    {noSharesNum !== null && noSharesNum > 0 ? `${noSharesNum.toFixed(2)} shares` : "\u00A0"}
-                  </span>
+                  {noSharesNum !== null && noSharesNum > 0 && (
+                    <span className={`text-[9px] font-bold tabular-nums ${!isYesActive ? "opacity-70" : "opacity-50"}`}>
+                      {noSharesNum.toFixed(2)} shares
+                    </span>
+                  )}
                 </button>
               </div>
             ) : (
