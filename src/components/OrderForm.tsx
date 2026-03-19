@@ -204,7 +204,7 @@ export default function OrderForm({
     functionName: "balanceOf",
     args: balanceTarget ? [balanceTarget] : undefined,
     chainId: polygon.id,
-    query: { enabled: isConnected && isPolygon && !!balanceTarget, refetchInterval: 60_000 },
+    query: { enabled: isConnected && isPolygon && !!balanceTarget, refetchInterval: 15_000 },
   });
   const usdcBalanceDisplay = usdcRawBalance !== undefined
     ? (Number(usdcRawBalance) / 1e6).toFixed(2)
@@ -246,7 +246,7 @@ export default function OrderForm({
     functionName: "balanceOf",
     args: balanceTarget && tokenId ? [balanceTarget, BigInt(tokenId)] : undefined,
     chainId: polygon.id,
-    query: { enabled: isConnected && isPolygon && !!balanceTarget && !!tokenId, refetchInterval: 60_000 },
+    query: { enabled: isConnected && isPolygon && !!balanceTarget && !!tokenId, refetchInterval: 15_000 },
   });
   const sharesHeld = shareBalance !== undefined ? Number(shareBalance) / 1e6 : null;
   const displayedSharesHeld = optimisticSharesHeld ?? sharesHeld;
