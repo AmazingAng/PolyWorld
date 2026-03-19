@@ -197,6 +197,14 @@ export default function OrderForm({
   const isEOA = !!address && !!proxyAddress && proxyAddress.toLowerCase() === address.toLowerCase();
 
   const balanceTarget = (proxyAddress ?? address) as `0x${string}` | undefined;
+
+  // Debug: remove after confirming balance reads work
+  useEffect(() => {
+    console.log("[OrderForm] balance debug:", {
+      isConnected, chainId, storeChainId, effectiveChainId,
+      isPolygon, address, proxyAddress, balanceTarget,
+    });
+  }, [isConnected, chainId, storeChainId, effectiveChainId, isPolygon, address, proxyAddress, balanceTarget]);
   const { data: usdcRawBalance, refetch: refetchUsdcBalance } = useReadContract({
     address: USDC_ADDRESS,
     abi: BALANCE_ABI,
