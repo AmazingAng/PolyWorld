@@ -154,7 +154,10 @@ export default function OrderForm({
       .catch(() => {/* keep default */});
   }, [tokenId]);
 
-  const isPolygon = chainId === polygon.id;
+  // chainId from useAccount() may be undefined briefly after connect; trust walletStore as fallback
+  const storeChainId = useWalletStore((s) => s.chainId);
+  const effectiveChainId = chainId ?? storeChainId;
+  const isPolygon = effectiveChainId === polygon.id;
   const priceNum  = parseFloat(price) || 0;
   const amountNum = parseFloat(amount) || 0;
 
