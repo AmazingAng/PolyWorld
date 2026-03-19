@@ -23,6 +23,7 @@ interface WalletButtonProps {
   onRefresh?: () => void;
   loading?: boolean;
   lastSyncTime?: string | null;
+  onTrade?: (state: import("./TradeModal").TradeModalState) => void;
 }
 
 function getRelativeTime(iso: string): string {
@@ -51,7 +52,17 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export default function WalletButton({ onRefresh, loading, lastSyncTime }: WalletButtonProps) {
+interface PositionItem {
+  conditionId: string;
+  title: string;
+  outcome: string;
+  size: number;
+  avgPrice: number;
+  currentPrice: number;
+  cashPnl: number;
+}
+
+export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade }: WalletButtonProps) {
   const { address, isConnected, connector, chainId } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
@@ -152,6 +163,11 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
   // Uses resolvedProxy or tradeSession.proxyAddress (whichever is available)
   const effectiveProxy = tradeSession?.proxyAddress ?? resolvedProxy;
 
+  // Portfolio positions for hover dropdown
+  const [positions, setPositions] = useState<PositionItem[]>([]);
+  const [portfolioOpen, setPortfolioOpen] = useState(false);
+  const portfolioTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!effectiveProxy) { setPolyBalance(null); setPortfolioValue(null); return; }
     const proxyAddr = effectiveProxy;
@@ -190,6 +206,42 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
     const onRefreshEv = () => { void fetchBal(); void fetchPortfolio(); };
     window.addEventListener("polyworld:refresh-header-balance", onRefreshEv);
     return () => { cancelled = true; clearInterval(iv); window.removeEventListener("polyworld:refresh-header-balance", onRefreshEv); };
+  }, [effectiveProxy]);
+
+  // Fetch positions for portfolio hover dropdown
+  useEffect(() => {
+    if (!effectiveProxy) { setPositions([]); return; }
+    let cancelled = false;
+    const fetchPositions = async () => {
+      try {
+        const res = await fetch(
+          `https://data-api.polymarket.com/positions?user=${encodeURIComponent(effectiveProxy)}&sortBy=CURRENT&limit=50`,
+          { signal: AbortSignal.timeout(10_000) }
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const arr = Array.isArray(data) ? data : data.positions || data.data || [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const items: PositionItem[] = arr.filter((p: any) => parseFloat(String(p.size || p.shares || 0)) > 0.01).map((p: any) => {
+          const size = parseFloat(String(p.size || p.shares || 0));
+          const avgPrice = parseFloat(String(p.avgPrice || p.price || 0));
+          const curPrice = parseFloat(String(p.curPrice || p.currentPrice || avgPrice));
+          return {
+            conditionId: String(p.conditionId || p.market || ""),
+            title: String(p.title || p.question || p.marketTitle || ""),
+            outcome: String(p.outcome || ""),
+            size,
+            avgPrice,
+            currentPrice: curPrice,
+            cashPnl: (curPrice - avgPrice) * size,
+          };
+        });
+        if (!cancelled) setPositions(items);
+      } catch { /* ignore */ }
+    };
+    fetchPositions();
+    const iv = setInterval(fetchPositions, 30_000);
+    return () => { cancelled = true; clearInterval(iv); };
   }, [effectiveProxy]);
 
   // Restore approval state from localStorage
@@ -385,34 +437,87 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Balances — visible when proxy wallet is known (no auth required) */}
+      {/* Portfolio — hover for position details */}
       {(portfolioValue !== null || polyBalance !== null) && (
         <div
-          className="flex items-center gap-2.5 px-2.5 py-1 text-[11px] tabular-nums border border-[var(--border-subtle)]"
-          style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.4)" }}
+          className="relative"
+          onMouseEnter={() => { if (portfolioTimer.current) clearTimeout(portfolioTimer.current); setPortfolioOpen(true); }}
+          onMouseLeave={() => { portfolioTimer.current = setTimeout(() => setPortfolioOpen(false), 300); }}
         >
-          {portfolioValue !== null && (
-            <span className="flex items-center gap-1">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--text-faint)] shrink-0">
-                <rect x="2" y="7" width="20" height="14" rx="2"/>
-                <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
-                <line x1="12" y1="12" x2="12" y2="16"/>
-                <line x1="10" y1="14" x2="14" y2="14"/>
-              </svg>
-              <span className="text-[var(--text-secondary)] font-bold">${portfolioValue.toFixed(2)}</span>
-            </span>
-          )}
-          {portfolioValue !== null && polyBalance !== null && (
-            <span className="text-[var(--border)] select-none">|</span>
-          )}
-          {polyBalance !== null && (
-            <span className="flex items-center gap-1">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--text-faint)] shrink-0">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 6v2M12 16v2M9 9.5c0-1 1.5-1.5 3-1.5s3 .5 3 2-1.5 2-3 2-3 1-3 2 1.5 2 3 2 3-.5 3-1.5"/>
-              </svg>
-              <span className="text-[var(--text-secondary)] font-bold">${polyBalance.toFixed(2)}</span>
-            </span>
+          <div
+            className="flex items-center gap-2.5 px-2.5 py-1 text-[11px] tabular-nums border border-[var(--border-subtle)] cursor-default"
+            style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.4)" }}
+          >
+            {portfolioValue !== null && (
+              <span className="flex items-center gap-1">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--text-faint)] shrink-0">
+                  <rect x="2" y="7" width="20" height="14" rx="2"/>
+                  <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+                  <line x1="12" y1="12" x2="12" y2="16"/>
+                  <line x1="10" y1="14" x2="14" y2="14"/>
+                </svg>
+                <span className="text-[var(--text-secondary)] font-bold">${portfolioValue.toFixed(2)}</span>
+              </span>
+            )}
+            {portfolioValue !== null && polyBalance !== null && (
+              <span className="text-[var(--border)] select-none">|</span>
+            )}
+            {polyBalance !== null && (
+              <span className="flex items-center gap-1">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--text-faint)] shrink-0">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 6v2M12 16v2M9 9.5c0-1 1.5-1.5 3-1.5s3 .5 3 2-1.5 2-3 2-3 1-3 2 1.5 2 3 2 3-.5 3-1.5"/>
+                </svg>
+                <span className="text-[var(--text-secondary)] font-bold">${polyBalance.toFixed(2)}</span>
+              </span>
+            )}
+          </div>
+
+          {/* Portfolio positions dropdown */}
+          {portfolioOpen && positions.length > 0 && (
+            <div
+              className="absolute right-0 top-full mt-1 w-[300px] max-h-[360px] overflow-y-auto bg-[var(--bg)] border border-[var(--border)] z-[200] font-mono"
+              style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
+            >
+              <div className="px-3 py-1.5 text-[9px] text-[var(--text-ghost)] uppercase tracking-[0.1em] border-b border-[var(--border-subtle)] sticky top-0 bg-[var(--bg)]">
+                Positions · {positions.length}
+              </div>
+              {positions.map((p) => (
+                <button
+                  key={`${p.conditionId}-${p.outcome}`}
+                  onClick={() => {
+                    if (onTrade) {
+                      onTrade({
+                        tokenId: p.conditionId,
+                        currentPrice: p.currentPrice,
+                        outcomeName: p.outcome,
+                        marketTitle: p.title,
+                        negRisk: false,
+                        defaultSide: "SELL",
+                      });
+                    }
+                    setPortfolioOpen(false);
+                  }}
+                  className="w-full px-3 py-2 text-left border-b border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]/20 transition-colors"
+                >
+                  <div className="text-[10px] text-[var(--text)] truncate leading-snug">{p.title}</div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className={`text-[10px] font-bold ${p.outcome.toLowerCase() === "no" ? "text-[#ff4444]" : "text-[#22c55e]"}`}>
+                      {p.outcome}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-secondary)] font-bold tabular-nums">
+                      {p.size.toFixed(2)} shares
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mt-0.5 text-[9px] tabular-nums text-[var(--text-faint)]">
+                    <span>Avg: {(p.avgPrice * 100).toFixed(1)}¢ · Cur: {(p.currentPrice * 100).toFixed(1)}¢</span>
+                    <span className={p.cashPnl >= 0 ? "text-[#22c55e]" : "text-[#ff4444]"}>
+                      {p.cashPnl >= 0 ? "+" : ""}${p.cashPnl.toFixed(2)}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
           )}
         </div>
       )}

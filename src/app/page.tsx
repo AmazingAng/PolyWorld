@@ -1241,6 +1241,7 @@ export default function Home() {
         alertUnreadCount={unreadCount}
         autoRefresh={autoRefresh}
         refreshError={refreshError}
+        onTrade={setQuickTrade}
         alertManagerOpen={alertManagerOpen}
         onOpenAlertManager={() => useUIStore.getState().setAlertManagerOpen((v) => !v)}
         onCloseAlertManager={() => { const ui = useUIStore.getState(); ui.setAlertManagerOpen(false); ui.setAlertPrefill(undefined); }}
