@@ -243,9 +243,9 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
     }
   }, [address, resolvedProxy, proxyNotFound, signTypedDataAsync, setTradeSession, setWallet, chainId]);
 
-  // ── Not connected: wallet selector ──
+  // ── Not connected: CONNECT button + modal ──
   if (!isConnected) {
-    // Deduplicate connectors by name, prefer EIP-6963 discovered ones
+    // Deduplicate connectors by name
     const seen = new Set<string>();
     const uniqueConnectors = connectors.filter((c) => {
       const key = c.name.toLowerCase().replace(/\s+wallet$/i, "");
@@ -254,66 +254,83 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
       return true;
     });
 
-    // Single connector — direct connect on click
-    if (uniqueConnectors.length <= 1) {
-      return (
-        <button
-          onClick={() => handleConnect()}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold font-mono border border-[#22c55e]/40 text-[#22c55e] hover:border-[#22c55e]/70 hover:bg-[#22c55e]/5 transition-colors"
-          title="Connect wallet"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="1" y="6" width="22" height="14" rx="2"/><path d="M1 10h22"/>
-          </svg>
-          CONNECT
-        </button>
+    const walletIconFor = (c: typeof connectors[0]) => {
+      if (c.icon) return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={c.icon} alt="" width={28} height={28} className="rounded-md" />
       );
-    }
+      const n = c.name.toLowerCase();
+      if (n.includes("metamask")) return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src="https://images.ctfassets.net/clixtyxoaeas/4rnpEzy1ATWRKVBOLxZ1Fm/a74dc1eed36d23d7ea6030383a4d5163/MetaMask-icon-fox.svg" alt="MetaMask" width={28} height={28} />
+      );
+      if (n.includes("okx")) return (
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="currentColor" className="text-[var(--text)]"><rect x="4" y="4" width="9" height="9" rx="1"/><rect x="19" y="4" width="9" height="9" rx="1"/><rect x="4" y="19" width="9" height="9" rx="1"/><rect x="19" y="19" width="9" height="9" rx="1"/></svg>
+      );
+      return (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--text-muted)]"><rect x="1" y="6" width="22" height="14" rx="2"/><path d="M1 10h22"/></svg>
+      );
+    };
 
-    // Multiple wallets — show picker dropdown on hover
     return (
-      <div className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+      <>
         <button
-          onClick={() => handleConnect()}
+          onClick={() => setOpen(true)}
           className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold font-mono border border-[#22c55e]/40 text-[#22c55e] hover:border-[#22c55e]/70 hover:bg-[#22c55e]/5 transition-colors"
-          title="Connect wallet"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <rect x="1" y="6" width="22" height="14" rx="2"/><path d="M1 10h22"/>
           </svg>
           CONNECT
         </button>
+
         {open && (
-          <div className="absolute top-full right-0 mt-1 min-w-[160px] border border-[var(--border)] bg-[var(--panel-bg)] shadow-lg z-[200]">
-            <div className="px-2 py-1 text-[9px] text-[var(--text-ghost)] border-b border-[var(--border-subtle)]">Connect Wallet</div>
-            {uniqueConnectors.map((c) => {
-              const n = c.name.toLowerCase();
-              const isOkx = n.includes("okx");
-              const isMM = n.includes("metamask");
-              return (
-                <button
-                  key={c.uid}
-                  onClick={() => { handleConnect(c.uid); setOpen(false); }}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 text-[11px] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border-subtle)]/30 transition-colors"
-                >
-                  {c.icon ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={c.icon} alt="" width={14} height={14} className="rounded-sm" />
-                  ) : isMM ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src="https://images.ctfassets.net/clixtyxoaeas/4rnpEzy1ATWRKVBOLxZ1Fm/a74dc1eed36d23d7ea6030383a4d5163/MetaMask-icon-fox.svg" alt="MetaMask" width={14} height={14} />
-                  ) : isOkx ? (
-                    <svg width="14" height="14" viewBox="0 0 32 32" fill="currentColor"><rect x="4" y="4" width="9" height="9" rx="1"/><rect x="19" y="4" width="9" height="9" rx="1"/><rect x="4" y="19" width="9" height="9" rx="1"/><rect x="19" y="19" width="9" height="9" rx="1"/></svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="1" y="6" width="22" height="14" rx="2"/><path d="M1 10h22"/></svg>
-                  )}
-                  <span>{c.name}</span>
+          <>
+            <div className="fixed inset-0 bg-black/60 z-[300]" onClick={() => setOpen(false)} />
+            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[301] w-[340px] max-w-[90vw] border border-[var(--border)] bg-[var(--panel-bg)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              {/* Header */}
+              <div className="px-5 pt-5 pb-3 text-center">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[#22c55e]">
+                    <polygon points="22,12 17,3.4 7,3.4 2,12 7,20.6 17,20.6" />
+                    <path d="M2 12h20M12 3.4L16 12l-4 8.6M12 3.4L8 12l4 8.6" />
+                  </svg>
+                  <span className="text-[15px] font-bold text-[var(--text)]">Welcome to PolyWorld</span>
+                </div>
+                <p className="text-[11px] text-[var(--text-faint)]">Connect your wallet to start trading on Polymarket</p>
+              </div>
+
+              {/* Wallet list */}
+              <div className="px-4 pb-4 space-y-2">
+                {uniqueConnectors.map((c) => (
+                  <button
+                    key={c.uid}
+                    onClick={() => { handleConnect(c.uid); setOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 border border-[var(--border-subtle)] hover:border-[var(--text-ghost)] hover:bg-[var(--border-subtle)]/20 transition-colors"
+                  >
+                    {walletIconFor(c)}
+                    <div className="text-left">
+                      <div className="text-[12px] font-medium text-[var(--text)]">{c.name}</div>
+                      <div className="text-[9px] text-[var(--text-ghost)]">
+                        {c.name.toLowerCase().includes("metamask") ? "Browser extension" :
+                         c.name.toLowerCase().includes("okx") ? "Browser extension" :
+                         "Detected wallet"}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Footer */}
+              <div className="px-4 pb-4 pt-1 border-t border-[var(--border-subtle)]">
+                <button onClick={() => setOpen(false)} className="w-full py-2 text-[11px] text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors">
+                  Cancel
                 </button>
-              );
-            })}
-          </div>
+              </div>
+            </div>
+          </>
         )}
-      </div>
+      </>
     );
   }
 
