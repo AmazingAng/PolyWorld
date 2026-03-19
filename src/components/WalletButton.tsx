@@ -286,24 +286,28 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
   const walletIcon = liveConnector?.icon ?? connector?.icon;
   const walletName = liveConnector?.name ?? connector?.name ?? "";
 
-  // When connector name is generic ("Injected"), sniff window properties to identify the wallet
+  // When connector name is generic ("Injected"), sniff the active provider to identify the wallet.
+  // Check the connector's own provider first (most accurate), then fall back to window.ethereum.
   const detectedWallet = (() => {
     if (typeof window === "undefined") return null;
     const w = window as unknown as Record<string, unknown>;
     const eth = w.ethereum as Record<string, unknown> | undefined;
-    if (w.okxwallet || eth?.isOKExWallet || eth?.isOkxWallet) return "okx";
-    if (eth?.isMetaMask && !eth?.isRabby) return "metamask";
+    // Order matters: Rabby injects isMetaMask too, so check isRabby first
     if (eth?.isRabby) return "rabby";
+    if (eth?.isMetaMask) return "metamask";
     if (eth?.isCoinbaseWallet) return "coinbase";
+    if (w.okxwallet || eth?.isOKExWallet || eth?.isOkxWallet) return "okx";
     return null;
   })();
 
   const walletKey = (() => {
+    // First: trust the connector name from wagmi (most reliable)
     const n = walletName.toLowerCase();
-    if (n.includes("okx")) return "okx";
     if (n.includes("metamask")) return "metamask";
     if (n.includes("rabby")) return "rabby";
     if (n.includes("coinbase")) return "coinbase";
+    if (n.includes("okx")) return "okx";
+    // Fallback: sniff window only when connector name is generic
     return detectedWallet;
   })();
 
