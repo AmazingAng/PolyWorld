@@ -95,9 +95,10 @@ export default function Header({
   const _syncInfo = lastSyncTime ? getRelativeTime(lastSyncTime) : null;
   void _syncInfo;
   const bellRef = useRef<HTMLButtonElement>(null);
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mounted, setMounted] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration guard
-  useEffect(() => setMounted(true), []);
+  useEffect(() => { setMounted(true); return () => { if (hoverTimeout.current) clearTimeout(hoverTimeout.current); }; }, []);
   const progressKey = `${loading ? "loading" : "idle"}:${lastSyncTime ?? "none"}`;
 
   return (
@@ -134,9 +135,20 @@ export default function Header({
 
       {/* Right: Alerts + Wallet + Settings */}
       <div className="flex items-center gap-1.5 text-[11px]">
-        {/* Alert bell + dropdown */}
+        {/* Alert bell + dropdown — opens on hover */}
         {onOpenAlertManager && (
-          <div className="relative">
+          <div
+            className="relative"
+            onMouseEnter={() => {
+              if (hoverTimeout.current) { clearTimeout(hoverTimeout.current); hoverTimeout.current = null; }
+              if (!alertManagerOpen) onOpenAlertManager();
+            }}
+            onMouseLeave={() => {
+              hoverTimeout.current = setTimeout(() => {
+                onCloseAlertManager?.();
+              }, 300);
+            }}
+          >
             <button
               ref={bellRef}
               onClick={onOpenAlertManager}
@@ -176,6 +188,14 @@ export default function Header({
         <AlertManager
           open={alertManagerOpen}
           onClose={onCloseAlertManager}
+          onHoverEnter={() => {
+            if (hoverTimeout.current) { clearTimeout(hoverTimeout.current); hoverTimeout.current = null; }
+          }}
+          onHoverLeave={() => {
+            hoverTimeout.current = setTimeout(() => {
+              onCloseAlertManager();
+            }, 300);
+          }}
           {...alertProps}
         />
       )}

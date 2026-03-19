@@ -35,6 +35,8 @@ interface AlertManagerProps {
   prefill?: { marketId?: string; marketTitle?: string };
   notifPermission: NotificationPermission;
   onRequestPermission: () => void;
+  onHoverEnter?: () => void;
+  onHoverLeave?: () => void;
 }
 
 type Tab = "alerts" | "history";
@@ -62,6 +64,8 @@ function AlertManagerContent({
   prefill,
   notifPermission,
   onRequestPermission,
+  onHoverEnter,
+  onHoverLeave,
 }: AlertManagerProps) {
   const [activeTab, setActiveTab] = useState<Tab>("alerts");
 
@@ -172,14 +176,16 @@ function AlertManagerContent({
 
   return (
     <>
-      {/* Light backdrop — only catches clicks, does not dim page */}
-      <div className="alert-dropdown-backdrop" onClick={onClose} />
+      {/* Light backdrop — only catches clicks, does not dim page; pointer-events disabled when hover-driven */}
+      <div className={`alert-dropdown-backdrop ${onHoverLeave ? "pointer-events-none" : ""}`} onClick={onClose} />
       <div
         className="alert-dropdown"
         role="dialog"
         aria-modal="true"
         aria-label="Alert Manager"
         onClick={(e) => e.stopPropagation()}
+        onMouseEnter={onHoverEnter}
+        onMouseLeave={onHoverLeave}
       >
         {/* Header */}
         <div className="alert-dropdown-header">
