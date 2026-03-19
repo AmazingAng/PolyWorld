@@ -157,7 +157,7 @@ export async function fetchMarketTrades(
   minAmount = 5000
 ): Promise<MarketTrade[]> {
   try {
-    const marketParam = conditionId ? `market=${conditionId}&` : "";
+    const marketParam = conditionId ? `market=${encodeURIComponent(conditionId)}&` : "";
     // Use smaller limit for fresher data from the API (larger limits return staler cached results)
     const limit = conditionId ? 100 : 20;
     const res = await rateLimitedFetch(
@@ -252,7 +252,7 @@ interface PositionApiEntry {
 export async function fetchWalletPositions(wallet: string): Promise<WalletPosition[]> {
   try {
     const res = await rateLimitedFetch(
-      `${DATA_API_BASE}/positions?user=${wallet}&sortBy=CURRENT&limit=100`
+      `${DATA_API_BASE}/positions?user=${encodeURIComponent(wallet)}&sortBy=CURRENT&limit=100`
     );
     if (!res.ok) return [];
     const data = await res.json();
@@ -355,9 +355,10 @@ function parseTraderPosition(p: TraderPositionApiEntry, redeemed: boolean): Trad
 export async function fetchTraderPositions(wallet: string): Promise<TraderPosition[]> {
   try {
     // Sequential to respect rate limiter — parallel causes timeout when both queue up
-    const openRes = await rateLimitedFetch(`${DATA_API_BASE}/positions?user=${wallet}&sortBy=CURRENT&limit=200`);
+    const encodedWallet = encodeURIComponent(wallet);
+    const openRes = await rateLimitedFetch(`${DATA_API_BASE}/positions?user=${encodedWallet}&sortBy=CURRENT&limit=200`);
     const openData = openRes.ok ? await openRes.json() : [];
-    const closedRes = await rateLimitedFetch(`${DATA_API_BASE}/closed-positions?user=${wallet}&limit=200`);
+    const closedRes = await rateLimitedFetch(`${DATA_API_BASE}/closed-positions?user=${encodedWallet}&limit=200`);
     const closedData = closedRes.ok ? await closedRes.json() : [];
     const openArr = Array.isArray(openData) ? openData : openData.positions || openData.data || [];
     const closedArr = Array.isArray(closedData) ? closedData : closedData.positions || closedData.data || [];

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 async function tryPublicProfile(address: string): Promise<string | null> {
   try {
     const res = await fetch(
-      `https://gamma-api.polymarket.com/public-profile?address=${address}`,
+      `https://gamma-api.polymarket.com/public-profile?address=${encodeURIComponent(address)}`,
       { headers: { "Accept": "application/json" } }
     );
     if (!res.ok) return null;
@@ -18,7 +18,7 @@ async function tryPolymarketDataApi(address: string): Promise<string | null> {
   for (const endpoint of ["positions", "activity"]) {
     try {
       const res = await fetch(
-        `https://data-api.polymarket.com/${endpoint}?user=${address}&limit=1`,
+        `https://data-api.polymarket.com/${endpoint}?user=${encodeURIComponent(address)}&limit=1`,
         { headers: { "Accept": "application/json" } }
       );
       if (!res.ok) continue;

@@ -30,7 +30,7 @@ export async function GET() {
     return NextResponse.json({ status: "ok", timestamp: new Date().toISOString() });
   } catch (err) {
     return NextResponse.json(
-      { status: "error", reason: err instanceof Error ? err.message : "unknown" },
+      { status: "error", reason: "internal" },
       { status: 503 }
     );
   }

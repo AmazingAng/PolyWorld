@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const res = await fetch(`${CLOB_BASE}/book?token_id=${tokenId}`, {
+    const res = await fetch(`${CLOB_BASE}/book?token_id=${encodeURIComponent(tokenId)}`, {
       signal: AbortSignal.timeout(8_000),
     });
 
