@@ -198,7 +198,7 @@ export default function OrderForm({
 
   const balanceTarget = (proxyAddress ?? address) as `0x${string}` | undefined;
 
-  const { data: usdcRawBalance, refetch: refetchUsdcBalance } = useReadContract({
+  const usdcQuery = useReadContract({
     address: USDC_ADDRESS,
     abi: BALANCE_ABI,
     functionName: "balanceOf",
@@ -206,9 +206,19 @@ export default function OrderForm({
     chainId: polygon.id,
     query: { enabled: isConnected && isPolygon && !!balanceTarget, refetchInterval: 30_000 },
   });
+  const { data: usdcRawBalance, refetch: refetchUsdcBalance } = usdcQuery;
   const usdcBalanceDisplay = usdcRawBalance !== undefined
     ? (Number(usdcRawBalance) / 1e6).toFixed(2)
     : null;
+
+  // Debug: log full useReadContract state
+  useEffect(() => {
+    console.log("[OrderForm] USDC query:", {
+      data: usdcRawBalance, status: usdcQuery.status, error: usdcQuery.error?.message,
+      fetchStatus: usdcQuery.fetchStatus, isEnabled: isConnected && isPolygon && !!balanceTarget,
+      balanceTarget, USDC_ADDRESS,
+    });
+  }, [usdcRawBalance, usdcQuery.status, usdcQuery.error, usdcQuery.fetchStatus, isConnected, isPolygon, balanceTarget]);
 
   const { data: allowance } = useReadContract({
     address: USDC_ADDRESS,
