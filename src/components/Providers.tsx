@@ -5,19 +5,15 @@ import { polygon } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode, useState } from "react";
 
-// NEXT_PUBLIC_POLYGON_RPC_URL: optional, set to a paid/private RPC for reliability.
-// Falls back to public RPCs if not configured.
-const PUBLIC_POLYGON_RPC_URLS = [
-  "https://polygon-rpc.com",
-  "https://rpc.ankr.com/polygon",
-  "https://polygon.llamarpc.com",
-  "https://1rpc.io/matic",
-];
-
+// Primary: publicnode (same as Betmoar). Fallbacks: other free RPCs.
+// NEXT_PUBLIC_POLYGON_RPC_URL overrides the primary if set.
 const configuredRpc = process.env.NEXT_PUBLIC_POLYGON_RPC_URL;
+
 const rpcTransports = [
-  ...(configuredRpc ? [http(configuredRpc)] : []),
-  ...PUBLIC_POLYGON_RPC_URLS.map((url) => http(url)),
+  http(configuredRpc || "https://polygon-bor-rpc.publicnode.com"),
+  http("https://polygon-rpc.com"),
+  http("https://1rpc.io/matic"),
+  http("https://rpc.ankr.com/polygon"),
 ];
 
 const wagmiConfig = createConfig({

@@ -116,7 +116,7 @@ function buildCsp(): string {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob: https: http:",
     "font-src 'self' data: https://fonts.gstatic.com",
-    "connect-src 'self' https://gamma-api.polymarket.com https://data-api.polymarket.com https://clob.polymarket.com https://rpc.ankr.com https://polygon-rpc.com https://polygon.llamarpc.com https://1rpc.io https://*.blockpi.network https://*.zan.top https://*.basemaps.cartocdn.com https://basemaps.cartocdn.com https://cdn.jsdelivr.net https://manifest.googlevideo.com https://*.googlevideo.com",
+    "connect-src 'self' https://gamma-api.polymarket.com https://data-api.polymarket.com https://clob.polymarket.com https://*.publicnode.com https://polygon-rpc.com https://1rpc.io https://rpc.ankr.com https://*.zan.top https://*.basemaps.cartocdn.com https://basemaps.cartocdn.com https://cdn.jsdelivr.net https://manifest.googlevideo.com https://*.googlevideo.com",
     "media-src 'self' blob: https://*.googlevideo.com https://*.akamaized.net https://*.amagi.tv https://*.trt.com.tr https://*.nhkworld.jp",
     "worker-src 'self' blob:",
     "child-src 'self' blob:",
