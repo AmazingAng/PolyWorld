@@ -1245,6 +1245,12 @@ export default function Home() {
         onTradePosition={(conditionId, outcome) => {
           // Find the market containing this conditionId and build a full TradeModalState
           const allMarkets = [...mapped, ...unmapped];
+          console.log("[onTradePosition] looking for conditionId:", conditionId, "outcome:", outcome);
+          // Log first market's structure for debugging
+          if (allMarkets[0]?.markets[0]) {
+            const sample = allMarkets[0].markets[0];
+            console.log("[onTradePosition] sample market:", { id: sample.id, conditionId: (sample as unknown as Record<string, unknown>).conditionId, clobTokenIds: sample.clobTokenIds });
+          }
           for (const ev of allMarkets) {
             for (const m of ev.markets) {
               const ids = (() => {
@@ -1257,8 +1263,11 @@ export default function Home() {
                 const raw = Array.isArray(m.outcomePrices) ? m.outcomePrices : JSON.parse(m.outcomePrices as string);
                 return raw.map((p: string) => parseFloat(p));
               })();
-              // Match: conditionId could be the sub-market id or found in token ids
-              if (ids.length >= 2 && (m.id === conditionId || ids.includes(conditionId))) {
+              // Match by sub-market id, condition id, token ids, or event id
+              const match = m.id === conditionId || ev.id === conditionId || ids.includes(conditionId)
+                || (m as unknown as Record<string, unknown>).conditionId === conditionId;
+              if (ids.length >= 2 && match) {
+                console.log("[onTradePosition] MATCHED:", ev.title, "m.id:", m.id, "ids:", ids);
                 const yesTokenId = String(ids[0]);
                 const noTokenId = String(ids[1]);
                 const yesPrice = prices[0] ?? ev.prob ?? 0.5;
