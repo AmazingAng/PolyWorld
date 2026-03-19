@@ -336,12 +336,12 @@ export default function Home() {
   const isFirstLoad = useRef(true);
   const lbCacheRef = useRef<Record<string, import("@/types").SmartWallet[]>>({});
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
     const { setMapped, setUnmapped, setLoading, setDataMode, setLastSyncTime, setSignals, setNewMarkets, setLastRefresh } = useMarketStore.getState();
     setLoading(true);
     setNewMarkets([]);
     try {
-      const res = await fetch("/api/markets");
+      const res = await fetch("/api/markets", { signal });
       if (!res.ok) throw new Error("API error");
       const data = await res.json();
       const m: ProcessedMarket[] = data.mapped || [];
@@ -381,7 +381,8 @@ export default function Home() {
       } else {
         throw new Error("No events in DB");
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setRefreshError(true);
       const sample = getSampleData();
       const { mapped: m, unmapped: u } = processEvents(sample);
@@ -394,12 +395,20 @@ export default function Home() {
     setLoading(false);
   }, []);
 
-  const fetchSmartMoney = useCallback(async (period?: LeaderboardPeriod, leaderboardOnly?: boolean) => {
+  const fetchSmartMoney = useCallback(async (periodOrSignal?: LeaderboardPeriod | AbortSignal, leaderboardOnly?: boolean) => {
+    // Support being called from useVisibilityPolling (signal) or directly (period)
+    let period: LeaderboardPeriod | undefined;
+    let signal: AbortSignal | undefined;
+    if (periodOrSignal instanceof AbortSignal) {
+      signal = periodOrSignal;
+    } else {
+      period = periodOrSignal;
+    }
     try {
       const sm = useSmartMoneyStore.getState();
       const p = period ?? sm.leaderboardPeriod;
       const params = `period=${p}${leaderboardOnly ? "&leaderboardOnly=1" : ""}`;
-      const res = await fetch(`/api/smart-money?${params}`);
+      const res = await fetch(`/api/smart-money?${params}`, { signal });
       if (!res.ok) return;
       const data = await res.json();
       const lb = data.leaderboard || [];

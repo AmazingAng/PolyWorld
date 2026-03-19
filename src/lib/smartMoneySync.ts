@@ -2,8 +2,10 @@ import { getDb } from "./db";
 import { fetchLeaderboard, fetchFullLeaderboard, fetchMarketTrades } from "./smartMoney";
 import type { LeaderboardTimePeriod } from "./smartMoney";
 import { SMART_MONEY_MS, LEADERBOARD_MS } from "./syncIntervals";
+import { CircuitBreaker } from "./circuitBreaker";
 
 const SYNC_INTERVAL = SMART_MONEY_MS;
+const smartMoneyBreaker = new CircuitBreaker<void>("smartMoneySync", 5, 60_000);
 const FULL_LEADERBOARD_INTERVAL = LEADERBOARD_MS;
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let fullLeaderboardTimer: ReturnType<typeof setInterval> | null = null;
@@ -98,6 +100,7 @@ async function syncLeaderboardCache(): Promise<void> {
 }
 
 export async function runSmartMoneySync(): Promise<void> {
+  await smartMoneyBreaker.call(async () => {
   const db = getDb();
 
   try {
@@ -211,7 +214,9 @@ export async function runSmartMoneySync(): Promise<void> {
     );
   } catch (err) {
     console.error("[smartMoney] Sync error:", err);
+    throw err; // re-throw so circuit breaker counts it
   }
+  }, undefined).catch(() => {}); // swallow after breaker records
 }
 
 let startupTimer: ReturnType<typeof setTimeout> | null = null;

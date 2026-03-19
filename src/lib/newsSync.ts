@@ -6,9 +6,11 @@ import { isAiConfigured, matchNewsToMarkets } from "./ai";
 import { extractKeywords } from "./keywords";
 import type { NewsItem } from "@/types";
 import { NEWS_SYNC_MS } from "./syncIntervals";
+import { CircuitBreaker } from "./circuitBreaker";
 
 const parser = new RssParser({ timeout: 10_000 });
 const NEWS_SYNC_INTERVAL = NEWS_SYNC_MS;
+const newsBreaker = new CircuitBreaker<{ items: number; matches: number }>("newsSync", 5, 120_000);
 
 const MAX_MATCHES_PER_ITEM = 20; // limit matches per news/tweet to prevent explosion
 
@@ -17,6 +19,7 @@ function makeId(url: string): string {
 }
 
 export async function runNewsSync(): Promise<{ items: number; matches: number }> {
+  return newsBreaker.call(async () => {
   const db = getDb();
   let totalItems = 0;
   let totalMatches = 0;
@@ -93,6 +96,7 @@ export async function runNewsSync(): Promise<{ items: number; matches: number }>
 
   console.info(`[newsSync] OK - ${totalItems} items, ${totalMatches} matches`);
   return { items: totalItems, matches: totalMatches };
+  }, { items: 0, matches: 0 });
 }
 
 function runKeywordMatching(db: ReturnType<typeof getDb>): number {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef, useEffect, useMemo } from "react";
+import { rafSchedule } from "@/lib/rafSchedule";
 
 interface ResizeHandleProps {
   direction: "horizontal" | "vertical";
@@ -13,12 +14,15 @@ export default function ResizeHandle({ direction, onResize, onResizeEnd }: Resiz
   const lastPos = useRef(0);
   const onResizeRef = useRef(onResize);
   const onResizeEndRef = useRef(onResizeEnd);
-  const rafId = useRef(0);
 
   useEffect(() => {
     onResizeRef.current = onResize;
     onResizeEndRef.current = onResizeEnd;
   }, [onResize, onResizeEnd]);
+
+  const scheduledResize = useMemo(() => rafSchedule((delta: number) => {
+    onResizeRef.current(delta);
+  }), []);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -39,17 +43,14 @@ export default function ResizeHandle({ direction, onResize, onResizeEnd }: Resiz
       const delta = pos - lastPos.current;
       if (delta !== 0) {
         lastPos.current = pos;
-        cancelAnimationFrame(rafId.current);
-        rafId.current = requestAnimationFrame(() => {
-          onResizeRef.current(delta);
-        });
+        scheduledResize(delta);
       }
     };
 
     const onMouseUp = () => {
       if (!dragging.current) return;
       dragging.current = false;
-      cancelAnimationFrame(rafId.current);
+      scheduledResize.cancel();
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       document.body.classList.remove("resize-active");
@@ -61,9 +62,9 @@ export default function ResizeHandle({ direction, onResize, onResizeEnd }: Resiz
     return () => {
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
-      cancelAnimationFrame(rafId.current);
+      scheduledResize.cancel();
     };
-  }, [direction]); // only depends on direction, not on callback refs
+  }, [direction, scheduledResize]);
 
   return (
     <div

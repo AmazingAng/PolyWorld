@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useMemo } from "react";
+import { rafSchedule } from "@/lib/rafSchedule";
 
 interface SpanResizeOptions {
   axis: "col" | "row";
@@ -28,8 +29,10 @@ export function useSpanResize({ axis, span, onChange, maxSpan }: SpanResizeOptio
   const dragging = useRef(false);
   const startPos = useRef(0);
   const startSpan = useRef(1);
-  const rafId = useRef(0);
   const lastApplied = useRef(span);
+  const scheduledSpan = useMemo(() => rafSchedule((newSpan: number) => {
+    onChangeRef.current?.(newSpan);
+  }), []);
   const threshold = useRef(axis === "col" ? COL_FALLBACK_THRESHOLD : ROW_DRAG_THRESHOLD);
 
   useEffect(() => {
@@ -51,17 +54,14 @@ export function useSpanResize({ axis, span, onChange, maxSpan }: SpanResizeOptio
       const newSpan = Math.max(1, Math.min(effectiveMax, startSpan.current + spanDelta));
       if (newSpan !== lastApplied.current) {
         lastApplied.current = newSpan;
-        cancelAnimationFrame(rafId.current);
-        rafId.current = requestAnimationFrame(() => {
-          onChangeRef.current?.(newSpan);
-        });
+        scheduledSpan(newSpan);
       }
     };
 
     const onUp = () => {
       if (!dragging.current) return;
       dragging.current = false;
-      cancelAnimationFrame(rafId.current);
+      scheduledSpan.cancel();
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       document.body.classList.remove("resize-active", "resize-col");
@@ -72,9 +72,9 @@ export function useSpanResize({ axis, span, onChange, maxSpan }: SpanResizeOptio
     return () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
-      cancelAnimationFrame(rafId.current);
+      scheduledSpan.cancel();
     };
-  }, [axis, effectiveMax]);
+  }, [axis, effectiveMax, scheduledSpan]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     if (!onChangeRef.current) return;

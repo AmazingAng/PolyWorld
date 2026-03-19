@@ -8,8 +8,10 @@ import { aiGeocodeBatch, addJitter } from "./aiGeo";
 import { isAiConfigured } from "./ai";
 import { geolocate } from "./geo";
 import { MARKET_SYNC_MS } from "./syncIntervals";
+import { CircuitBreaker } from "./circuitBreaker";
 
 const SYNC_INTERVAL = MARKET_SYNC_MS;
+const marketBreaker = new CircuitBreaker<Awaited<ReturnType<typeof fetchEventsFromAPI>>>("marketSync", 5, 60_000);
 
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let geocodeRunning = false;
@@ -93,7 +95,7 @@ export async function runSync(): Promise<{
   const startedAt = new Date().toISOString();
 
   try {
-    const events = await fetchEventsFromAPI();
+    const events = await marketBreaker.call(() => fetchEventsFromAPI(), []);
     const { mapped, unmapped } = processEvents(events);
     const all = [...mapped, ...unmapped];
 

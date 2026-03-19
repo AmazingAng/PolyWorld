@@ -382,34 +382,33 @@ function WorldMapInner({
       };
 
       const animatePulse = () => {
-        if (prefersReducedMotion) {
+        if (prefersReducedMotion || document.hidden) {
           pulseRef.current = requestAnimationFrame(animatePulse);
           return;
         }
         phase = (phase + 0.04) % (2 * Math.PI);
         const sin = Math.sin(phase);
-        if (map.getLayer("signal-glow")) {
-          setPaint("signal-glow", "circle-opacity", clamp01(0.15 + 0.1 * sin));
+        const zoom = map.getZoom();
+        // Skip setPaint for layers not visible at current zoom
+        if (zoom >= 2) {
+          if (map.getLayer("signal-glow")) {
+            setPaint("signal-glow", "circle-opacity", clamp01(0.15 + 0.1 * sin));
+          }
+          if (map.getLayer("signal-pulse-ring")) {
+            setPaint("signal-pulse-ring", "circle-stroke-opacity", clamp01(0.08 + 0.06 * Math.sin(phase * 0.7)));
+          }
+          if (map.getLayer("selected-ring")) {
+            setPaint("selected-ring", "circle-stroke-opacity", clamp01(0.5 + 0.3 * sin));
+            setPaint("selected-ring", "circle-opacity", clamp01(0.08 + 0.04 * sin));
+          }
+          if (map.getLayer("selected-beacon")) {
+            setPaint("selected-beacon", "circle-stroke-opacity", clamp01(0.10 + 0.08 * Math.sin(phase * 0.5)));
+          }
+          if (map.getLayer("anomaly-glow")) {
+            setPaint("anomaly-glow", "circle-opacity", clamp01(0.08 + 0.06 * Math.sin(phase * 1.2)));
+          }
         }
-        // Outer pulse ring
-        if (map.getLayer("signal-pulse-ring")) {
-          setPaint("signal-pulse-ring", "circle-stroke-opacity", clamp01(0.08 + 0.06 * Math.sin(phase * 0.7)));
-        }
-        // Selected market ring pulse + faint glow fill
-        if (map.getLayer("selected-ring")) {
-          setPaint("selected-ring", "circle-stroke-opacity", clamp01(0.5 + 0.3 * sin));
-          setPaint("selected-ring", "circle-opacity", clamp01(0.08 + 0.04 * sin));
-        }
-        // Selected beacon — half-speed breathing
-        if (map.getLayer("selected-beacon")) {
-          setPaint("selected-beacon", "circle-stroke-opacity", clamp01(0.10 + 0.08 * Math.sin(phase * 0.5)));
-        }
-        // Anomaly amber glow pulse
-        if (map.getLayer("anomaly-glow")) {
-          setPaint("anomaly-glow", "circle-opacity", clamp01(0.08 + 0.06 * Math.sin(phase * 1.2)));
-        }
-        // Market breathe glow — slow sine wave
-        if (map.getLayer("market-breathe-glow")) {
+        if (zoom >= 3 && map.getLayer("market-breathe-glow")) {
           const breathe = 0.10 + 0.06 * Math.sin(phase * 0.5);
           setPaint("market-breathe-glow", "circle-opacity", clamp01(breathe));
         }
@@ -765,6 +764,7 @@ function WorldMapInner({
         id: `overlay-${id}-glow`,
         type: "circle",
         source: `overlay-${id}`,
+        minzoom: 2,
         layout: { visibility: "none" },
         paint: {
           "circle-color": color,
@@ -777,6 +777,7 @@ function WorldMapInner({
         id: `overlay-${id}-dot`,
         type: "symbol",
         source: `overlay-${id}`,
+        minzoom: 2,
         layout: {
           visibility: "none",
           "icon-image": spriteId,
@@ -864,6 +865,7 @@ function WorldMapInner({
       type: "circle",
       source: "markets",
       filter: ["has", "point_count"],
+      maxzoom: 8,
       paint: {
         "circle-color": "#4a8c6a",
         "circle-radius": [
@@ -885,6 +887,7 @@ function WorldMapInner({
       type: "circle",
       source: "markets",
       filter: ["has", "point_count"],
+      maxzoom: 8,
       paint: {
         "circle-color": "#1e3a2f",
         "circle-radius": [
@@ -903,6 +906,7 @@ function WorldMapInner({
       type: "symbol",
       source: "markets",
       filter: ["has", "point_count"],
+      maxzoom: 8,
       layout: {
         "text-field": "{point_count_abbreviated}",
         "text-size": [
@@ -930,6 +934,7 @@ function WorldMapInner({
       type: "circle",
       source: "markets",
       filter: ["!", ["has", "point_count"]],
+      minzoom: 3,
       paint: {
         "circle-color": ["get", "color"],
         "circle-radius": [
@@ -978,6 +983,7 @@ function WorldMapInner({
       type: "circle",
       source: "markets",
       filter: ["all", ["!", ["has", "point_count"]], ["get", "hasSignal"]],
+      minzoom: 2,
       paint: {
         "circle-color": ["get", "signalColor"],
         "circle-radius": ["get", "signalRadius"],
@@ -992,6 +998,7 @@ function WorldMapInner({
       type: "circle",
       source: "markets",
       filter: ["all", ["!", ["has", "point_count"]], ["get", "hasSignal"]],
+      minzoom: 2,
       paint: {
         "circle-color": "transparent",
         "circle-radius": ["+", ["get", "signalRadius"], 4],
@@ -1007,6 +1014,7 @@ function WorldMapInner({
       type: "circle",
       source: "markets",
       filter: ["all", ["!", ["has", "point_count"]], ["get", "isAnomaly"]],
+      minzoom: 2,
       paint: {
         "circle-color": "#f59e0b",
         "circle-radius": ["+", ["get", "radius"], 6],
@@ -1037,6 +1045,7 @@ function WorldMapInner({
       type: "circle",
       source: "markets",
       filter: ["all", ["!", ["has", "point_count"]], ["get", "isSelected"]],
+      minzoom: 2,
       paint: {
         "circle-color": "transparent",
         "circle-radius": ["+", ["get", "radius"], 10],

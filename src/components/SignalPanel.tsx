@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ProcessedMarket, SmartWallet, WhaleTrade, NewsItem } from "@/types";
 import { generateSignals, getSignalIcon, type UnifiedSignal, type UnifiedSignalType } from "@/lib/signalEngine";
@@ -50,6 +50,8 @@ function timeAgo(ts: number): string {
 
 /** Hook for page.tsx to get signal data + available categories for the dropdown */
 export function useSignalData(trades: WhaleTrade[], markets: ProcessedMarket[], leaderboard: SmartWallet[]) {
+  const deferredTrades = useDeferredValue(trades);
+  const deferredMarkets = useDeferredValue(markets);
   const [news, setNews] = useState<NewsItem[]>([]);
   const newsRetry = useRef(0);
   const fetchNewsRef = useRef<(() => Promise<void>) | undefined>(undefined);
@@ -78,16 +80,16 @@ export function useSignalData(trades: WhaleTrade[], markets: ProcessedMarket[], 
   }, [fetchNews]);
 
   const signals = useMemo(
-    () => generateSignals(trades, markets, leaderboard, news),
-    [trades, markets, leaderboard, news]
+    () => generateSignals(deferredTrades, deferredMarkets, leaderboard, news),
+    [deferredTrades, deferredMarkets, leaderboard, news]
   );
 
   // Build slug → category lookup
   const slugToCategory = useMemo(() => {
     const map = new Map<string, string>();
-    for (const m of markets) map.set(m.slug, m.category);
+    for (const m of deferredMarkets) map.set(m.slug, m.category);
     return map;
-  }, [markets]);
+  }, [deferredMarkets]);
 
   const categories = useMemo(() => {
     const cats = new Set<string>();

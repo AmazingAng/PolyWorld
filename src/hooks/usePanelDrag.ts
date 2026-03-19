@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { rafSchedule } from "@/lib/rafSchedule";
 
 const DRAG_THRESHOLD = 8;
 const SAME_ROW_TOLERANCE_PX = 18;
@@ -42,9 +43,12 @@ export function usePanelDrag(config: {
     let lastIndicatorSide: string | null = null;
     let lastTargetContainerIdx = -1;
     let ghost: HTMLElement | null = null;
-    let dragFrame = 0;
     let latestClientX = 0;
     let latestClientY = 0;
+    const scheduledDrag = rafSchedule(() => {
+      moveGhost(latestClientX, latestClientY);
+      applyIndicators(latestClientX, latestClientY);
+    });
     let layoutSnapshot: Array<{
       container: HTMLElement;
       rect: DOMRect;
@@ -408,21 +412,13 @@ export function usePanelDrag(config: {
 
       latestClientX = clientX;
       latestClientY = clientY;
-      if (dragFrame) return;
-      dragFrame = requestAnimationFrame(() => {
-        dragFrame = 0;
-        moveGhost(latestClientX, latestClientY);
-        applyIndicators(latestClientX, latestClientY);
-      });
+      scheduledDrag();
     }
 
     function endDrag() {
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
-      if (dragFrame) {
-        cancelAnimationFrame(dragFrame);
-        dragFrame = 0;
-      }
+      scheduledDrag.cancel();
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
       document.body.classList.remove("panel-drag-active");
@@ -518,7 +514,7 @@ export function usePanelDrag(config: {
       document.removeEventListener("touchmove", onTouchMovePrevent);
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
-      if (dragFrame) cancelAnimationFrame(dragFrame);
+      scheduledDrag.cancel();
       removeGhost();
     };
   }, []);
