@@ -211,12 +211,9 @@ export default function Home() {
   const [sigCatFilter, setSigCatFilter] = useState<Set<string>>(new Set());
   const [resStrFilter, setResStrFilter] = useState<Set<string>>(new Set());
   const [resCatFilter, setResCatFilter] = useState<Set<string>>(new Set());
-  const [newsCleared, setNewsCleared] = useState(false);
-  const [tweetsCleared, setTweetsCleared] = useState(false);
+  const [newsFollowMarket, setNewsFollowMarket] = useState(false);
+  const [tweetsFollowMarket, setTweetsFollowMarket] = useState(false);
   const [liveActiveStream, setLiveActiveStream] = useState<StreamSource | null>(null);
-
-  // Reset per-panel market overrides when a new market is selected
-  useEffect(() => { setNewsCleared(false); setTweetsCleared(false); }, [selectedMarket]);
 
   const panelsRef = useRef<HTMLDivElement>(null);
   const bottomPanelsRef = useRef<HTMLDivElement>(null);
@@ -784,7 +781,7 @@ export default function Home() {
           </Panel>
         );
       case "news": {
-        const newsMarket = newsCleared ? null : selectedMarket;
+        const newsMarket = newsFollowMarket ? selectedMarket : null;
         return (
           <Panel
             key="news"
@@ -797,10 +794,20 @@ export default function Home() {
             maxColSpan={maxColSpan}
             headerRight={
               <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: newsMarket ? "var(--green)" : "var(--text-muted)" }}>
-                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: newsMarket ? "var(--green)" : "var(--text-ghost)" }} />
                 <span className="truncate">{newsMarket ? `${newsMarket.title.slice(0, 40)}${newsMarket.title.length > 40 ? "\u2026" : ""}` : "global feed"}</span>
-                {selectedMarket && !newsCleared && (
-                  <button onClick={() => setNewsCleared(true)} className="shrink-0 text-[13px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors leading-none ml-1" title="Show all news">×</button>
+                {selectedMarket && (
+                  <button
+                    onClick={() => setNewsFollowMarket((v) => !v)}
+                    className={`shrink-0 transition-colors leading-none ml-1 ${newsFollowMarket ? "text-[var(--green)]" : "text-[var(--text-ghost)] hover:text-[var(--text)]"}`}
+                    title={newsFollowMarket ? "Unlink from market" : "Follow selected market"}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      {newsFollowMarket
+                        ? <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                        : <><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /><line x1="4" y1="4" x2="20" y2="20" strokeWidth="2.5" /></>
+                      }
+                    </svg>
+                  </button>
                 )}
               </span>
             }
@@ -810,7 +817,7 @@ export default function Home() {
         );
       }
       case "tweets": {
-        const tweetsMarket = tweetsCleared ? null : selectedMarket;
+        const tweetsMarket = tweetsFollowMarket ? selectedMarket : null;
         return (
           <Panel
             key="tweets"
@@ -823,10 +830,20 @@ export default function Home() {
             maxColSpan={maxColSpan}
             headerRight={
               <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: tweetsMarket ? "var(--green)" : "var(--text-muted)" }}>
-                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: tweetsMarket ? "var(--green)" : "var(--text-ghost)" }} />
                 <span className="truncate">{tweetsMarket ? `${tweetsMarket.title.slice(0, 40)}${tweetsMarket.title.length > 40 ? "\u2026" : ""}` : "all accounts"}</span>
-                {selectedMarket && !tweetsCleared && (
-                  <button onClick={() => setTweetsCleared(true)} className="shrink-0 text-[13px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors leading-none ml-1" title="Show all tweets">×</button>
+                {selectedMarket && (
+                  <button
+                    onClick={() => setTweetsFollowMarket((v) => !v)}
+                    className={`shrink-0 transition-colors leading-none ml-1 ${tweetsFollowMarket ? "text-[var(--green)]" : "text-[var(--text-ghost)] hover:text-[var(--text)]"}`}
+                    title={tweetsFollowMarket ? "Unlink from market" : "Follow selected market"}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      {tweetsFollowMarket
+                        ? <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                        : <><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /><line x1="4" y1="4" x2="20" y2="20" strokeWidth="2.5" /></>
+                      }
+                    </svg>
+                  </button>
                 )}
               </span>
             }
