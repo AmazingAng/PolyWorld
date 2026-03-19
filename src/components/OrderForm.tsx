@@ -198,18 +198,12 @@ export default function OrderForm({
 
   const balanceTarget = (proxyAddress ?? address) as `0x${string}` | undefined;
 
-  // Debug: remove after confirming balance reads work
-  useEffect(() => {
-    console.log("[OrderForm] balance debug:", {
-      isConnected, chainId, storeChainId, effectiveChainId,
-      isPolygon, address, proxyAddress, balanceTarget,
-    });
-  }, [isConnected, chainId, storeChainId, effectiveChainId, isPolygon, address, proxyAddress, balanceTarget]);
   const { data: usdcRawBalance, refetch: refetchUsdcBalance } = useReadContract({
     address: USDC_ADDRESS,
     abi: BALANCE_ABI,
     functionName: "balanceOf",
     args: balanceTarget ? [balanceTarget] : undefined,
+    chainId: polygon.id,
     query: { enabled: isConnected && isPolygon && !!balanceTarget, refetchInterval: 30_000 },
   });
   const usdcBalanceDisplay = usdcRawBalance !== undefined
@@ -221,6 +215,7 @@ export default function OrderForm({
     abi: ERC20_ABI,
     functionName: "allowance",
     args: balanceTarget ? [balanceTarget, negRisk ? NEG_RISK_EXCHANGE_ADDR : EXCHANGE_ADDRESS] : undefined,
+    chainId: polygon.id,
     query: { enabled: isConnected && isPolygon && !!balanceTarget },
   });
   const spendUsdc = side === "BUY" ? amountNum : 0;
@@ -232,6 +227,7 @@ export default function OrderForm({
     abi: CTF_ABI,
     functionName: "isApprovedForAll",
     args: balanceTarget ? [balanceTarget, negRisk ? NEG_RISK_EXCHANGE_ADDR : EXCHANGE_ADDRESS] : undefined,
+    chainId: polygon.id,
     query: { enabled: isConnected && isPolygon && !!balanceTarget && side === "SELL" },
   });
   const needsCTFApproval = side === "SELL" && ctfApproved === false;
@@ -249,6 +245,7 @@ export default function OrderForm({
     abi: CTF_ABI,
     functionName: "balanceOf",
     args: balanceTarget && tokenId ? [balanceTarget, BigInt(tokenId)] : undefined,
+    chainId: polygon.id,
     query: { enabled: isConnected && isPolygon && !!balanceTarget && !!tokenId, refetchInterval: 15_000 },
   });
   const sharesHeld = shareBalance !== undefined ? Number(shareBalance) / 1e6 : null;
