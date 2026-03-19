@@ -525,16 +525,16 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
         onMouseLeave={handleMouseLeave}
       >
       <button
-        className={`relative flex items-center justify-center w-7 h-7 border transition-colors overflow-hidden ${
+        className={`relative flex items-center justify-center w-9 h-9 border transition-colors overflow-hidden ${
           open
-            ? "border-[var(--text-faint)] bg-[var(--border-subtle)]"
-            : "border-[var(--border-subtle)] hover:border-[var(--text-ghost)]"
+            ? "border-[var(--text-muted)] bg-[var(--border-subtle)]"
+            : "border-[var(--text-ghost)] hover:border-[var(--text-muted)]"
         }`}
         title={walletName || address || "wallet"}
       >
         {walletIcon ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={walletIcon} alt={walletName} width={18} height={18} className="object-contain" />
+          <img src={walletIcon} alt={walletName} width={22} height={22} className="object-contain" />
         ) : (
           walletFallback
         )}
