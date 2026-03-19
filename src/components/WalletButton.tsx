@@ -440,12 +440,12 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
           onMouseLeave={() => { portfolioTimer.current = setTimeout(() => setPortfolioOpen(false), 300); }}
         >
           <div
-            className="flex items-center gap-2.5 px-2.5 py-1 text-[11px] tabular-nums border border-[var(--border-subtle)] cursor-default"
+            className="flex items-center gap-3 px-3 py-1.5 text-[13px] tabular-nums border border-[var(--border-subtle)] cursor-default"
             style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.4)" }}
           >
             {portfolioValue !== null && (
-              <span className="flex items-center gap-1">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--text-faint)] shrink-0">
+              <span className="flex items-center gap-1.5">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--text-faint)] shrink-0">
                   <rect x="2" y="7" width="20" height="14" rx="2"/>
                   <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
                   <line x1="12" y1="12" x2="12" y2="16"/>
@@ -458,8 +458,8 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
               <span className="text-[var(--border)] select-none">|</span>
             )}
             {polyBalance !== null && (
-              <span className="flex items-center gap-1">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--text-faint)] shrink-0">
+              <span className="flex items-center gap-1.5">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--text-faint)] shrink-0">
                   <circle cx="12" cy="12" r="10"/>
                   <path d="M12 6v2M12 16v2M9 9.5c0-1 1.5-1.5 3-1.5s3 .5 3 2-1.5 2-3 2-3 1-3 2 1.5 2 3 2 3-.5 3-1.5"/>
                 </svg>
