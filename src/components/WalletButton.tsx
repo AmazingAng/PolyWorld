@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  useConnect, useDisconnect, useAccount, useChainId,
+  useConnect, useDisconnect, useAccount,
   useSwitchChain, useSignTypedData, useConnectors,
 } from "wagmi";
 import { polygon } from "wagmi/chains";
@@ -52,8 +52,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export default function WalletButton({ onRefresh, loading, lastSyncTime }: WalletButtonProps) {
-  const { address, isConnected, connector } = useAccount();
-  const chainId = useChainId();
+  const { address, isConnected, connector, chainId } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
@@ -88,7 +87,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
   // Sync wagmi → walletStore; restore persisted session on connect
   // Validates the saved session is still alive on the server side
   useEffect(() => {
-    if (isConnected && address && isPolygon) {
+    if (isConnected && address && isPolygon && chainId) {
       setWallet(address, chainId);
       const saved = loadTradeSession(address);
       if (saved) {
@@ -188,7 +187,10 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
   }, [tradeSession, address, markDone]);
 
   const handleConnect = useCallback(() => {
-    const injector = connectors.find((c) => c.id === "injected") ?? connectors[0];
+    // Prefer the generic injected connector, then any EIP-6963 discovered wallet
+    const injector = connectors.find((c) => c.id === "injected")
+      ?? connectors.find((c) => c.type === "injected")
+      ?? connectors[0];
     if (injector) connect({ connector: injector });
   }, [connect, connectors]);
 
@@ -231,7 +233,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
     try {
       const session = await authorizeTradeSession(address, proxy, signTypedDataAsync);
       setTradeSession(session);
-      setWallet(address, chainId);
+      if (chainId) setWallet(address, chainId);
       saveTradeSession(address, session);
     } catch (e) {
       setError(e instanceof Error ? e.message : "authorization failed");

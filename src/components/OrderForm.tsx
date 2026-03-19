@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useAccount, useChainId, useConnect, useSignTypedData, useReadContract, useWalletClient, useWriteContract } from "wagmi";
+import { useAccount, useConnect, useSignTypedData, useReadContract, useWalletClient, useWriteContract } from "wagmi";
 import { polygon } from "wagmi/chains";
 import { useWalletStore } from "@/stores/walletStore";
 import { useToastStore } from "@/stores/toastStore";
@@ -111,8 +111,7 @@ export default function OrderForm({
   const amountInputRef = useRef<HTMLInputElement>(null);
   const BUY_PRESETS = [5, 50, 100, 500] as const;
   const SELL_PRESETS = [10, 25, 50, 100] as const;
-  const { address, isConnected } = useAccount();
-  const chainId = useChainId();
+  const { address, isConnected, chainId } = useAccount();
   const { connect, connectors } = useConnect();
   const { signTypedDataAsync } = useSignTypedData();
   const { signMessageAsync } = useSignMessage();
@@ -298,7 +297,7 @@ export default function OrderForm({
       });
       const session = await authorizeTradeSession(address, proxyAddr, signTypedDataAsync);
       setTradeSession(session);
-      setWallet(address, chainId);
+      if (chainId) setWallet(address, chainId);
       saveTradeSession(address, session);
       setStatus("idle");
     } catch (e) {
