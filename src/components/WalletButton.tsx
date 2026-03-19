@@ -58,7 +58,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
   const { signTypedDataAsync } = useSignTypedData();
-  const { setWallet, clearWallet, tradeSession, setTradeSession, proxyAddress } = useWalletStore();
+  const { setWallet, clearWallet, tradeSession, setTradeSession, proxyAddress, setProxyAddress } = useWalletStore();
   const [authorizing, setAuthorizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [polyBalance, setPolyBalance] = useState<number | null>(null);
@@ -127,10 +127,10 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
     lookupDoneRef.current = address;
 
     const cached = getCachedProxyWallet(address);
-    if (cached) { setResolvedProxy(cached); setProxyNotFound(false); return; }
+    if (cached) { setResolvedProxy(cached); setProxyAddress(cached); setProxyNotFound(false); return; }
 
     lookupProxyWallet(address).then((proxy) => {
-      setResolvedProxy(proxy); setProxyNotFound(false);
+      setResolvedProxy(proxy); setProxyAddress(proxy); setProxyNotFound(false);
     }).catch((e) => {
       if (e instanceof Error && e.message === "PROXY_NOT_FOUND") setProxyNotFound(true);
     });
@@ -217,6 +217,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
     const proxy = manualProxyInput.trim();
     setCachedProxyWallet(address, proxy);
     setResolvedProxy(proxy);
+    setProxyAddress(proxy);
     setProxyNotFound(false);
     setManualProxyInput("");
   }, [address, manualProxyInput]);
