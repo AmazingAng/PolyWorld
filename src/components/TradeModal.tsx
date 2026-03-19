@@ -3,6 +3,9 @@
 import { useEffect, useCallback, useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
+import { useReadContract } from "wagmi";
+import { polygon } from "wagmi/chains";
+import { useWalletStore } from "@/stores/walletStore";
 import type { SmartMoneyFlow } from "@/types";
 
 const OrderForm = dynamic(() => import("./OrderForm"), { ssr: false });
@@ -238,6 +241,27 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
   const isYesActive = state.yesToken ? activeTokenId === state.yesToken.tokenId : !activeName.endsWith(" No");
   const displayedRecentOrders = useMemo(() => recentOrders.slice(0, 3), [recentOrders]);
 
+  // Read share balances for Yes/No tokens
+  const CTF_ADDRESS = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045" as const;
+  const CTF_BALANCE_ABI = [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ name: "account", type: "address" }, { name: "id", type: "uint256" }], outputs: [{ name: "", type: "uint256" }] }] as const;
+  const { proxyAddress, address, isConnected } = useWalletStore();
+  const balanceTarget = (proxyAddress ?? address) as `0x${string}` | undefined;
+
+  const { data: yesShares } = useReadContract({
+    address: CTF_ADDRESS, abi: CTF_BALANCE_ABI, functionName: "balanceOf",
+    args: balanceTarget && state.yesToken ? [balanceTarget, BigInt(state.yesToken.tokenId)] : undefined,
+    chainId: polygon.id,
+    query: { enabled: isConnected && !!balanceTarget && !!state.yesToken, refetchInterval: 15_000 },
+  });
+  const { data: noShares } = useReadContract({
+    address: CTF_ADDRESS, abi: CTF_BALANCE_ABI, functionName: "balanceOf",
+    args: balanceTarget && state.noToken ? [balanceTarget, BigInt(state.noToken.tokenId)] : undefined,
+    chainId: polygon.id,
+    query: { enabled: isConnected && !!balanceTarget && !!state.noToken, refetchInterval: 15_000 },
+  });
+  const yesSharesNum = yesShares !== undefined ? Number(yesShares) / 1e6 : null;
+  const noSharesNum = noShares !== undefined ? Number(noShares) / 1e6 : null;
+
   return createPortal(
     <div
       className="fixed inset-0 z-[10000] flex items-center justify-center"
@@ -264,23 +288,33 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
               <div className="flex gap-2">
                 <button
                   onClick={() => selectToken(state.yesToken!)}
-                  className={`flex-1 py-2 text-[12px] font-bold transition-colors ${
+                  className={`flex-1 py-2 text-[12px] font-bold transition-colors flex flex-col items-center gap-0.5 ${
                     isYesActive
                       ? "bg-[#22c55e] text-black"
                       : "bg-[#22c55e]/10 text-[#22c55e] hover:bg-[#22c55e]/20"
                   }`}
                 >
-                  Yes {(state.yesToken!.price * 100).toFixed(1)}¢
+                  <span>Yes {(state.yesToken!.price * 100).toFixed(1)}¢</span>
+                  {yesSharesNum !== null && yesSharesNum > 0 && (
+                    <span className={`text-[9px] font-normal ${isYesActive ? "opacity-70" : "opacity-50"}`}>
+                      {yesSharesNum.toFixed(2)} shares
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => selectToken(state.noToken!)}
-                  className={`flex-1 py-2 text-[12px] font-bold transition-colors ${
+                  className={`flex-1 py-2 text-[12px] font-bold transition-colors flex flex-col items-center gap-0.5 ${
                     !isYesActive
                       ? "bg-[#ff4444] text-white"
                       : "bg-[#ff4444]/10 text-[#ff4444] hover:bg-[#ff4444]/20"
                   }`}
                 >
-                  No {(state.noToken!.price * 100).toFixed(1)}¢
+                  <span>No {(state.noToken!.price * 100).toFixed(1)}¢</span>
+                  {noSharesNum !== null && noSharesNum > 0 && (
+                    <span className={`text-[9px] font-normal ${!isYesActive ? "opacity-70" : "opacity-50"}`}>
+                      {noSharesNum.toFixed(2)} shares
+                    </span>
+                  )}
                 </button>
               </div>
             ) : (
