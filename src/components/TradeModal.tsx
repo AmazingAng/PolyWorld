@@ -295,11 +295,9 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                   }`}
                 >
                   <span>Yes {(state.yesToken!.price * 100).toFixed(1)}¢</span>
-                  {yesSharesNum !== null && yesSharesNum > 0 && (
-                    <span className={`text-[9px] font-normal ${isYesActive ? "opacity-70" : "opacity-50"}`}>
-                      {yesSharesNum.toFixed(2)} shares
-                    </span>
-                  )}
+                  <span className={`text-[9px] font-bold tabular-nums ${isYesActive ? "opacity-70" : "opacity-50"}`}>
+                    {yesSharesNum !== null && yesSharesNum > 0 ? `${yesSharesNum.toFixed(2)} shares` : "\u00A0"}
+                  </span>
                 </button>
                 <button
                   onClick={() => selectToken(state.noToken!)}
@@ -310,11 +308,9 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                   }`}
                 >
                   <span>No {(state.noToken!.price * 100).toFixed(1)}¢</span>
-                  {noSharesNum !== null && noSharesNum > 0 && (
-                    <span className={`text-[9px] font-normal ${!isYesActive ? "opacity-70" : "opacity-50"}`}>
-                      {noSharesNum.toFixed(2)} shares
-                    </span>
-                  )}
+                  <span className={`text-[9px] font-bold tabular-nums ${!isYesActive ? "opacity-70" : "opacity-50"}`}>
+                    {noSharesNum !== null && noSharesNum > 0 ? `${noSharesNum.toFixed(2)} shares` : "\u00A0"}
+                  </span>
                 </button>
               </div>
             ) : (
