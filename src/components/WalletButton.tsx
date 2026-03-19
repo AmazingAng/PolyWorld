@@ -431,12 +431,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
   const syncText = lastSyncTime ? getRelativeTime(lastSyncTime) : null;
 
   return (
-    <div
-      className="relative flex items-center gap-2"
-      ref={dropdownRef}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
+    <div className="flex items-center gap-2">
       {/* Portfolio — hover for position details */}
       {(portfolioValue !== null || polyBalance !== null) && (
         <div
@@ -522,7 +517,13 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
         </div>
       )}
 
-      {/* Wallet icon button */}
+      {/* Wallet icon button + dropdown */}
+      <div
+        className="relative"
+        ref={dropdownRef}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
       <button
         className={`relative flex items-center justify-center w-7 h-7 border transition-colors overflow-hidden ${
           open
@@ -659,6 +660,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 }
