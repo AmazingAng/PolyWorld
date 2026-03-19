@@ -85,7 +85,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
   };
 
   // Sync wagmi → walletStore; restore persisted session on connect
-  // Validates the saved session is still alive on the server side
+  // Validates the saved session; if server lost it, silently re-authorize
   useEffect(() => {
     if (isConnected && address && isPolygon && chainId) {
       setWallet(address, chainId);
@@ -96,12 +96,25 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime }: Walle
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionToken: saved.sessionToken }),
-        }).then((res) => {
+        }).then(async (res) => {
           if (res.ok) {
             setTradeSession(saved);
           } else {
-            // Session expired on server — clear stale token
-            clearSavedTradeSession(address);
+            // Session expired on server — silently re-authorize
+            // (user already authorized before, so we have proxy cached)
+            const proxy = saved.proxyAddress;
+            if (proxy && signTypedDataAsync) {
+              try {
+                const session = await authorizeTradeSession(address, proxy, signTypedDataAsync);
+                setTradeSession(session);
+                saveTradeSession(address, session);
+              } catch {
+                // Signature rejected or failed — clear stale session
+                clearSavedTradeSession(address);
+              }
+            } else {
+              clearSavedTradeSession(address);
+            }
           }
         }).catch(() => {
           // Network error — still load optimistically
