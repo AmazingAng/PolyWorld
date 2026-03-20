@@ -639,6 +639,10 @@ export default function Home() {
       yesToken: isBinary && yesTokenId ? { tokenId: yesTokenId, price: yesPrice, name: "Yes" } : undefined,
       noToken: isBinary && noTokenId ? { tokenId: noTokenId, price: noPrice, name: "No" } : undefined,
       smartMoney: market.smartMoney,
+      volume: market.volume,
+      volume24h: market.volume24h,
+      liquidity: market.liquidity,
+      recentChange: market.recentChange,
     });
   }, []);
 
@@ -1278,6 +1282,10 @@ export default function Home() {
                   yesToken: { tokenId: yesTokenId, price: yesPrice, name: "Yes" },
                   noToken: { tokenId: noTokenId, price: noPrice, name: "No" },
                   smartMoney: ev.smartMoney,
+                  volume: ev.volume,
+                  volume24h: ev.volume24h,
+                  liquidity: ev.liquidity,
+                  recentChange: ev.recentChange,
                 });
                 return;
               }

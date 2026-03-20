@@ -108,6 +108,10 @@ export default function MarketPreview({ market, onTrade, singleSeries }: MarketP
       yesToken,
       noToken,
       smartMoney: market.smartMoney,
+      volume: market.volume,
+      volume24h: market.volume24h,
+      liquidity: market.liquidity,
+      recentChange: market.recentChange,
     });
   };
 

@@ -27,6 +27,11 @@ export interface TradeModalState {
   yesToken?: TokenInfo;
   noToken?: TokenInfo;
   smartMoney?: SmartMoneyFlow | null;
+  /** Market stats for info bar */
+  volume?: number;
+  volume24h?: number;
+  liquidity?: number;
+  recentChange?: number | null;
 }
 
 const RECENT_ORDERS_KEY = "polyworld:recentOrders";
@@ -366,6 +371,26 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
             ✕
           </button>
         </div>
+
+        {/* ── Market stats bar ── */}
+        {(state.volume != null || state.volume24h != null || state.liquidity != null || state.recentChange != null) && (
+          <div className="flex items-center gap-3 px-4 py-1.5 border-b border-[var(--border-subtle)] text-[10px] tabular-nums text-[var(--text-faint)] shrink-0 flex-wrap">
+            {state.recentChange != null && state.recentChange !== 0 && (
+              <span className={state.recentChange > 0 ? "text-[#22c55e]" : "text-[#ff4444]"}>
+                24h: {state.recentChange > 0 ? "+" : ""}{(state.recentChange * 100).toFixed(1)}%
+              </span>
+            )}
+            {state.volume24h != null && state.volume24h > 0 && (
+              <span>Vol 24h: ${state.volume24h >= 1_000_000 ? `${(state.volume24h / 1_000_000).toFixed(1)}M` : state.volume24h >= 1_000 ? `${(state.volume24h / 1_000).toFixed(0)}K` : state.volume24h.toFixed(0)}</span>
+            )}
+            {state.volume != null && state.volume > 0 && (
+              <span>Vol: ${state.volume >= 1_000_000 ? `${(state.volume / 1_000_000).toFixed(1)}M` : state.volume >= 1_000 ? `${(state.volume / 1_000).toFixed(0)}K` : state.volume.toFixed(0)}</span>
+            )}
+            {state.liquidity != null && state.liquidity > 0 && (
+              <span>Liq: ${state.liquidity >= 1_000_000 ? `${(state.liquidity / 1_000_000).toFixed(1)}M` : state.liquidity >= 1_000 ? `${(state.liquidity / 1_000).toFixed(0)}K` : state.liquidity.toFixed(0)}</span>
+            )}
+          </div>
+        )}
 
         {/* ── Body: two columns ── */}
         <div className="flex flex-1 min-h-0 overflow-hidden">

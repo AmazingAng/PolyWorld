@@ -289,6 +289,10 @@ function MarketDetailPanelInner({
             yesToken: yesTokenId ? { tokenId: yesTokenId, price: yesPrice, name: abbr } : undefined,
             noToken: noTokenId ? { tokenId: noTokenId, price: 1 - yesPrice, name: `${abbr} No` } : undefined,
             smartMoney: market.smartMoney,
+            volume: market.volume,
+            volume24h: market.volume24h,
+            liquidity: market.liquidity,
+            recentChange: market.recentChange,
           });
         };
         return (
@@ -409,6 +413,10 @@ function MarketDetailPanelInner({
                           yesToken: isSimpleYesNoPair ? { tokenId: String(cardAllIds[0]), price: prices[0] ?? 0, name: "Yes" } : undefined,
                           noToken: isSimpleYesNoPair ? { tokenId: String(cardAllIds[1]), price: prices[1] ?? 0, name: "No" } : undefined,
                           smartMoney: market.smartMoney,
+                          volume: market.volume,
+                          volume24h: market.volume24h,
+                          liquidity: market.liquidity,
+                          recentChange: market.recentChange,
                         }); }}
                         className="shrink-0 text-[10px] font-bold px-2.5 py-0.5 transition-colors hover:opacity-80"
                         style={{ background: `${barColor}26`, color: barColor }}
