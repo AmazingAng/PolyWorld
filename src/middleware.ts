@@ -106,9 +106,10 @@ function checkRateLimit(
 // ---------------------------------------------------------------------------
 function buildCsp(): string {
   const isDev = process.env.NODE_ENV !== "production";
+  // Production Next.js still emits small inline bootstraps; Cloudflare proxy injects Insights.
   const scriptSrc = isDev
     ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
-    : "script-src 'self'";
+    : "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com";
 
   return [
     "default-src 'self'",

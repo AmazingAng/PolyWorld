@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Providers from "@/components/Providers";
+import ChunkLoadRecovery from "@/components/ChunkLoadRecovery";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://polyworld.app";
 
@@ -58,6 +59,7 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased">
+        <ChunkLoadRecovery />
         <Providers>
           {children}
         </Providers>

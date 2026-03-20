@@ -23,7 +23,10 @@ export async function GET() {
       // ignore
     }
 
-    return NextResponse.json({ mapped, unmapped, lastSync });
+    return NextResponse.json(
+      { mapped, unmapped, lastSync },
+      { headers: { "Cache-Control": "public, max-age=10, stale-while-revalidate=30" } }
+    );
   } catch (err) {
     return apiError("markets", "Error reading from DB", 500, err);
   }
