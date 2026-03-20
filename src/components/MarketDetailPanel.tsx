@@ -325,7 +325,7 @@ function MarketDetailPanelInner({
             {yesTokenId && !market.closed && (
               <button
                 onClick={(e) => { e.stopPropagation(); openTrade("YES"); }}
-                className={`shrink-0 ${mbBtnSize} font-bold px-3 ml-1.5 transition-colors hover:opacity-80 self-stretch flex items-center`}
+                className={`shrink-0 w-[72px] ${mbBtnSize} font-bold ml-1.5 transition-colors hover:opacity-80 self-stretch flex items-center justify-center`}
                 style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
                 title={`Buy Yes · ${pct.toFixed(1)}%`}
               >
@@ -415,7 +415,7 @@ function MarketDetailPanelInner({
                           liquidity: market.liquidity,
                           recentChange: market.recentChange,
                         }); }}
-                        className={`shrink-0 ${regBtnSize} font-bold px-2.5 py-0.5 transition-colors hover:opacity-80`}
+                        className={`shrink-0 w-[72px] ${regBtnSize} font-bold py-0.5 transition-colors hover:opacity-80 text-center`}
                         style={{ background: `${barColor}26`, color: barColor }}
                         title={`Buy ${label} · ${pct.toFixed(1)}%`}
                       >
