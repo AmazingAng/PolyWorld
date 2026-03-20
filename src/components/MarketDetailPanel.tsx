@@ -252,7 +252,7 @@ function MarketDetailPanelInner({
   const labelColWidth = useMemo(() => {
     if (parsedOutcomes.length === 0) return 56;
     const maxLen = Math.max(...parsedOutcomes.map(o => o.abbr.length));
-    return Math.max(48, Math.min(72, maxLen * 6.5 + 4));
+    return Math.max(48, Math.min(180, maxLen * 6.5 + 4));
   }, [parsedOutcomes]);
 
   // If labels are very long, use a stacked layout (label above bar) instead of inline
@@ -360,7 +360,7 @@ function MarketDetailPanelInner({
         const isSimpleYesNo = outcomeLabels.length === 2 && outcomeLabels[0] === "Yes" && outcomeLabels[1] === "No"
           && (!m.question || m.question === market.title || cardTitle === market.title);
         const maxLabelLen = Math.max(...outcomeLabels.map(l => l.length), 0);
-        const regLabelW = isSimpleYesNo ? 24 : Math.max(40, Math.min(120, maxLabelLen * 7 + 4));
+        const regLabelW = isSimpleYesNo ? 24 : Math.max(40, Math.min(200, maxLabelLen * 7 + 4));
         // Hoist token IDs so outcome rows can set the orderbook focus on click
         const cardAllIds: string[] = m.clobTokenIds
           ? Array.isArray(m.clobTokenIds) ? m.clobTokenIds as string[]
