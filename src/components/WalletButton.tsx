@@ -224,10 +224,21 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
         const data = await res.json();
         const arr = Array.isArray(data) ? data : data.positions || data.data || [];
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const items: PositionItem[] = arr.filter((p: any) => parseFloat(String(p.size || p.shares || 0)) > 0.01).map((p: any) => {
+        const items: PositionItem[] = arr.filter((p: any) => {
+          const size = parseFloat(String(p.size || p.shares || 0));
+          if (size < 0.01) return false;
+          // Filter out closed/redeemed/resolved positions
+          const closed = p.closed || p.resolved || p.redeemed || p.mergeable;
+          if (closed) return false;
+          // Filter out positions with curPrice at 0 or 1 (settled)
+          const cur = parseFloat(String(p.curPrice || p.currentPrice || -1));
+          if (cur <= 0.001 || cur >= 0.999) return false;
+          return true;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        }).map((p: any) => {
           const size = parseFloat(String(p.size || p.shares || 0));
           const avgPrice = parseFloat(String(p.avgPrice || p.price || 0));
-          const curPrice = parseFloat(String(p.curPrice || p.currentPrice || avgPrice));
+          const curPrice = parseFloat(String(p.curPrice || p.currentPrice || 0));
           return {
             conditionId: String(p.conditionId || p.market || ""),
             title: String(p.title || p.question || p.marketTitle || ""),
