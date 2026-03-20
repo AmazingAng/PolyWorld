@@ -304,12 +304,9 @@ function MarketDetailPanelInner({
               >
                 {abbr}
               </span>
-              <div className="flex-1 h-2 bg-[var(--bg)] rounded-sm relative overflow-hidden">
-                <div
-                  className="h-full rounded-sm transition-all duration-500 ease-out"
-                  style={{ width: `${Math.max(pct, 1)}%`, background: `linear-gradient(90deg, #22c55eaa, #22c55e44)` }}
-                />
-              </div>
+              <span className={`text-[10px] tabular-nums shrink-0 ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-dim)]"}`}>
+                {pct.toFixed(0)}%
+              </span>
               <span className={`text-[9px] w-8 text-right tabular-nums shrink-0 ${mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
                 {mChg.text}
               </span>
@@ -401,12 +398,9 @@ function MarketDetailPanelInner({
                     <span className="text-[10px] shrink-0 truncate font-medium" style={{ color: labelColor, width: regLabelW }} title={label}>
                       {label}
                     </span>
-                    <div className="flex-1 h-3 bg-[var(--bg)] rounded-sm relative overflow-hidden">
-                      <div
-                        className="h-full rounded-sm transition-all duration-500 ease-out"
-                        style={{ width: `${Math.max(pct, 2)}%`, background: `linear-gradient(90deg, ${barColor}99, ${barColor}44)` }}
-                      />
-                    </div>
+                    <span className="text-[10px] tabular-nums shrink-0" style={{ color: isW ? "#22c55e" : "var(--text-dim)" }}>
+                      {pct.toFixed(0)}%
+                    </span>
                     <div className="flex-1" />
                     {rowTokenId && !market.closed ? (
                       <button
