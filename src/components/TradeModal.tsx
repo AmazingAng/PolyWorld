@@ -271,7 +271,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
       <div
         className="relative w-full mx-4 bg-[var(--bg)] border border-[var(--border)] font-mono outline-none flex flex-col"
         style={{
-          maxWidth: 460,
+          maxWidth: 560,
           maxHeight: "calc(100vh - 48px)",
           boxShadow: "0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)",
         }}
