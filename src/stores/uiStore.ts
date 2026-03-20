@@ -11,9 +11,9 @@ const DEFAULT_PANEL_VISIBILITY: PanelVisibility = {
 };
 
 const DEFAULT_PANEL_ORDER = [
-  "signals", "markets", "smartMoney", "news", "watchlist",
-  "tweets", "whaleTrades", "sentiment", "leaderboard", "trader",
-  "chart", "arbitrage", "calendar", "resolution", "portfolio", "live", "country",
+  "markets", "watchlist", "signals", "smartMoney", "whaleTrades",
+  "news", "tweets", "sentiment", "leaderboard", "chart",
+  "portfolio", "trader", "arbitrage", "resolution", "calendar", "live", "country",
 ];
 
 interface UIState {

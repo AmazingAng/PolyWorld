@@ -40,7 +40,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
     resolution: true,
     portfolio: true,
   },
-  panelOrder: ["signals", "markets", "smartMoney", "news", "watchlist", "tweets", "whaleTrades", "sentiment", "leaderboard", "trader", "chart", "arbitrage", "calendar", "resolution", "portfolio", "live", "country"],
+  panelOrder: ["markets", "watchlist", "signals", "smartMoney", "whaleTrades", "news", "tweets", "sentiment", "leaderboard", "chart", "portfolio", "trader", "arbitrage", "resolution", "calendar", "live", "country"],
   activeCategories: [
     "Politics", "Crypto", "Sports",
     "Finance", "Tech", "Culture", "Other",
