@@ -7,6 +7,8 @@ import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 interface NewsPanelProps {
   selectedMarket: ProcessedMarket | null;
+  sourceFilter: string | null;
+  onSourcesChange?: (sources: string[]) => void;
 }
 
 const SOURCE_ABBREVS: Record<string, string> = {
@@ -169,11 +171,10 @@ function NewsPopover({
   );
 }
 
-export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
+export default function NewsPanel({ selectedMarket, sourceFilter, onSourcesChange }: NewsPanelProps) {
   const [items, setItems] = useState<ExtendedNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const [hoveredItem, setHoveredItem] = useState<ExtendedNewsItem | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -236,36 +237,13 @@ export default function NewsPanel({ selectedMarket }: NewsPanelProps) {
     return NEWS_SOURCES.filter((s) => set.has(s.name));
   }, [items]);
 
+  // Notify parent of available sources for header dropdown
+  useEffect(() => {
+    onSourcesChange?.(activeSources.map(s => s.name));
+  }, [activeSources, onSourcesChange]);
+
   return (
     <div>
-      {/* Source filter pills */}
-      <div className="flex gap-1 flex-wrap mb-2">
-        <button
-          onClick={() => setSourceFilter(null)}
-          className="text-[10px] font-mono px-1.5 py-0.5 border transition-colors"
-          style={{
-            borderColor: !sourceFilter ? "rgba(68,255,136,0.4)" : "var(--border)",
-            color: !sourceFilter ? "var(--green)" : "var(--text-muted)",
-            background: !sourceFilter ? "rgba(68,255,136,0.08)" : "transparent",
-          }}
-        >
-          ALL
-        </button>
-        {activeSources.map((s) => (
-          <button
-            key={s.name}
-            onClick={() => setSourceFilter(sourceFilter === s.name ? null : s.name)}
-            className="text-[10px] font-mono px-1.5 py-0.5 border transition-colors"
-            style={{
-              borderColor: sourceFilter === s.name ? "rgba(68,255,136,0.4)" : "var(--border)",
-              color: sourceFilter === s.name ? "var(--green)" : "var(--text-muted)",
-              background: sourceFilter === s.name ? "rgba(68,255,136,0.08)" : "transparent",
-            }}
-          >
-            {SOURCE_ABBREVS[s.name] || s.name.slice(0, 3).toUpperCase()}
-          </button>
-        ))}
-      </div>
 
       {/* Loading skeleton */}
       {loading && items.length === 0 && (

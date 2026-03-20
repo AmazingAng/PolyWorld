@@ -213,6 +213,10 @@ export default function Home() {
   const [resCatFilter, setResCatFilter] = useState<Set<string>>(new Set());
   const [newsFollowMarket, setNewsFollowMarket] = useState(false);
   const [tweetsFollowMarket, setTweetsFollowMarket] = useState(false);
+  const [newsSourceFilter, setNewsSourceFilter] = useState<string | null>(null);
+  const [newsActiveSources, setNewsActiveSources] = useState<string[]>([]);
+  const [tweetsHandleFilter, setTweetsHandleFilter] = useState<string | null>(null);
+  const [tweetsActiveHandles, setTweetsActiveHandles] = useState<string[]>([]);
   const [liveActiveStream, setLiveActiveStream] = useState<StreamSource | null>(null);
 
   const panelsRef = useRef<HTMLDivElement>(null);
@@ -797,12 +801,19 @@ export default function Home() {
             rowSpan={rowSpanFor("news")}
             maxColSpan={maxColSpan}
             headerRight={
-              <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: newsMarket ? "var(--green)" : "var(--text-muted)" }}>
-                <span className="truncate">{newsMarket ? `${newsMarket.title.slice(0, 40)}${newsMarket.title.length > 40 ? "\u2026" : ""}` : "global feed"}</span>
+              <span className="flex items-center gap-1.5 text-[10px] font-mono">
+                <select
+                  value={newsSourceFilter ?? ""}
+                  onChange={(e) => setNewsSourceFilter(e.target.value || null)}
+                  className="bg-transparent border border-[var(--border)] text-[var(--text-muted)] text-[10px] px-1 py-0.5 outline-none cursor-pointer hover:border-[var(--text-ghost)] transition-colors"
+                >
+                  <option value="">All Sources</option>
+                  {newsActiveSources.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
                 {selectedMarket && (
                   <button
                     onClick={() => setNewsFollowMarket((v) => !v)}
-                    className={`shrink-0 transition-colors leading-none ml-1 ${newsFollowMarket ? "text-[var(--green)]" : "text-[var(--text-ghost)] hover:text-[var(--text)]"}`}
+                    className={`shrink-0 transition-colors leading-none ${newsFollowMarket ? "text-[var(--green)]" : "text-[var(--text-ghost)] hover:text-[var(--text)]"}`}
                     title={newsFollowMarket ? "Unlink from market" : "Follow selected market"}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -816,7 +827,7 @@ export default function Home() {
               </span>
             }
           >
-            <NewsPanel selectedMarket={newsMarket} />
+            <NewsPanel selectedMarket={newsMarket} sourceFilter={newsSourceFilter} onSourcesChange={setNewsActiveSources} />
           </Panel>
         );
       }
@@ -833,12 +844,19 @@ export default function Home() {
             rowSpan={rowSpanFor("tweets")}
             maxColSpan={maxColSpan}
             headerRight={
-              <span className="flex items-center gap-1 text-[10px] font-mono truncate max-w-[250px]" style={{ color: tweetsMarket ? "var(--green)" : "var(--text-muted)" }}>
-                <span className="truncate">{tweetsMarket ? `${tweetsMarket.title.slice(0, 40)}${tweetsMarket.title.length > 40 ? "\u2026" : ""}` : "all accounts"}</span>
+              <span className="flex items-center gap-1.5 text-[10px] font-mono">
+                <select
+                  value={tweetsHandleFilter ?? ""}
+                  onChange={(e) => setTweetsHandleFilter(e.target.value || null)}
+                  className="bg-transparent border border-[var(--border)] text-[var(--text-muted)] text-[10px] px-1 py-0.5 outline-none cursor-pointer hover:border-[var(--text-ghost)] transition-colors"
+                >
+                  <option value="">All Accounts</option>
+                  {tweetsActiveHandles.map((h) => <option key={h} value={h}>@{h}</option>)}
+                </select>
                 {selectedMarket && (
                   <button
                     onClick={() => setTweetsFollowMarket((v) => !v)}
-                    className={`shrink-0 transition-colors leading-none ml-1 ${tweetsFollowMarket ? "text-[var(--green)]" : "text-[var(--text-ghost)] hover:text-[var(--text)]"}`}
+                    className={`shrink-0 transition-colors leading-none ${tweetsFollowMarket ? "text-[var(--green)]" : "text-[var(--text-ghost)] hover:text-[var(--text)]"}`}
                     title={tweetsFollowMarket ? "Unlink from market" : "Follow selected market"}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -852,7 +870,7 @@ export default function Home() {
               </span>
             }
           >
-            <TweetsPanel selectedMarket={tweetsMarket} />
+            <TweetsPanel selectedMarket={tweetsMarket} handleFilter={tweetsHandleFilter} onHandlesChange={setTweetsActiveHandles} />
           </Panel>
         );
       }

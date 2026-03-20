@@ -7,6 +7,8 @@ import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 interface TweetsPanelProps {
   selectedMarket: ProcessedMarket | null;
+  handleFilter: string | null;
+  onHandlesChange?: (handles: string[]) => void;
 }
 
 function timeAgo(dateStr: string): string {
@@ -122,11 +124,10 @@ function TweetPopover({
   );
 }
 
-export default function TweetsPanel({ selectedMarket }: TweetsPanelProps) {
+export default function TweetsPanel({ selectedMarket, handleFilter, onHandlesChange }: TweetsPanelProps) {
   const [items, setItems] = useState<TweetItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [handleFilter, setHandleFilter] = useState<string | null>(null);
   const [hoveredItem, setHoveredItem] = useState<TweetItem | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -189,36 +190,13 @@ export default function TweetsPanel({ selectedMarket }: TweetsPanelProps) {
     return TWEET_SOURCES.filter((s) => set.has(s.handle));
   }, [items]);
 
+  // Notify parent of available handles for header dropdown
+  useEffect(() => {
+    onHandlesChange?.(activeHandles.map(s => s.handle));
+  }, [activeHandles, onHandlesChange]);
+
   return (
     <div>
-      {/* Handle filter pills */}
-      <div className="flex gap-1 flex-wrap mb-2">
-        <button
-          onClick={() => setHandleFilter(null)}
-          className="text-[10px] font-mono px-1.5 py-0.5 border transition-colors"
-          style={{
-            borderColor: !handleFilter ? "rgba(68,255,136,0.4)" : "var(--border)",
-            color: !handleFilter ? "var(--green)" : "var(--text-muted)",
-            background: !handleFilter ? "rgba(68,255,136,0.08)" : "transparent",
-          }}
-        >
-          ALL
-        </button>
-        {activeHandles.map((s) => (
-          <button
-            key={s.handle}
-            onClick={() => setHandleFilter(handleFilter === s.handle ? null : s.handle)}
-            className="text-[10px] font-mono px-1.5 py-0.5 border transition-colors"
-            style={{
-              borderColor: handleFilter === s.handle ? "rgba(68,255,136,0.4)" : "var(--border)",
-              color: handleFilter === s.handle ? "var(--green)" : "var(--text-muted)",
-              background: handleFilter === s.handle ? "rgba(68,255,136,0.08)" : "transparent",
-            }}
-          >
-            {HANDLE_ABBREVS[s.handle] || s.handle.slice(0, 3).toUpperCase()}
-          </button>
-        ))}
-      </div>
 
       {/* Loading skeleton */}
       {loading && items.length === 0 && (
