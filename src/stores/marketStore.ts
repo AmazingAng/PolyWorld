@@ -57,12 +57,12 @@ export const useMarketStore = create<MarketState & MarketActions>((set) => ({
   selectMarket: (market) => {
     set({ selectedMarket: market, selectedOutcomeTokenId: null });
     try {
-      if (market) sessionStorage.setItem("pw:selectedMarket", market.id);
+      if (market) sessionStorage.setItem("pw:selectedMarket", market.slug);
       else sessionStorage.removeItem("pw:selectedMarket");
-      // Sync URL deep link
+      // Sync URL deep link — use slug for human-readable URLs
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href);
-        if (market) url.searchParams.set("m", market.id);
+        if (market) url.searchParams.set("m", market.slug);
         else url.searchParams.delete("m");
         window.history.replaceState(null, "", url.toString());
       }

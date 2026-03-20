@@ -446,13 +446,13 @@ export default function Home() {
     if (restoredRef.current || (mapped.length === 0 && unmapped.length === 0)) return;
     restoredRef.current = true;
     try {
-      // URL ?m= param takes priority over sessionStorage
+      // URL ?m= param takes priority over sessionStorage (uses slug)
       const urlParams = new URLSearchParams(window.location.search);
-      const urlMarketId = urlParams.get("m");
-      const cachedMarketId = urlMarketId || sessionStorage.getItem("pw:selectedMarket");
+      const urlSlug = urlParams.get("m");
+      const cachedSlug = urlSlug || sessionStorage.getItem("pw:selectedMarket");
       const all = [...mapped, ...unmapped];
-      if (cachedMarketId) {
-        const found = all.find(m => m.id === cachedMarketId);
+      if (cachedSlug) {
+        const found = all.find(m => m.slug === cachedSlug);
         if (found) {
           useMarketStore.getState().selectMarket(found);
           if (found.location) useMarketStore.getState().selectCountry(found.location);
