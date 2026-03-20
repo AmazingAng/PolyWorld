@@ -396,7 +396,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
         <div className="flex flex-1 min-h-0 overflow-hidden">
 
           {/* Left: Order Book */}
-          <div className="w-[180px] shrink-0 border-r border-[var(--border-subtle)] flex flex-col py-2">
+          <div className="w-[220px] shrink-0 border-r border-[var(--border-subtle)] flex flex-col py-2">
             <div className="text-[8px] uppercase tracking-[0.12em] text-[var(--text-ghost)] px-2 pb-1 shrink-0">
               order book
             </div>
