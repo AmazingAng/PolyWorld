@@ -263,6 +263,10 @@ function MarketDetailPanelInner({
   }, [parsedOutcomes]);
 
   // --- Multi-binary outcomes: rows with inline trade strips ---
+  const mbCount = parsedOutcomes.length;
+  const mbLabelSize = mbCount <= 4 ? "text-[12px]" : mbCount <= 8 ? "text-[11px]" : "text-[10px]";
+  const mbBtnSize = mbCount <= 4 ? "text-[11px]" : "text-[9px]";
+  const mbRowPy = mbCount <= 4 ? "py-[9px]" : "py-[7px]";
   const multiBinaryContent = multiBinary && (
     <div>
       {parsedOutcomes.map(({ m, idx, yesPrice, entity, abbr, mChg, isWinner }, i) => {
@@ -298,12 +302,12 @@ function MarketDetailPanelInner({
         return (
           <div key={m.id || idx} className="border-b border-[var(--border-subtle)] last:border-0">
             <div
-              className="flex items-center gap-1.5 py-[7px] px-1.5 cursor-pointer hover:bg-[var(--surface-hover)] transition-colors"
+              className={`flex items-center gap-1.5 ${mbRowPy} px-1.5 cursor-pointer hover:bg-[var(--surface-hover)] transition-colors`}
               title={entity}
               onClick={() => yesTokenId && useMarketStore.getState().setSelectedOutcomeTokenId(yesTokenId)}
             >
               <span
-                className={`text-[10px] shrink-0 truncate ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-secondary)]"}`}
+                className={`${mbLabelSize} shrink-0 truncate ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-secondary)]"}`}
                 style={{ width: labelColWidth }}
               >
                 {abbr}
@@ -316,7 +320,7 @@ function MarketDetailPanelInner({
               {yesTokenId && !market.closed && (
                 <button
                   onClick={(e) => { e.stopPropagation(); openTrade("YES"); }}
-                  className="shrink-0 text-[9px] font-bold px-2.5 py-1 transition-colors hover:opacity-80"
+                  className={`shrink-0 ${mbBtnSize} font-bold px-2.5 py-1 transition-colors hover:opacity-80`}
                   style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
                   title={`Buy Yes · ${pct.toFixed(1)}%`}
                 >
@@ -326,7 +330,7 @@ function MarketDetailPanelInner({
               {noTokenId && !market.closed && (
                 <button
                   onClick={(e) => { e.stopPropagation(); openTrade("NO"); }}
-                  className="shrink-0 text-[9px] font-bold px-2.5 py-1 transition-colors hover:opacity-80"
+                  className={`shrink-0 ${mbBtnSize} font-bold px-2.5 py-1 transition-colors hover:opacity-80`}
                   style={{ background: "rgba(255,68,68,0.15)", color: "#ff4444" }}
                   title={`Buy No · ${noPct.toFixed(1)}%`}
                 >
@@ -350,6 +354,10 @@ function MarketDetailPanelInner({
   const regularContent = !multiBinary && hasOutcomes && (
     <div className="space-y-1">
       {regularCards.map(({ m, i, prices, outcomeLabels, mChg, winnerIdx }) => {
+        const optCount = outcomeLabels.length;
+        const regFontSize = optCount <= 3 ? "text-[12px]" : optCount <= 6 ? "text-[11px]" : "text-[10px]";
+        const regBtnSize = optCount <= 3 ? "text-[11px]" : "text-[10px]";
+        const regRowPy = optCount <= 3 ? "py-1.5" : "py-1";
         let cardTitle = m.groupItemTitle || m.question || "\u2014";
         if (!m.groupItemTitle && m.question && market.title) {
           const q = m.question;
@@ -394,10 +402,10 @@ function MarketDetailPanelInner({
                 return (
                   <div
                     key={j}
-                    className={`flex items-center gap-1.5 rounded-sm -mx-1 px-1 py-1 transition-colors ${rowTokenId && !market.closed ? "cursor-pointer hover:bg-[var(--surface-hover)]" : ""}`}
+                    className={`flex items-center gap-1.5 rounded-sm -mx-1 px-1 ${regRowPy} transition-colors ${rowTokenId && !market.closed ? "cursor-pointer hover:bg-[var(--surface-hover)]" : ""}`}
                     onClick={() => rowTokenId && useMarketStore.getState().setSelectedOutcomeTokenId(rowTokenId)}
                   >
-                    <span className="text-[10px] shrink-0 truncate font-medium" style={{ color: labelColor, width: regLabelW }} title={label}>
+                    <span className={`${regFontSize} shrink-0 truncate font-medium`} style={{ color: labelColor, width: regLabelW }} title={label}>
                       {label}
                     </span>
                     <div className="flex-1" />
@@ -418,7 +426,7 @@ function MarketDetailPanelInner({
                           liquidity: market.liquidity,
                           recentChange: market.recentChange,
                         }); }}
-                        className="shrink-0 text-[10px] font-bold px-2.5 py-0.5 transition-colors hover:opacity-80"
+                        className={`shrink-0 ${regBtnSize} font-bold px-2.5 py-0.5 transition-colors hover:opacity-80`}
                         style={{ background: `${barColor}26`, color: barColor }}
                         title={`Buy ${label} · ${pct.toFixed(1)}%`}
                       >
