@@ -307,15 +307,13 @@ function MarketDetailPanelInner({
               onClick={() => yesTokenId && useMarketStore.getState().setSelectedOutcomeTokenId(yesTokenId)}
             >
               <span
-                className={`${mbLabelSize} shrink-0 truncate ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-secondary)]"}`}
-                style={{ width: labelColWidth }}
+                className={`${mbLabelSize} flex-1 min-w-0 truncate ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-secondary)]"}`}
               >
                 {abbr}
               </span>
-              <span className={`text-[9px] w-8 text-right tabular-nums shrink-0 ${mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
+              <span className={`text-[9px] tabular-nums shrink-0 ${mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
                 {mChg.text}
               </span>
-              <div className="flex-1" />
               {/* YES / NO trade buttons — right aligned */}
               {yesTokenId && !market.closed && (
                 <button
@@ -405,10 +403,9 @@ function MarketDetailPanelInner({
                     className={`flex items-center gap-1.5 rounded-sm -mx-1 px-1 ${regRowPy} transition-colors ${rowTokenId && !market.closed ? "cursor-pointer hover:bg-[var(--surface-hover)]" : ""}`}
                     onClick={() => rowTokenId && useMarketStore.getState().setSelectedOutcomeTokenId(rowTokenId)}
                   >
-                    <span className={`${regFontSize} shrink-0 truncate font-medium`} style={{ color: labelColor, width: regLabelW }} title={label}>
+                    <span className={`${regFontSize} flex-1 min-w-0 truncate font-medium`} style={{ color: labelColor }} title={label}>
                       {label}
                     </span>
-                    <div className="flex-1" />
                     {rowTokenId && !market.closed ? (
                       <button
                         onClick={(e) => { e.stopPropagation(); setTradeModal({
