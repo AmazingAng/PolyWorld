@@ -344,7 +344,7 @@ function MarketDetailPanelInner({
 
   // --- Regular outcomes: card-based display ---
   const regularContent = !multiBinary && hasOutcomes && (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       {regularCards.map(({ m, i, prices, outcomeLabels, mChg, winnerIdx }) => {
         let cardTitle = m.groupItemTitle || m.question || "\u2014";
         if (!m.groupItemTitle && m.question && market.title) {
@@ -370,9 +370,9 @@ function MarketDetailPanelInner({
           && outcomeLabels[0] === "Yes" && outcomeLabels[1] === "No"
           && cardAllIds.length >= 2;
         return (
-        <div key={m.id || i} className={`border border-[var(--border-subtle)] rounded-sm px-2 ${isSimpleYesNo ? "py-1.5" : "py-2"} text-[11px]`}>
+        <div key={m.id || i} className={`border border-[var(--border-subtle)] rounded-sm px-2 py-1 text-[11px]`}>
           {!isSimpleYesNo && (
-            <div className="text-[var(--text)] font-bold text-[11px] line-clamp-1 mb-1" title={m.question || ""}>
+            <div className="text-[var(--text)] font-bold text-[11px] line-clamp-1 mb-0.5" title={m.question || ""}>
               {cardTitle}
             </div>
           )}
@@ -413,7 +413,7 @@ function MarketDetailPanelInner({
                           noToken: isSimpleYesNoPair ? { tokenId: String(cardAllIds[1]), price: prices[1] ?? 0, name: "No" } : undefined,
                           smartMoney: market.smartMoney,
                         }); }}
-                        className="shrink-0 text-[11px] font-bold px-3 py-1.5 transition-colors hover:opacity-80"
+                        className="shrink-0 text-[10px] font-bold px-2 py-0.5 transition-colors hover:opacity-80"
                         style={{ background: `${barColor}26`, color: barColor }}
                         title={`Trade ${label} · ${pct.toFixed(1)}%`}
                       >
