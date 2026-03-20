@@ -451,17 +451,17 @@ export default function Home() {
       const urlSlug = urlParams.get("m");
       const cachedSlug = urlSlug || sessionStorage.getItem("pw:selectedMarket");
       const all = [...mapped, ...unmapped];
+      let target: ProcessedMarket | undefined;
       if (cachedSlug) {
-        const found = all.find(m => m.slug === cachedSlug);
-        if (found) {
-          useMarketStore.getState().selectMarket(found);
-          if (found.location) useMarketStore.getState().selectCountry(found.location);
-        }
-      } else if (all.length > 0) {
-        // Default to highest impact market
-        const top = all.reduce((best, m) => (m.impactScore || 0) > (best.impactScore || 0) ? m : best, all[0]);
-        useMarketStore.getState().selectMarket(top);
-        if (top.location) useMarketStore.getState().selectCountry(top.location);
+        target = all.find(m => m.slug === cachedSlug);
+      }
+      if (!target && all.length > 0) {
+        // Fallback to highest impact market
+        target = all.reduce((best, m) => (m.impactScore || 0) > (best.impactScore || 0) ? m : best, all[0]);
+      }
+      if (target) {
+        useMarketStore.getState().selectMarket(target);
+        if (target.location) useMarketStore.getState().selectCountry(target.location);
       }
       const cachedCountry = sessionStorage.getItem("pw:selectedCountry");
       if (cachedCountry && !useMarketStore.getState().selectedCountry) {
