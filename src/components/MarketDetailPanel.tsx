@@ -316,7 +316,7 @@ function MarketDetailPanelInner({
                   style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
                   title={`Buy Yes · ${pct.toFixed(1)}%`}
                 >
-                  Buy Yes
+                  Yes {pct.toFixed(0)}%
                 </button>
               )}
               {noTokenId && !market.closed && (
@@ -326,7 +326,7 @@ function MarketDetailPanelInner({
                   style={{ background: "rgba(255,68,68,0.15)", color: "#ff4444" }}
                   title={`Buy No · ${noPct.toFixed(1)}%`}
                 >
-                  Buy No
+                  No {noPct.toFixed(0)}%
                 </button>
               )}
             </div>
@@ -396,9 +396,6 @@ function MarketDetailPanelInner({
                     <span className="text-[10px] shrink-0 truncate font-medium" style={{ color: labelColor, width: regLabelW }} title={label}>
                       {label}
                     </span>
-                    <span className="text-[10px] tabular-nums shrink-0" style={{ color: isW ? "#22c55e" : "var(--text-dim)" }}>
-                      {pct.toFixed(0)}%
-                    </span>
                     <div className="flex-1" />
                     {rowTokenId && !market.closed ? (
                       <button
@@ -417,7 +414,7 @@ function MarketDetailPanelInner({
                         style={{ background: `${barColor}26`, color: barColor }}
                         title={`Buy ${label} · ${pct.toFixed(1)}%`}
                       >
-                        Buy
+                        {pct.toFixed(0)}%
                       </button>
                     ) : (
                       <span className="text-[10px] w-8 text-right tabular-nums shrink-0" style={{ color: labelColor }}>
