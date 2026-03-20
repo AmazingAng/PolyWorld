@@ -325,16 +325,6 @@ function MarketDetailPanelInner({
                   Buy {pct.toFixed(0)}%
                 </button>
               )}
-              {noTokenId && !market.closed && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); openTrade("NO"); }}
-                  className={`shrink-0 ${mbBtnSize} font-bold px-2.5 py-1 transition-colors hover:opacity-80`}
-                  style={{ background: "rgba(255,68,68,0.15)", color: "#ff4444" }}
-                  title={`Buy No · ${noPct.toFixed(1)}%`}
-                >
-                  Buy {noPct.toFixed(0)}%
-                </button>
-              )}
             </div>
             {(m.volume24hr || m.liquidity) && (
               <div className="flex items-center gap-2 px-1.5 pb-1 text-[8px] text-[var(--text-ghost)]">
