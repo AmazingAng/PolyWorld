@@ -7,7 +7,7 @@ import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 interface NewsPanelProps {
   selectedMarket: ProcessedMarket | null;
-  sourceFilter: string | null;
+  sourceFilter: Set<string>;
   onSourcesChange?: (sources: string[]) => void;
 }
 
@@ -228,8 +228,8 @@ export default function NewsPanel({ selectedMarket, sourceFilter, onSourcesChang
   useVisibilityPolling(fetchNews, 120_000);
 
   const filteredItems = useMemo(() => {
-    if (!sourceFilter) return items;
-    return items.filter((item) => item.source === sourceFilter);
+    if (sourceFilter.size === 0) return items;
+    return items.filter((item) => sourceFilter.has(item.source));
   }, [items, sourceFilter]);
 
   const activeSources = useMemo(() => {

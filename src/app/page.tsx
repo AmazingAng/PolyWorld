@@ -213,9 +213,9 @@ export default function Home() {
   const [resCatFilter, setResCatFilter] = useState<Set<string>>(new Set());
   const [newsFollowMarket, setNewsFollowMarket] = useState(false);
   const [tweetsFollowMarket, setTweetsFollowMarket] = useState(false);
-  const [newsSourceFilter, setNewsSourceFilter] = useState<string | null>(null);
+  const [newsSourceFilter, setNewsSourceFilter] = useState<Set<string>>(new Set());
   const [newsActiveSources, setNewsActiveSources] = useState<string[]>([]);
-  const [tweetsHandleFilter, setTweetsHandleFilter] = useState<string | null>(null);
+  const [tweetsHandleFilter, setTweetsHandleFilter] = useState<Set<string>>(new Set());
   const [tweetsActiveHandles, setTweetsActiveHandles] = useState<string[]>([]);
   const [liveActiveStream, setLiveActiveStream] = useState<StreamSource | null>(null);
 
@@ -803,13 +803,12 @@ export default function Home() {
             headerRight={
               <span className="flex items-center gap-1.5">
                 <FilterDropdown
-                  label={newsSourceFilter ?? "Source"}
+                  label="Source"
                   groups={[{
                     label: "Source",
                     options: newsActiveSources.map(s => ({ key: s, label: s })),
-                    selected: newsSourceFilter ? new Set([newsSourceFilter]) : new Set<string>(),
-                    onChange: (sel) => setNewsSourceFilter(sel.size > 0 ? [...sel][0] : null),
-                    exclusive: true,
+                    selected: newsSourceFilter,
+                    onChange: setNewsSourceFilter,
                   }]}
                 />
                 {selectedMarket && (
@@ -848,13 +847,12 @@ export default function Home() {
             headerRight={
               <span className="flex items-center gap-1.5">
                 <FilterDropdown
-                  label={tweetsHandleFilter ? `@${tweetsHandleFilter}` : "Account"}
+                  label="Account"
                   groups={[{
                     label: "Account",
                     options: tweetsActiveHandles.map(h => ({ key: h, label: `@${h}` })),
-                    selected: tweetsHandleFilter ? new Set([tweetsHandleFilter]) : new Set<string>(),
-                    onChange: (sel) => setTweetsHandleFilter(sel.size > 0 ? [...sel][0] : null),
-                    exclusive: true,
+                    selected: tweetsHandleFilter,
+                    onChange: setTweetsHandleFilter,
                   }]}
                 />
                 {selectedMarket && (

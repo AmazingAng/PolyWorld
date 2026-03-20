@@ -7,7 +7,7 @@ import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 interface TweetsPanelProps {
   selectedMarket: ProcessedMarket | null;
-  handleFilter: string | null;
+  handleFilter: Set<string>;
   onHandlesChange?: (handles: string[]) => void;
 }
 
@@ -181,8 +181,8 @@ export default function TweetsPanel({ selectedMarket, handleFilter, onHandlesCha
   useVisibilityPolling(fetchTweets, 90_000);
 
   const filteredItems = useMemo(() => {
-    if (!handleFilter) return items;
-    return items.filter((item) => item.handle === handleFilter);
+    if (handleFilter.size === 0) return items;
+    return items.filter((item) => handleFilter.has(item.handle));
   }, [items, handleFilter]);
 
   const activeHandles = useMemo(() => {
