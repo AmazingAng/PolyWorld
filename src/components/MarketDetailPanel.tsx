@@ -300,37 +300,37 @@ function MarketDetailPanelInner({
           });
         };
         return (
-          <div key={m.id || idx} className="border-b border-[var(--border-subtle)] last:border-0">
-            <div
-              className={`flex items-center gap-1.5 ${mbRowPy} px-1.5 cursor-pointer hover:bg-[var(--surface-hover)] transition-colors`}
-              title={entity}
-              onClick={() => yesTokenId && useMarketStore.getState().setSelectedOutcomeTokenId(yesTokenId)}
-            >
-              <span
-                className={`${mbLabelSize} flex-1 min-w-0 truncate ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-secondary)]"}`}
-              >
-                {abbr}
-              </span>
-              <span className={`text-[9px] tabular-nums shrink-0 ${mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
-                {mChg.text}
-              </span>
-              {/* YES / NO trade buttons — right aligned */}
-              {yesTokenId && !market.closed && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); openTrade("YES"); }}
-                  className={`shrink-0 ${mbBtnSize} font-bold px-2.5 py-1 transition-colors hover:opacity-80`}
-                  style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
-                  title={`Buy Yes · ${pct.toFixed(1)}%`}
-                >
-                  Buy {pct.toFixed(0)}%
-                </button>
+          <div
+            key={m.id || idx}
+            className={`flex items-stretch border-b border-[var(--border-subtle)] last:border-0 ${mbRowPy} px-1.5 cursor-pointer hover:bg-[var(--surface-hover)] transition-colors`}
+            title={entity}
+            onClick={() => yesTokenId && useMarketStore.getState().setSelectedOutcomeTokenId(yesTokenId)}
+          >
+            <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className={`${mbLabelSize} flex-1 min-w-0 truncate ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-secondary)]"}`}>
+                  {abbr}
+                </span>
+                <span className={`text-[9px] tabular-nums shrink-0 ${mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
+                  {mChg.text}
+                </span>
+              </div>
+              {(m.volume24hr || m.liquidity) && (
+                <div className="flex items-center gap-2 text-[8px] text-[var(--text-ghost)]">
+                  {m.volume24hr && <span>24h {formatVolume(parseFloat(String(m.volume24hr)))}</span>}
+                  {m.liquidity && <span>liq {formatVolume(parseFloat(String(m.liquidity)))}</span>}
+                </div>
               )}
             </div>
-            {(m.volume24hr || m.liquidity) && (
-              <div className="flex items-center gap-2 px-1.5 pb-1 text-[8px] text-[var(--text-ghost)]">
-                {m.volume24hr && <span>24h {formatVolume(parseFloat(String(m.volume24hr)))}</span>}
-                {m.liquidity && <span>liq {formatVolume(parseFloat(String(m.liquidity)))}</span>}
-              </div>
+            {yesTokenId && !market.closed && (
+              <button
+                onClick={(e) => { e.stopPropagation(); openTrade("YES"); }}
+                className={`shrink-0 ${mbBtnSize} font-bold px-3 ml-1.5 transition-colors hover:opacity-80 self-stretch flex items-center`}
+                style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
+                title={`Buy Yes · ${pct.toFixed(1)}%`}
+              >
+                Buy {pct.toFixed(0)}%
+              </button>
             )}
           </div>
         );
