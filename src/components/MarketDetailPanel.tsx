@@ -294,7 +294,7 @@ function MarketDetailPanelInner({
         return (
           <div key={m.id || idx} className="border-b border-[var(--border-subtle)] last:border-0">
             <div
-              className="flex items-center gap-1.5 py-[5px] px-1.5 cursor-pointer hover:bg-[var(--surface-hover)] transition-colors"
+              className="flex items-center gap-1.5 py-[7px] px-1.5 cursor-pointer hover:bg-[var(--surface-hover)] transition-colors"
               title={entity}
               onClick={() => yesTokenId && useMarketStore.getState().setSelectedOutcomeTokenId(yesTokenId)}
             >
@@ -312,21 +312,21 @@ function MarketDetailPanelInner({
               {yesTokenId && !market.closed && (
                 <button
                   onClick={(e) => { e.stopPropagation(); openTrade("YES"); }}
-                  className="shrink-0 text-[9px] font-bold px-2 py-1 transition-colors hover:opacity-80"
+                  className="shrink-0 text-[9px] font-bold px-2.5 py-1 transition-colors hover:opacity-80"
                   style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
                   title={`Buy Yes · ${pct.toFixed(1)}%`}
                 >
-                  Yes {pct.toFixed(0)}%
+                  Buy {pct.toFixed(0)}%
                 </button>
               )}
               {noTokenId && !market.closed && (
                 <button
                   onClick={(e) => { e.stopPropagation(); openTrade("NO"); }}
-                  className="shrink-0 text-[9px] font-bold px-2 py-1 transition-colors hover:opacity-80"
+                  className="shrink-0 text-[9px] font-bold px-2.5 py-1 transition-colors hover:opacity-80"
                   style={{ background: "rgba(255,68,68,0.15)", color: "#ff4444" }}
                   title={`Buy No · ${noPct.toFixed(1)}%`}
                 >
-                  No {noPct.toFixed(0)}%
+                  Buy {noPct.toFixed(0)}%
                 </button>
               )}
             </div>
@@ -390,7 +390,7 @@ function MarketDetailPanelInner({
                 return (
                   <div
                     key={j}
-                    className={`flex items-center gap-1.5 rounded-sm -mx-1 px-1 py-0.5 transition-colors ${rowTokenId && !market.closed ? "cursor-pointer hover:bg-[var(--surface-hover)]" : ""}`}
+                    className={`flex items-center gap-1.5 rounded-sm -mx-1 px-1 py-1 transition-colors ${rowTokenId && !market.closed ? "cursor-pointer hover:bg-[var(--surface-hover)]" : ""}`}
                     onClick={() => rowTokenId && useMarketStore.getState().setSelectedOutcomeTokenId(rowTokenId)}
                   >
                     <span className="text-[10px] shrink-0 truncate font-medium" style={{ color: labelColor, width: regLabelW }} title={label}>
@@ -410,11 +410,11 @@ function MarketDetailPanelInner({
                           noToken: isSimpleYesNoPair ? { tokenId: String(cardAllIds[1]), price: prices[1] ?? 0, name: "No" } : undefined,
                           smartMoney: market.smartMoney,
                         }); }}
-                        className="shrink-0 text-[10px] font-bold px-2 py-0.5 transition-colors hover:opacity-80"
+                        className="shrink-0 text-[10px] font-bold px-2.5 py-0.5 transition-colors hover:opacity-80"
                         style={{ background: `${barColor}26`, color: barColor }}
                         title={`Buy ${label} · ${pct.toFixed(1)}%`}
                       >
-                        {pct.toFixed(0)}%
+                        Buy {pct.toFixed(0)}%
                       </button>
                     ) : (
                       <span className="text-[10px] w-8 text-right tabular-nums shrink-0" style={{ color: labelColor }}>
