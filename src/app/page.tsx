@@ -801,15 +801,17 @@ export default function Home() {
             rowSpan={rowSpanFor("news")}
             maxColSpan={maxColSpan}
             headerRight={
-              <span className="flex items-center gap-1.5 text-[10px] font-mono">
-                <select
-                  value={newsSourceFilter ?? ""}
-                  onChange={(e) => setNewsSourceFilter(e.target.value || null)}
-                  className="bg-transparent border border-[var(--border)] text-[var(--text-muted)] text-[10px] px-1 py-0.5 outline-none cursor-pointer hover:border-[var(--text-ghost)] transition-colors"
-                >
-                  <option value="">All Sources</option>
-                  {newsActiveSources.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+              <span className="flex items-center gap-1.5">
+                <FilterDropdown
+                  label={newsSourceFilter ?? "Source"}
+                  groups={[{
+                    label: "Source",
+                    options: newsActiveSources.map(s => ({ key: s, label: s })),
+                    selected: newsSourceFilter ? new Set([newsSourceFilter]) : new Set<string>(),
+                    onChange: (sel) => setNewsSourceFilter(sel.size > 0 ? [...sel][0] : null),
+                    exclusive: true,
+                  }]}
+                />
                 {selectedMarket && (
                   <button
                     onClick={() => setNewsFollowMarket((v) => !v)}
@@ -844,15 +846,17 @@ export default function Home() {
             rowSpan={rowSpanFor("tweets")}
             maxColSpan={maxColSpan}
             headerRight={
-              <span className="flex items-center gap-1.5 text-[10px] font-mono">
-                <select
-                  value={tweetsHandleFilter ?? ""}
-                  onChange={(e) => setTweetsHandleFilter(e.target.value || null)}
-                  className="bg-transparent border border-[var(--border)] text-[var(--text-muted)] text-[10px] px-1 py-0.5 outline-none cursor-pointer hover:border-[var(--text-ghost)] transition-colors"
-                >
-                  <option value="">All Accounts</option>
-                  {tweetsActiveHandles.map((h) => <option key={h} value={h}>@{h}</option>)}
-                </select>
+              <span className="flex items-center gap-1.5">
+                <FilterDropdown
+                  label={tweetsHandleFilter ? `@${tweetsHandleFilter}` : "Account"}
+                  groups={[{
+                    label: "Account",
+                    options: tweetsActiveHandles.map(h => ({ key: h, label: `@${h}` })),
+                    selected: tweetsHandleFilter ? new Set([tweetsHandleFilter]) : new Set<string>(),
+                    onChange: (sel) => setTweetsHandleFilter(sel.size > 0 ? [...sel][0] : null),
+                    exclusive: true,
+                  }]}
+                />
                 {selectedMarket && (
                   <button
                     onClick={() => setTweetsFollowMarket((v) => !v)}
