@@ -314,9 +314,9 @@ function MarketDetailPanelInner({
                   onClick={(e) => { e.stopPropagation(); openTrade("YES"); }}
                   className="shrink-0 text-[9px] font-bold px-2 py-1 transition-colors hover:opacity-80"
                   style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
-                  title={`Buy YES · ${pct.toFixed(1)}%`}
+                  title={`Buy Yes · ${pct.toFixed(1)}%`}
                 >
-                  Yes {pct.toFixed(0)}%
+                  Buy Yes
                 </button>
               )}
               {noTokenId && !market.closed && (
@@ -324,9 +324,9 @@ function MarketDetailPanelInner({
                   onClick={(e) => { e.stopPropagation(); openTrade("NO"); }}
                   className="shrink-0 text-[9px] font-bold px-2 py-1 transition-colors hover:opacity-80"
                   style={{ background: "rgba(255,68,68,0.15)", color: "#ff4444" }}
-                  title={`Buy NO · ${noPct.toFixed(1)}%`}
+                  title={`Buy No · ${noPct.toFixed(1)}%`}
                 >
-                  No {noPct.toFixed(0)}%
+                  Buy No
                 </button>
               )}
             </div>
@@ -415,9 +415,9 @@ function MarketDetailPanelInner({
                         }); }}
                         className="shrink-0 text-[10px] font-bold px-2 py-0.5 transition-colors hover:opacity-80"
                         style={{ background: `${barColor}26`, color: barColor }}
-                        title={`Trade ${label} · ${pct.toFixed(1)}%`}
+                        title={`Buy ${label} · ${pct.toFixed(1)}%`}
                       >
-                        {pct.toFixed(0)}%
+                        Buy
                       </button>
                     ) : (
                       <span className="text-[10px] w-8 text-right tabular-nums shrink-0" style={{ color: labelColor }}>
