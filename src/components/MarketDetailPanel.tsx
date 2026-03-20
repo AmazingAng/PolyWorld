@@ -389,6 +389,8 @@ function MarketDetailPanelInner({
           {prices.length > 0 && outcomeLabels.length > 0 ? (
             <div className="space-y-[2px]">
               {outcomeLabels.map((label, j) => {
+                // For simple Yes/No pairs, only show the Yes row
+                if (isSimpleYesNoPair && label === "No") return null;
                 const pct = prices[j] != null ? prices[j] * 100 : 0;
                 const isW = winnerIdx === j;
                 const isYes = label === "Yes";
