@@ -304,21 +304,19 @@ function MarketDetailPanelInner({
               >
                 {abbr}
               </span>
-              <span className={`text-[10px] tabular-nums shrink-0 ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-dim)]"}`}>
-                {pct.toFixed(0)}%
-              </span>
               <span className={`text-[9px] w-8 text-right tabular-nums shrink-0 ${mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
                 {mChg.text}
               </span>
-              {/* YES / NO trade buttons — stop propagation so row click doesn't also fire */}
+              <div className="flex-1" />
+              {/* YES / NO trade buttons — right aligned */}
               {yesTokenId && !market.closed && (
                 <button
                   onClick={(e) => { e.stopPropagation(); openTrade("YES"); }}
                   className="shrink-0 text-[9px] font-bold px-2 py-1 transition-colors hover:opacity-80"
                   style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
-                  title={`Buy YES · ${pct.toFixed(1)}¢`}
+                  title={`Buy YES · ${pct.toFixed(1)}%`}
                 >
-                  Yes {pct.toFixed(0)}¢
+                  Yes {pct.toFixed(0)}%
                 </button>
               )}
               {noTokenId && !market.closed && (
@@ -326,9 +324,9 @@ function MarketDetailPanelInner({
                   onClick={(e) => { e.stopPropagation(); openTrade("NO"); }}
                   className="shrink-0 text-[9px] font-bold px-2 py-1 transition-colors hover:opacity-80"
                   style={{ background: "rgba(255,68,68,0.15)", color: "#ff4444" }}
-                  title={`Buy NO · ${noPct.toFixed(1)}¢`}
+                  title={`Buy NO · ${noPct.toFixed(1)}%`}
                 >
-                  No {noPct.toFixed(0)}¢
+                  No {noPct.toFixed(0)}%
                 </button>
               )}
             </div>
@@ -417,9 +415,9 @@ function MarketDetailPanelInner({
                         }); }}
                         className="shrink-0 text-[11px] font-bold px-3 py-1.5 transition-colors hover:opacity-80"
                         style={{ background: `${barColor}26`, color: barColor }}
-                        title={`Trade ${label} · ${pct.toFixed(1)}¢`}
+                        title={`Trade ${label} · ${pct.toFixed(1)}%`}
                       >
-                        {pct.toFixed(0)}¢
+                        {pct.toFixed(0)}%
                       </button>
                     ) : (
                       <span className="text-[10px] w-8 text-right tabular-nums shrink-0" style={{ color: labelColor }}>
