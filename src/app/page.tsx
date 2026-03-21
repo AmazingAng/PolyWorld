@@ -155,7 +155,6 @@ export default function Home() {
   const isFullscreen = useUIStore((s) => s.isFullscreen);
   const settingsOpen = useUIStore((s) => s.settingsOpen);
   const alertManagerOpen = useUIStore((s) => s.alertManagerOpen);
-  const isDragging = useUIStore((s) => s.isDragging);
   const mapWidthPct = useUIStore((s) => s.mapWidthPct);
   const bottomPanelHeight = useUIStore((s) => s.bottomPanelHeight);
   const bottomPanelCollapsed = useUIStore((s) => s.bottomPanelCollapsed);
@@ -172,7 +171,6 @@ export default function Home() {
   const alertPrefill = useUIStore((s) => s.alertPrefill);
 
   // Stable action selectors — Zustand actions never change identity
-  const setIsDragging = useUIStore((s) => s.setIsDragging);
   const setTimeRange = useUIStore((s) => s.setTimeRange);
   const toggleCategory = useUIStore((s) => s.toggleCategory);
   const toggleFullscreen = useUIStore((s) => s.toggleFullscreen);
@@ -561,7 +559,6 @@ export default function Home() {
       { ref: panelsRef, panelOrder, onReorder: handlePanelReorder, maxCols: 2 },
     ],
     onTransfer: handlePanelTransfer,
-    onDragStateChange: setIsDragging,
   });
 
   // Related markets for detail panel — correlation-based similarity
@@ -1419,11 +1416,11 @@ export default function Home() {
                   {bottomPanelCollapsed ? "\u25B2" : "\u25BC"}
                 </button>
               </div>
-              {!bottomPanelCollapsed && (bottomVisiblePanels.length > 0 || isDragging) && (
+              {!bottomPanelCollapsed && (
                 <div
                   className={`bottom-panels-grid${bottomVisiblePanels.length === 0 ? " bottom-panels-grid-empty" : ""}`}
                   ref={bottomPanelsRef}
-                  style={{ height: bottomPanelHeight }}
+                  style={bottomVisiblePanels.length > 0 ? { height: bottomPanelHeight } : undefined}
                 >
                   {bottomVisiblePanels.map((key) => (
                     <PanelErrorBoundary key={`eb-${key}`} panelName={key}>

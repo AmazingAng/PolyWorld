@@ -9,11 +9,8 @@ const AUTO_SCROLL_MAX_STEP_PX = 22;
 const AUTO_SCROLL_OUTSIDE_TOLERANCE_PX = 28;
 const LAYOUT_ANIMATION_MS = 180;
 const LAYOUT_ANIMATION_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
-const PANEL_DRAG_DEBUG = process.env.NEXT_PUBLIC_PANEL_DRAG_DEBUG === "1" ||
-  (typeof window !== "undefined" && process.env.NODE_ENV === "development");
-const PANEL_DRAG_PERF = typeof window !== "undefined" &&
-  (process.env.NEXT_PUBLIC_PANEL_DRAG_PERF === "1" || PANEL_DRAG_DEBUG ||
-   process.env.NODE_ENV === "development");
+const PANEL_DRAG_DEBUG = process.env.NEXT_PUBLIC_PANEL_DRAG_DEBUG === "1";
+const PANEL_DRAG_PERF = process.env.NEXT_PUBLIC_PANEL_DRAG_PERF === "1";
 
 interface SnapshotPanel {
   el: HTMLElement;
@@ -73,6 +70,20 @@ function arraysEqual(a: string[], b: string[]) {
   return a.length === b.length && a.every((item, idx) => item === b[idx]);
 }
 
+function readRuntimeFlag(storageKey: string, queryKey: string) {
+  if (typeof window === "undefined") return false;
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const queryValue = params.get(queryKey);
+    if (queryValue === "1") return true;
+    if (queryValue === "0") return false;
+    return window.localStorage.getItem(storageKey) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Multi-container drag-to-reorder panels with cross-grid transfer.
  * Uses a live placeholder for slot preview and a lightweight overlay card
@@ -96,6 +107,9 @@ export function usePanelDrag(config: {
   });
 
   useEffect(() => {
+    const debugEnabled = PANEL_DRAG_DEBUG || readRuntimeFlag("polyworld:panelDragDebug", "panelDragDebug");
+    const perfEnabled = PANEL_DRAG_PERF || readRuntimeFlag("polyworld:panelDragPerf", "panelDragPerf") || debugEnabled;
+
     let startX = 0;
     let startY = 0;
     let active = false;
@@ -117,24 +131,123 @@ export function usePanelDrag(config: {
     let autoScrollFrameId = 0;
     let layoutSnapshot: ContainerSnapshot[] = [];
     let snapshotStale = false;
+    let debugOverlay: HTMLDivElement | null = null;
+    let debugOverlayFrameId = 0;
+    const debugState = {
+      phase: "idle",
+      sourceId: "-",
+      sourceContainerIdx: -1,
+      targetContainerIdx: -1,
+      targetIndex: -1,
+      lastFrameMs: 0,
+      avgFrameMs: 0,
+      lastSnapshotMs: 0,
+      avgSnapshotMs: 0,
+      lastSnapshotReason: "idle",
+      lastHitTestMs: 0,
+      lastComputeDropMs: 0,
+      lastMovePlaceholderMs: 0,
+      lastCaptureMs: 0,
+      lastCaptureCount: 0,
+      lastAnimateMs: 0,
+      lastAnimateCount: 0,
+      lastAutoScrollDelta: 0,
+      autoScrollCount: 0,
+      targetChanges: 0,
+      placeholderMoves: 0,
+      lastCommitMs: 0,
+      lastEndMs: 0,
+      notes: "",
+    };
+
+    function ensureDebugOverlay() {
+      if (!debugEnabled || debugOverlay) return;
+      debugOverlay = document.createElement("div");
+      debugOverlay.setAttribute("aria-hidden", "true");
+      debugOverlay.style.position = "fixed";
+      debugOverlay.style.left = "12px";
+      debugOverlay.style.bottom = "12px";
+      debugOverlay.style.zIndex = "10001";
+      debugOverlay.style.minWidth = "260px";
+      debugOverlay.style.maxWidth = "360px";
+      debugOverlay.style.padding = "10px 12px";
+      debugOverlay.style.border = "1px solid rgba(34, 197, 94, 0.45)";
+      debugOverlay.style.background = "rgba(7, 10, 9, 0.92)";
+      debugOverlay.style.boxShadow = "0 12px 28px rgba(0, 0, 0, 0.4)";
+      debugOverlay.style.color = "#d7dfda";
+      debugOverlay.style.fontFamily = "var(--font-mono, monospace)";
+      debugOverlay.style.fontSize = "10px";
+      debugOverlay.style.lineHeight = "1.45";
+      debugOverlay.style.whiteSpace = "pre-wrap";
+      debugOverlay.style.pointerEvents = "none";
+      document.body.appendChild(debugOverlay);
+    }
+
+    function renderDebugOverlay() {
+      if (!debugEnabled) return;
+      ensureDebugOverlay();
+      if (!debugOverlay) return;
+      debugOverlay.textContent = [
+        "PANEL DRAG DEBUG",
+        `phase: ${debugState.phase}`,
+        `source: ${debugState.sourceId} @ c${debugState.sourceContainerIdx}`,
+        `target: c${debugState.targetContainerIdx} / i${debugState.targetIndex}`,
+        `frame: ${debugState.lastFrameMs.toFixed(2)}ms avg ${debugState.avgFrameMs.toFixed(2)}ms`,
+        `snapshot: ${debugState.lastSnapshotMs.toFixed(2)}ms avg ${debugState.avgSnapshotMs.toFixed(2)}ms (${debugState.lastSnapshotReason})`,
+        `hit/drop/move: ${debugState.lastHitTestMs.toFixed(2)} / ${debugState.lastComputeDropMs.toFixed(2)} / ${debugState.lastMovePlaceholderMs.toFixed(2)}ms`,
+        `capture/animate: ${debugState.lastCaptureMs.toFixed(2)}ms (${debugState.lastCaptureCount}) / ${debugState.lastAnimateMs.toFixed(2)}ms (${debugState.lastAnimateCount})`,
+        `autoScroll: ${debugState.lastAutoScrollDelta}px count ${debugState.autoScrollCount}`,
+        `targetChanges: ${debugState.targetChanges} | placeholderMoves: ${debugState.placeholderMoves}`,
+        `commit/end: ${debugState.lastCommitMs.toFixed(2)} / ${debugState.lastEndMs.toFixed(2)}ms`,
+        debugState.notes ? `note: ${debugState.notes}` : "",
+      ].filter(Boolean).join("\n");
+    }
+
+    function scheduleDebugOverlayRender() {
+      if (!debugEnabled || debugOverlayFrameId) return;
+      debugOverlayFrameId = requestAnimationFrame(() => {
+        debugOverlayFrameId = 0;
+        renderDebugOverlay();
+      });
+    }
+
+    function removeDebugOverlay() {
+      if (debugOverlayFrameId) {
+        cancelAnimationFrame(debugOverlayFrameId);
+        debugOverlayFrameId = 0;
+      }
+      if (debugOverlay) {
+        debugOverlay.remove();
+        debugOverlay = null;
+      }
+    }
+
+    function markSnapshotStale(reason: string) {
+      snapshotStale = true;
+      debugState.lastSnapshotReason = reason;
+      scheduleDebugOverlayRender();
+    }
 
     const scheduledDrag = rafSchedule(() => {
-      const _t0 = PANEL_DRAG_PERF ? performance.now() : 0;
+      const _t0 = perfEnabled ? performance.now() : 0;
       if (snapshotStale) {
         snapshotStale = false;
         snapshotLayout();
       }
       moveGhost(latestClientX, latestClientY);
       updateDropTarget(latestClientX, latestClientY);
-      if (PANEL_DRAG_PERF) {
+      if (perfEnabled) {
+        debugState.lastFrameMs = performance.now() - _t0;
         perfFrameCount++;
-        perfFrameTotalMs += performance.now() - _t0;
+        perfFrameTotalMs += debugState.lastFrameMs;
+        debugState.avgFrameMs = perfFrameTotalMs / perfFrameCount;
         perfReport();
       }
+      scheduleDebugOverlayRender();
     });
 
     function debugLog(label: string, payload: Record<string, unknown>) {
-      if (!PANEL_DRAG_DEBUG) return;
+      if (!debugEnabled) return;
       console.log(`[usePanelDrag] ${label}`, payload);
     }
 
@@ -146,10 +259,13 @@ export function usePanelDrag(config: {
     let perfHitTestMs = 0;
     let perfComputeDropMs = 0;
     let perfMovePlaceholderMs = 0;
+    let perfCaptureMs = 0;
+    let perfAnimateMs = 0;
+    let perfCommitMs = 0;
     let perfLastReport = 0;
 
     function perfReport() {
-      if (!PANEL_DRAG_PERF || perfFrameCount === 0) return;
+      if (!perfEnabled || perfFrameCount === 0) return;
       const now = performance.now();
       if (now - perfLastReport < 1000) return; // report every 1s
       perfLastReport = now;
@@ -159,7 +275,8 @@ export function usePanelDrag(config: {
         `snapshot: ${perfSnapshotCount}x total=${perfSnapshotTotalMs.toFixed(1)}ms avg=${perfSnapshotCount ? (perfSnapshotTotalMs / perfSnapshotCount).toFixed(2) : 0}ms | ` +
         `hitTest=${perfHitTestMs.toFixed(1)}ms | ` +
         `computeDrop=${perfComputeDropMs.toFixed(1)}ms | ` +
-        `movePlaceholder=${perfMovePlaceholderMs.toFixed(1)}ms`
+        `movePlaceholder=${perfMovePlaceholderMs.toFixed(1)}ms | ` +
+        `capture=${perfCaptureMs.toFixed(1)}ms | animate=${perfAnimateMs.toFixed(1)}ms | commit=${perfCommitMs.toFixed(1)}ms`
       );
       // reset accumulators
       perfFrameCount = 0;
@@ -169,6 +286,9 @@ export function usePanelDrag(config: {
       perfHitTestMs = 0;
       perfComputeDropMs = 0;
       perfMovePlaceholderMs = 0;
+      perfCaptureMs = 0;
+      perfAnimateMs = 0;
+      perfCommitMs = 0;
     }
 
     function perfReset() {
@@ -179,6 +299,9 @@ export function usePanelDrag(config: {
       perfHitTestMs = 0;
       perfComputeDropMs = 0;
       perfMovePlaceholderMs = 0;
+      perfCaptureMs = 0;
+      perfAnimateMs = 0;
+      perfCommitMs = 0;
       perfLastReport = 0;
     }
 
@@ -194,6 +317,19 @@ export function usePanelDrag(config: {
           child instanceof HTMLElement &&
           child !== sourcePanel &&
           child.hasAttribute("data-panel")
+      );
+    }
+
+    function uniqueElements(elements: Array<HTMLElement | null | undefined>) {
+      return Array.from(new Set(elements.filter((element): element is HTMLElement => Boolean(element))));
+    }
+
+    function getSequenceElements(container: HTMLElement | null) {
+      if (!container) return [];
+      return Array.from(container.children).filter(
+        (child): child is HTMLElement =>
+          child instanceof HTMLElement &&
+          (child === placeholder || (child !== sourcePanel && child.hasAttribute("data-panel")))
       );
     }
 
@@ -401,8 +537,8 @@ export function usePanelDrag(config: {
       return dx * dx + dy * dy;
     }
 
-    function getAnimatableElements() {
-      return getContainers().flatMap((container) =>
+    function getAnimatableElements(containers = getContainers()) {
+      return containers.flatMap((container) =>
         Array.from(container.children).filter(
           (child): child is HTMLElement =>
             child instanceof HTMLElement &&
@@ -410,6 +546,24 @@ export function usePanelDrag(config: {
             (child === placeholder || child.hasAttribute("data-panel"))
         )
       );
+    }
+
+    function captureLayoutStateForElements(elements: HTMLElement[]) {
+      const _t0 = perfEnabled ? performance.now() : 0;
+      const unique = uniqueElements(elements);
+      const rects = new Map<HTMLElement, DOMRect>();
+      for (const el of unique) {
+        rects.set(el, el.getBoundingClientRect());
+      }
+      for (const el of unique) {
+        clearElementLayoutAnimation(el);
+      }
+      if (perfEnabled) {
+        debugState.lastCaptureCount = unique.length;
+        debugState.lastCaptureMs = performance.now() - _t0;
+        perfCaptureMs += debugState.lastCaptureMs;
+      }
+      return rects;
     }
 
     function clearElementLayoutAnimation(el: HTMLElement) {
@@ -425,29 +579,23 @@ export function usePanelDrag(config: {
       el.style.removeProperty("will-change");
     }
 
-    function clearAllLayoutAnimations() {
-      for (const el of getAnimatableElements()) {
+    function clearAllLayoutAnimations(containers?: HTMLElement[]) {
+      const targetElements = containers
+        ? getAnimatableElements(containers)
+        : Array.from(new Set([
+            ...getAnimatableElements(),
+            ...layoutAnimationTimeouts.keys(),
+            ...stableLayoutRects.keys(),
+          ]));
+
+      for (const el of targetElements) {
         clearElementLayoutAnimation(el);
       }
-      layoutAnimationTimeouts.forEach((timeoutId) => window.clearTimeout(timeoutId));
-      layoutAnimationTimeouts.clear();
-      stableLayoutRects.clear();
     }
 
-    function captureLayoutState() {
-      const elements = getAnimatableElements();
-      const rects = new Map<HTMLElement, DOMRect>();
-      for (const el of elements) {
-        rects.set(el, el.getBoundingClientRect());
-      }
-      for (const el of elements) {
-        clearElementLayoutAnimation(el);
-      }
-      return rects;
-    }
-
-    function animateLayoutShift(previousRects: Map<HTMLElement, DOMRect>) {
-      const elements = getAnimatableElements();
+    function animateLayoutShiftForElements(previousRects: Map<HTMLElement, DOMRect>, elements: HTMLElement[]) {
+      const _t0 = perfEnabled ? performance.now() : 0;
+      const unique = uniqueElements(elements);
       const animations: Array<{
         el: HTMLElement;
         dx: number;
@@ -456,7 +604,7 @@ export function usePanelDrag(config: {
         scaleY: number;
       }> = [];
 
-      for (const el of elements) {
+      for (const el of unique) {
         const prevRect = previousRects.get(el);
         if (!prevRect) continue;
         const nextRect = el.getBoundingClientRect();
@@ -480,7 +628,14 @@ export function usePanelDrag(config: {
         animations.push({ el, dx, dy, scaleX, scaleY });
       }
 
-      if (animations.length === 0) return;
+      debugState.lastAnimateCount = animations.length;
+      if (animations.length === 0) {
+        if (perfEnabled) {
+          debugState.lastAnimateMs = performance.now() - _t0;
+          perfAnimateMs += debugState.lastAnimateMs;
+        }
+        return;
+      }
 
       for (const { el, dx, dy, scaleX, scaleY } of animations) {
         clearElementLayoutAnimation(el);
@@ -492,8 +647,6 @@ export function usePanelDrag(config: {
           `translate3d(${dx}px, ${dy}px, 0) scale(${scaleX}, ${scaleY})`
         );
       }
-
-      void document.body.offsetHeight;
 
       requestAnimationFrame(() => {
         for (const { el } of animations) {
@@ -509,10 +662,15 @@ export function usePanelDrag(config: {
           layoutAnimationTimeouts.set(el, timeoutId);
         }
       });
+
+      if (perfEnabled) {
+        debugState.lastAnimateMs = performance.now() - _t0;
+        perfAnimateMs += debugState.lastAnimateMs;
+      }
     }
 
     function snapshotLayout() {
-      const _t0 = PANEL_DRAG_PERF ? performance.now() : 0;
+      const _t0 = perfEnabled ? performance.now() : 0;
       layoutSnapshot = getContainers().map((container, idx) => {
         const maxCols = Math.max(1, configRef.current.grids[idx]?.maxCols ?? 1);
         const metrics = buildContainerMetrics(container, maxCols);
@@ -537,10 +695,11 @@ export function usePanelDrag(config: {
           panels,
         };
       });
-      if (PANEL_DRAG_PERF) {
-        const elapsed = performance.now() - _t0;
-        perfSnapshotTotalMs += elapsed;
+      if (perfEnabled) {
+        debugState.lastSnapshotMs = performance.now() - _t0;
+        perfSnapshotTotalMs += debugState.lastSnapshotMs;
         perfSnapshotCount++;
+        debugState.avgSnapshotMs = perfSnapshotTotalMs / perfSnapshotCount;
       }
 
       debugLog("snapshotLayout", {
@@ -634,8 +793,11 @@ export function usePanelDrag(config: {
       hit.container.scrollTop += deltaY;
       if (hit.container.scrollTop === prevScrollTop) return false;
 
+      debugState.lastAutoScrollDelta = deltaY;
+      debugState.autoScrollCount++;
+      debugState.notes = `autoScroll container=${lastTargetContainerIdx >= 0 ? lastTargetContainerIdx : "?"}`;
       clearAllLayoutAnimations();
-      snapshotStale = true;
+      markSnapshotStale("auto-scroll");
       return true;
     }
 
@@ -746,10 +908,11 @@ export function usePanelDrag(config: {
       }
 
       let target: DropTarget | null;
-      if (PANEL_DRAG_PERF) {
+      if (perfEnabled) {
         const _t0 = performance.now();
         target = resolveInsertionTarget(containerIdx, clientX, clientY);
-        perfHitTestMs += performance.now() - _t0;
+        debugState.lastHitTestMs = performance.now() - _t0;
+        perfHitTestMs += debugState.lastHitTestMs;
       } else {
         target = resolveInsertionTarget(containerIdx, clientX, clientY);
       }
@@ -879,6 +1042,38 @@ export function usePanelDrag(config: {
       }
     }
 
+    function getAffectedElementsForPlaceholderMove(container: HTMLElement, insertIndex: number) {
+      if (!placeholder) return [];
+
+      const previousContainer = placeholder.parentElement instanceof HTMLElement
+        ? placeholder.parentElement
+        : null;
+
+      if (previousContainer === container) {
+        const sequence = getSequenceElements(container);
+        const currentIndex = sequence.indexOf(placeholder);
+        if (currentIndex === -1) {
+          return uniqueElements(sequence.filter((element) => element !== placeholder));
+        }
+
+        const start = Math.max(0, Math.min(currentIndex, insertIndex));
+        const end = Math.min(sequence.length - 1, Math.max(currentIndex, insertIndex));
+        return uniqueElements(
+          sequence.slice(start, end + 1).filter((element) => element !== placeholder)
+        );
+      }
+
+      const previousSequence = getSequenceElements(previousContainer);
+      const previousIndex = previousSequence.indexOf(placeholder);
+      const previousAffected = previousIndex === -1
+        ? []
+        : previousSequence.slice(previousIndex + 1);
+      const nextSequence = getSequenceElements(container).filter((el) => el !== placeholder);
+      const nextAffected = nextSequence.slice(insertIndex);
+
+      return uniqueElements([...previousAffected, ...nextAffected]);
+    }
+
     function movePlaceholderToTarget(target: DropTarget) {
       if (!placeholder) return false;
       const containers = getContainers();
@@ -899,9 +1094,11 @@ export function usePanelDrag(config: {
 
       const actualPanels = getPanelElements(container);
       const referenceNode = actualPanels[target.insertIndex] ?? null;
-      const previousRects = captureLayoutState();
+      const affectedElements = getAffectedElementsForPlaceholderMove(container, target.insertIndex);
+      const previousRects = captureLayoutStateForElements(affectedElements);
+      clearElementLayoutAnimation(placeholder);
       container.insertBefore(placeholder, referenceNode);
-      animateLayoutShift(previousRects);
+      animateLayoutShiftForElements(previousRects, affectedElements);
       lastTargetContainerIdx = target.containerIdx;
       return true;
     }
@@ -954,18 +1151,25 @@ export function usePanelDrag(config: {
     function updateDropTarget(clientX: number, clientY: number) {
       let _t0: number;
 
-      _t0 = PANEL_DRAG_PERF ? performance.now() : 0;
+      _t0 = perfEnabled ? performance.now() : 0;
       const target = computeDropTarget(clientX, clientY);
-      if (PANEL_DRAG_PERF) perfComputeDropMs += performance.now() - _t0;
+      if (perfEnabled) {
+        debugState.lastComputeDropMs = performance.now() - _t0;
+        perfComputeDropMs += debugState.lastComputeDropMs;
+      }
 
       const nextKey = getTargetKey(target);
       if (nextKey === lastTargetKey) return;
       debugLog("updateDropTarget:newTarget", { prevKey: lastTargetKey, nextKey });
+      debugState.targetChanges++;
 
       lastTargetKey = nextKey;
       clearContainerTargets();
 
       if (!target) {
+        debugState.targetContainerIdx = -1;
+        debugState.targetIndex = -1;
+        debugState.notes = "pointer outside all drag containers";
         debugLog("updateDropTarget:none", {
           clientX: Math.round(clientX),
           clientY: Math.round(clientY),
@@ -973,14 +1177,23 @@ export function usePanelDrag(config: {
         return;
       }
 
-      _t0 = PANEL_DRAG_PERF ? performance.now() : 0;
+      _t0 = perfEnabled ? performance.now() : 0;
       const moved = movePlaceholderToTarget(target);
-      if (PANEL_DRAG_PERF) perfMovePlaceholderMs += performance.now() - _t0;
+      if (perfEnabled) {
+        debugState.lastMovePlaceholderMs = performance.now() - _t0;
+        perfMovePlaceholderMs += debugState.lastMovePlaceholderMs;
+      }
 
+      debugState.targetContainerIdx = target.containerIdx;
+      debugState.targetIndex = target.insertIndex;
+      debugState.notes = `hover target c${target.containerIdx} i${target.insertIndex}`;
       getContainers()[target.containerIdx]?.classList.add("panel-drop-target");
 
       if (moved) {
-        snapshotStale = true;
+        debugState.placeholderMoves++;
+        // Placeholder movement does not change the underlying panel order snapshot.
+        // Recomputing the full simulated grid on every hover transition adds noticeable
+        // drag latency when sweeping across cards, so we only invalidate on scroll/activation.
         debugLog("updateDropTarget:moved", {
           clientX: Math.round(clientX),
           clientY: Math.round(clientY),
@@ -1015,6 +1228,13 @@ export function usePanelDrag(config: {
       lastTargetKey = "none";
       lastTargetContainerIdx = containerIdx;
       sourceRect = null;
+      debugState.phase = "press";
+      debugState.sourceId = panel.getAttribute("data-panel") || "-";
+      debugState.sourceContainerIdx = containerIdx;
+      debugState.targetContainerIdx = containerIdx;
+      debugState.targetIndex = -1;
+      debugState.notes = "pointer down on drag handle";
+      scheduleDebugOverlayRender();
 
       debugLog("beginDrag", {
         sourceId: sourcePanel.getAttribute("data-panel"),
@@ -1037,7 +1257,9 @@ export function usePanelDrag(config: {
         if (dx * dx + dy * dy < DRAG_THRESHOLD_SQ) return;
 
         active = true;
-        const _activateT0 = PANEL_DRAG_PERF ? performance.now() : 0;
+        const _activateT0 = perfEnabled ? performance.now() : 0;
+        debugState.phase = "dragging";
+        debugState.notes = "activating drag";
 
         sourceRect = sourcePanel.getBoundingClientRect();
         sourceColSpan = sourcePanel.style.gridColumn
@@ -1046,21 +1268,23 @@ export function usePanelDrag(config: {
         sourceRowSpan = sourcePanel.style.gridRow
           ? Number.parseInt(sourcePanel.style.gridRow.replace(/[^0-9]/g, ""), 10) || 2
           : 2;
-        const previousRects = captureLayoutState();
         createPlaceholder(sourcePanel);
         sourcePanel.classList.add("panel-dragging", "panel-drag-source-hidden");
-        animateLayoutShift(previousRects);
         createGhost(sourcePanel, clientX, clientY);
         document.body.style.userSelect = "none";
         document.body.style.cursor = "grabbing";
         document.body.classList.add("panel-drag-active");
         configRef.current.onDragStateChange?.(true);
         // Defer snapshot to first RAF — avoids 87ms sync reflow during pointer event
-        snapshotStale = true;
+        markSnapshotStale("activate-drag");
 
-        if (PANEL_DRAG_PERF) {
+        if (perfEnabled) {
           console.log(`[drag-perf] activateDrag took ${(performance.now() - _activateT0).toFixed(1)}ms`);
         }
+        debugState.lastCaptureCount = 0;
+        debugState.lastCaptureMs = 0;
+        debugState.lastAnimateCount = 0;
+        debugState.lastAnimateMs = 0;
         perfReset();
 
         debugLog("activateDrag", {
@@ -1084,12 +1308,15 @@ export function usePanelDrag(config: {
     }
 
     function endDrag() {
+      const _endT0 = perfEnabled ? performance.now() : 0;
+      debugState.phase = "dropping";
+      debugState.notes = "finalizing drag";
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
       document.removeEventListener("pointercancel", onPointerCancel);
       scheduledDrag.cancel();
       stopAutoScrollLoop();
-      if (PANEL_DRAG_PERF && active) {
+      if (perfEnabled && active) {
         perfReport(); // flush final stats
         console.log("[drag-perf] drag ended");
       }
@@ -1098,6 +1325,7 @@ export function usePanelDrag(config: {
       document.body.classList.remove("panel-drag-active");
 
       if (active && sourcePanel) {
+        const _commitT0 = perfEnabled ? performance.now() : 0;
         const sourceId = sourcePanel.getAttribute("data-panel");
         const cfg = configRef.current;
 
@@ -1147,6 +1375,10 @@ export function usePanelDrag(config: {
             sourceId, sourceContainerIdx, lastTargetContainerIdx,
           });
         }
+        if (perfEnabled) {
+          debugState.lastCommitMs = performance.now() - _commitT0;
+          perfCommitMs += debugState.lastCommitMs;
+        }
       }
 
       if (sourcePanel) {
@@ -1168,6 +1400,10 @@ export function usePanelDrag(config: {
       lastTargetKey = "none";
       layoutSnapshot = [];
       configRef.current.onDragStateChange?.(false);
+      debugState.phase = "idle";
+      debugState.lastEndMs = perfEnabled ? performance.now() - _endT0 : 0;
+      debugState.notes = "drag ended";
+      scheduleDebugOverlayRender();
     }
 
     function onPointerDown(e: PointerEvent) {
@@ -1207,6 +1443,7 @@ export function usePanelDrag(config: {
       removePlaceholder();
       removeGhost();
       clearAllLayoutAnimations();
+      removeDebugOverlay();
     };
   }, []);
 }

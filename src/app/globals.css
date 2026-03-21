@@ -266,6 +266,16 @@ body.resize-active .map-container {
 
 .bottom-panels-grid-empty {
   min-height: 0;
+  height: 0 !important;
+  padding: 0;
+  overflow: hidden;
+  border-top: none;
+}
+.bottom-panels-grid-empty::after {
+  content: "";
+}
+
+body.panel-drag-active .bottom-panels-grid-empty {
   height: 48px !important;
   display: flex;
   align-items: center;
@@ -274,10 +284,12 @@ body.resize-active .map-container {
   border-top: 2px dashed var(--green);
   background: rgba(34, 197, 94, 0.03);
 }
-.bottom-panels-grid-empty::after {
+body.panel-drag-active .bottom-panels-grid-empty::after {
   content: "drop panel here";
-  font-size: 10px; text-transform: uppercase;
-  letter-spacing: 1px; color: var(--text-ghost);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-ghost);
 }
 
 /* Panels grid */
