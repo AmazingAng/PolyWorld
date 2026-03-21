@@ -79,7 +79,7 @@ export const useUIStore = create<UIState & UIActions>((set) => ({
   alertManagerOpen: false,
   isDragging: false,
   mapWidthPct: 60,
-  bottomPanelHeight: typeof window !== "undefined" && window.innerWidth <= 768 ? 200 : 360,
+  bottomPanelHeight: 360,
   bottomPanelCollapsed: false,
   marketSearch: undefined,
   region: "global",

@@ -267,6 +267,13 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefsReady]);
 
+  // Apply mobile default for bottom panel height after mount (avoids SSR/client hydration mismatch)
+  useEffect(() => {
+    const current = useUIStore.getState().bottomPanelHeight;
+    if (current !== 360) return;
+    useUIStore.getState().setBottomPanelHeight(window.innerWidth <= 768 ? 200 : 360);
+  }, []);
+
   // Sync all preferences back to localStorage in a single debounced effect
   const prefSyncTimer = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
