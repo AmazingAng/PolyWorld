@@ -253,7 +253,7 @@ body.resize-active .map-container {
   min-height: 120px;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  grid-auto-flow: row dense;
+  grid-auto-flow: row;
   grid-auto-rows: 175px;
   gap: 4px;
   padding: 4px;
@@ -284,7 +284,7 @@ body.resize-active .map-container {
 .panels-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  grid-auto-flow: row dense;
+  grid-auto-flow: row;
   grid-auto-rows: 175px;
   gap: 4px;
   padding: 4px;
@@ -523,85 +523,177 @@ body.resize-active .map-container {
   color: var(--green);
 }
 
-/* During drag: kill transitions, isolate panels, freeze map */
+/* dnd-kit: only disable touch-action on drag handles */
+.drag-handle {
+  touch-action: none;
+}
+
+/* Shared panel drag state */
 body.panel-drag-active .panel {
   transition: none !important;
-  contain: strict;
 }
 body.panel-drag-active .maplibregl-map,
 body.panel-drag-active .map-container,
-body.panel-drag-active canvas {
+body.panel-drag-active canvas,
+body.panel-drag-active iframe {
   pointer-events: none !important;
 }
 
-/* Panel being dragged */
 .panel.panel-dragging {
-  opacity: 0.4;
-  transform: scale(0.98);
-  box-shadow: 0 0 0 1px var(--green), 0 8px 24px rgba(34, 197, 94, 0.15);
-  will-change: transform, opacity;
-  z-index: 10;
-  pointer-events: none;
+  opacity: 0.32;
 }
 
-/* Drop indicator line */
-.panel.panel-drop-above,
-.panel.panel-drop-below {
+.panel.panel-drag-source-hidden {
+  display: none !important;
+}
+
+.panels-grid.panel-drop-target,
+.bottom-panels-grid.panel-drop-target {
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.35);
+}
+
+.panel-drop-placeholder {
   position: relative;
-}
-.panel.panel-drop-above::before {
-  content: "";
-  position: absolute;
-  top: -2px;
-  left: 4px;
-  right: 4px;
-  height: 2px;
-  background: var(--green);
-  border-radius: 1px;
-  z-index: 20;
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
-}
-.panel.panel-drop-below::after {
-  content: "";
-  position: absolute;
-  bottom: -2px;
-  left: 4px;
-  right: 4px;
-  height: 2px;
-  background: var(--green);
-  border-radius: 1px;
-  z-index: 20;
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
-}
-/* Highlight target panel during hover */
-.panel.panel-drop-above,
-.panel.panel-drop-below {
-  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.3);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  grid-row: span 2;
+  border: 1px dashed rgba(34, 197, 94, 0.5);
+  background:
+    linear-gradient(180deg, rgba(34, 197, 94, 0.08), rgba(34, 197, 94, 0.03)),
+    var(--panel-bg);
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.12);
+  overflow: hidden;
+  opacity: 0.98;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease, opacity 120ms ease;
+  animation: panel-placeholder-in 120ms ease-out;
 }
 
-/* Drag ghost preview — follows cursor */
-.panel-drag-ghost {
-  position: fixed;
-  z-index: 9999;
-  background: var(--bg-secondary);
-  border: 1px solid var(--green);
-  border-radius: 6px;
-  padding: 6px 10px;
+.panel-drop-placeholder__header {
+  display: flex;
+  align-items: center;
+  min-height: 29px;
+  padding: 4px 8px;
+  border-bottom: 1px dashed rgba(34, 197, 94, 0.3);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.panel-drop-placeholder__label {
   font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--text-secondary);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--green);
-  pointer-events: none;
-  opacity: 0.9;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--green);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 260px;
+}
+
+.panel-drop-placeholder__body {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
+  padding: 10px;
+  transition: opacity 120ms ease;
+}
+
+.panel-drop-placeholder__hint {
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.panel-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(34, 197, 94, 0.55);
+  background: linear-gradient(180deg, rgba(18, 22, 20, 0.96), rgba(12, 15, 14, 0.94));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  overflow: hidden;
   will-change: transform;
-  transform: translateZ(0);
+}
+
+.panel-drag-ghost__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.panel-drag-ghost__grip {
+  display: grid;
+  grid-template-columns: repeat(2, 3px);
+  gap: 2px;
+  color: var(--text-faint);
+}
+
+.panel-drag-ghost__grip span {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.panel-drag-ghost__title {
+  min-width: 0;
+  flex: 1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel-drag-ghost__meta {
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.panel-drag-ghost__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  padding: 14px 12px;
+}
+
+.panel-drag-ghost__line {
+  display: block;
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.2), rgba(255, 255, 255, 0.06));
+}
+
+.panel-drag-ghost__line.w-90 { width: 90%; }
+.panel-drag-ghost__line.w-75 { width: 75%; }
+.panel-drag-ghost__line.w-60 { width: 60%; }
+.panel-drag-ghost__line.w-45 { width: 45%; }
+
+@keyframes panel-placeholder-in {
+  from {
+    opacity: 0.72;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 0.98;
+    transform: scale(1);
+  }
 }
 
 .panel-wide {

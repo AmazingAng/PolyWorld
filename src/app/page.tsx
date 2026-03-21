@@ -235,7 +235,6 @@ export default function Home() {
   // Watchlist
   const { watchedIds, isWatched, toggleWatch, count: watchedCount, addedAt } = useWatchlist();
   const { getColSpan, setColSpan, resetColSpan } = usePanelColSpans();
-  const colSpanFor = (id: string) => getColSpan(id, DEFAULT_COL_SPANS[id] ?? 1);
   const { getRowSpan, setRowSpan, resetRowSpan } = usePanelRowSpans();
   const rowSpanFor = (id: string) => getRowSpan(id, 2);
 
@@ -292,36 +291,6 @@ export default function Home() {
     }, 300);
     return () => { if (prefSyncTimer.current) clearTimeout(prefSyncTimer.current); };
   }, [activeCategories, timeRange, autoRefresh, panelVisibility, panelOrder, bottomPanelOrder, mapWidthPct, colorMode, region, updatePref]);
-
-  const handlePanelReorder = useCallback((newOrder: string[]) => {
-    useUIStore.getState().setPanelOrder(newOrder);
-  }, []);
-
-  const handleBottomReorder = useCallback((newOrder: string[]) => {
-    useUIStore.getState().setBottomPanelOrder(newOrder);
-  }, []);
-
-  const handlePanelTransfer = useCallback((
-    _panelId: string,
-    fromIdx: number,
-    toIdx: number,
-    newFrom: string[],
-    newTo: string[]
-  ) => {
-    const { setBottomPanelOrder, setPanelOrder } = useUIStore.getState();
-    const setters = [setBottomPanelOrder, setPanelOrder];
-    setters[fromIdx](newFrom);
-    setters[toIdx](newTo);
-  }, []);
-
-  usePanelDrag({
-    grids: [
-      { ref: bottomPanelsRef, panelOrder: bottomPanelOrder, onReorder: handleBottomReorder },
-      { ref: panelsRef, panelOrder: panelOrder, onReorder: handlePanelReorder },
-    ],
-    onTransfer: handlePanelTransfer,
-    onDragStateChange: setIsDragging,
-  });
 
   const mainRef = useRef<HTMLDivElement>(null);
   const mapSectionRef = useRef<HTMLDivElement>(null);
@@ -550,6 +519,50 @@ export default function Home() {
     () => bottomPanelOrder.filter((k) => panelVisibility[k as keyof PanelVisibility]),
     [bottomPanelOrder, panelVisibility]
   );
+  const colSpanFor = useCallback((id: string) => {
+    const requested = getColSpan(id, DEFAULT_COL_SPANS[id] ?? 1);
+    const maxCols = bottomPanelSet.has(id) ? 3 : 2;
+    return Math.max(1, Math.min(requested, maxCols));
+  }, [bottomPanelSet, getColSpan]);
+
+  const handlePanelReorder = useCallback((newOrder: string[]) => {
+    useUIStore.getState().setPanelOrder(newOrder);
+  }, []);
+
+  const handleBottomReorder = useCallback((newOrder: string[]) => {
+    useUIStore.getState().setBottomPanelOrder(newOrder);
+  }, []);
+
+  const handlePanelTransfer = useCallback((
+    panelId: string,
+    fromIdx: number,
+    toIdx: number,
+    newFrom: string[],
+    newTo: string[]
+  ) => {
+    const { setBottomPanelOrder, setPanelOrder } = useUIStore.getState();
+    const setters = [setBottomPanelOrder, setPanelOrder];
+    setters[fromIdx](newFrom);
+    setters[toIdx](newTo);
+
+    const sourceMaxCols = fromIdx === 0 ? 3 : 2;
+    const targetMaxCols = toIdx === 0 ? 3 : 2;
+    const requestedSpan = getColSpan(panelId, DEFAULT_COL_SPANS[panelId] ?? 1);
+    const currentSpan = Math.max(1, Math.min(requestedSpan, sourceMaxCols));
+    const clampedSpan = Math.max(1, Math.min(currentSpan, targetMaxCols));
+    if (clampedSpan !== requestedSpan) {
+      setColSpan(panelId, clampedSpan);
+    }
+  }, [getColSpan, setColSpan]);
+
+  usePanelDrag({
+    grids: [
+      { ref: bottomPanelsRef, panelOrder: bottomPanelOrder, onReorder: handleBottomReorder, maxCols: 3 },
+      { ref: panelsRef, panelOrder, onReorder: handlePanelReorder, maxCols: 2 },
+    ],
+    onTransfer: handlePanelTransfer,
+    onDragStateChange: setIsDragging,
+  });
 
   // Related markets for detail panel — correlation-based similarity
   const relatedMarkets = useMemo(() => {
@@ -1412,7 +1425,11 @@ export default function Home() {
                   ref={bottomPanelsRef}
                   style={{ height: bottomPanelHeight }}
                 >
-                  {bottomVisiblePanels.map((key) => <PanelErrorBoundary key={`eb-${key}`} panelName={key}>{renderPanel(key)}</PanelErrorBoundary>)}
+                  {bottomVisiblePanels.map((key) => (
+                    <PanelErrorBoundary key={`eb-${key}`} panelName={key}>
+                      {renderPanel(key)}
+                    </PanelErrorBoundary>
+                  ))}
                 </div>
               )}
             </>

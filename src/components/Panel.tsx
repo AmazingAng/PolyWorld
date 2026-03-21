@@ -54,16 +54,16 @@ export default function Panel({
     return () => document.removeEventListener("keydown", handler);
   }, [expanded]);
 
-  const spanStyle: React.CSSProperties = {};
-  if (colSpan && colSpan > 1) spanStyle.gridColumn = `span ${colSpan}`;
-  if (rowSpan && rowSpan !== 2) spanStyle.gridRow = `span ${rowSpan}`;
+  const combinedStyle: React.CSSProperties = {};
+  if (colSpan && colSpan > 1) combinedStyle.gridColumn = `span ${colSpan}`;
+  if (rowSpan && rowSpan !== 2) combinedStyle.gridRow = `span ${rowSpan}`;
 
   return (
     <div
       ref={panelRef}
       data-panel={panelId}
       className={`panel${wide ? " panel-wide" : ""}${expanded ? " panel-expanded" : ""}${className ? ` ${className}` : ""}`}
-      style={spanStyle}
+      style={combinedStyle}
     >
       <div className="panel-header">
         <div className="flex items-center gap-2">
