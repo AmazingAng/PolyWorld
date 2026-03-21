@@ -1643,9 +1643,10 @@ function WorldMapInner({
       }
 
       // Market still in continent cluster — zoom in just enough to uncluster,
-      // but never zoom OUT from the user's current level
+      // but never zoom OUT from where the animation landed
+      const postAnimZoom = map.getZoom();
       const minUncluster = ZOOM_TIER_THRESHOLDS[0] + 0.5;
-      map.easeTo({ center: bubbleCoords, zoom: Math.max(minUncluster, currentZoom), duration: 800 });
+      map.easeTo({ center: bubbleCoords, zoom: Math.max(minUncluster, postAnimZoom), duration: 800 });
     });
   }, [flyToTarget]);
 
