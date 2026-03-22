@@ -86,11 +86,12 @@ function humanizeError(msg: string): string {
   return msg.replace(/0x[0-9a-f]{20,}/gi, "…").slice(0, 80);
 }
 
-/** Check Polymarket geo-restriction via our server-side proxy.
+/** Check Polymarket geo-restriction directly from the browser.
+ *  Must be called from client so Polymarket sees the user's real IP.
  *  @see https://docs.polymarket.com/api-reference/geoblock */
 async function checkGeoBlock(): Promise<{ blocked: boolean; country?: string }> {
   try {
-    const res = await fetch("/api/trade/geoblock", {
+    const res = await fetch("https://polymarket.com/api/geoblock", {
       signal: AbortSignal.timeout(5_000),
     });
     if (!res.ok) return { blocked: false };
