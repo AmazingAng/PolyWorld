@@ -5,6 +5,7 @@ import {
   useSensors,
   type DragEndEvent,
   type DragMoveEvent,
+  type DragOverEvent,
   type DragStartEvent,
   type Modifier,
 } from "@dnd-kit/core";
@@ -12,10 +13,12 @@ import { rafSchedule } from "@/lib/rafSchedule";
 
 const DRAG_THRESHOLD = 8;
 const CONTAINER_EDGE_TOLERANCE_PX = 24;
-const GLOBAL_TARGET_SNAP_DISTANCE_PX = 240;
+const PREFERRED_CONTAINER_SNAP_DISTANCE_PX = 72;
+const GLOBAL_TARGET_SNAP_DISTANCE_PX = 96;
 const OVERLAY_CURSOR_MIN_MARGIN_PX = 12;
 
 interface PanelDragGrid {
+  droppableId: string;
   ref: React.RefObject<HTMLElement | null>;
   visibleOrder: string[];
   fullOrder: string[];
@@ -83,6 +86,7 @@ interface OverlayPointerState {
 interface DragRuntimeState {
   activeId: string | null;
   sourceContainerIdx: number;
+  preferredContainerIdx: number;
   latestClientX: number;
   latestClientY: number;
   projectedVisibleOrders: string[][] | null;
@@ -368,6 +372,7 @@ export function usePanelDrag(config: {
   const dragStateRef = useRef<DragRuntimeState>({
     activeId: null,
     sourceContainerIdx: -1,
+    preferredContainerIdx: -1,
     latestClientX: 0,
     latestClientY: 0,
     projectedVisibleOrders: null,
@@ -413,6 +418,17 @@ export function usePanelDrag(config: {
     scrollCleanupRef.current = null;
   }, []);
 
+  const resolveContainerIdxForOverId = useCallback((overId: string | null | undefined) => {
+    if (!overId) return -1;
+    const dragState = dragStateRef.current;
+    return configRef.current.grids.findIndex((grid, idx) => (
+      grid.droppableId === overId ||
+      dragState.projectedVisibleOrders?.[idx]?.includes(overId) ||
+      grid.visibleOrder.includes(overId) ||
+      grid.fullOrder.includes(overId)
+    ));
+  }, []);
+
   const findPanelElement = useCallback((panelId: string) => {
     for (const grid of configRef.current.grids) {
       const container = grid.ref.current;
@@ -446,6 +462,7 @@ export function usePanelDrag(config: {
     const dragState = dragStateRef.current;
     if (!dragState.activeId || !dragState.projectedVisibleOrders) return null;
     const activePanelId = dragState.activeId;
+    const preferredContainerIdx = dragState.preferredContainerIdx;
 
     let containerTarget: DropTarget | null = null;
     let containerTargetScore = Number.POSITIVE_INFINITY;
@@ -453,8 +470,19 @@ export function usePanelDrag(config: {
     let nearestContainerDistance = Number.POSITIVE_INFINITY;
     let globalTarget: DropTarget | null = null;
     let globalTargetScore = Number.POSITIVE_INFINITY;
+    let preferredContainerTarget: DropTarget | null = null;
+    let preferredContainerScore = Number.POSITIVE_INFINITY;
 
-    configRef.current.grids.forEach((grid, containerIdx) => {
+    const containerOrder = configRef.current.grids
+      .map((_, idx) => idx)
+      .sort((a, b) => {
+        if (a === preferredContainerIdx) return -1;
+        if (b === preferredContainerIdx) return 1;
+        return a - b;
+      });
+
+    containerOrder.forEach((containerIdx) => {
+      const grid = configRef.current.grids[containerIdx];
       const container = grid.ref.current;
       if (!container) return;
 
@@ -542,8 +570,25 @@ export function usePanelDrag(config: {
         nearestContainerDistance = containerDistance;
         nearestContainerTarget = bestCellTargetInContainer ?? bestTargetInContainer;
       }
+
+      if (containerIdx === preferredContainerIdx) {
+        const target = bestCellTargetInContainer ?? bestTargetInContainer;
+        const score = bestCellTargetInContainer ? bestCellTargetScore : bestTargetInContainerScore;
+        if (
+          target &&
+          score < preferredContainerScore &&
+          (
+            isPointInsideRect(metrics.rect, clientX, clientY, CONTAINER_EDGE_TOLERANCE_PX) ||
+            containerDistance <= PREFERRED_CONTAINER_SNAP_DISTANCE_PX * PREFERRED_CONTAINER_SNAP_DISTANCE_PX
+          )
+        ) {
+          preferredContainerTarget = target;
+          preferredContainerScore = score;
+        }
+      }
     });
 
+    if (preferredContainerTarget) return preferredContainerTarget;
     if (containerTarget) return containerTarget;
     if (
       nearestContainerTarget &&
@@ -562,7 +607,18 @@ export function usePanelDrag(config: {
     if (!dragState.activeId || !dragState.projectedVisibleOrders) return;
 
     const target = resolveDropTarget(dragState.latestClientX, dragState.latestClientY);
-    if (!target) return;
+    if (!target) {
+      const resetOrders = configRef.current.grids.map((grid) => [...grid.visibleOrder]);
+      const resetContainerIdx = resetOrders.findIndex((order) => order.includes(dragState.activeId!));
+      const resetIndex = resetContainerIdx === -1 ? -1 : resetOrders[resetContainerIdx].indexOf(dragState.activeId);
+      const resetKey = resetContainerIdx === -1 || resetIndex === -1 ? "none" : `${resetContainerIdx}:${resetIndex}`;
+      if (dragState.lastTargetKey === resetKey) return;
+
+      dragState.lastTargetKey = resetKey;
+      dragState.projectedVisibleOrders = resetOrders;
+      setProjectedVisibleOrders(resetOrders);
+      return;
+    }
 
     const nextKey = `${target.containerIdx}:${target.insertIndex}`;
     if (nextKey === dragState.lastTargetKey) return;
@@ -593,20 +649,30 @@ export function usePanelDrag(config: {
     const containers = configRef.current.grids
       .map((grid) => grid.ref.current)
       .filter((container): container is HTMLElement => Boolean(container));
-    if (containers.length === 0) return;
 
     const handleScroll = () => {
+      scheduledProjectedTargetRef.current?.();
+    };
+    const handleResize = () => {
       scheduledProjectedTargetRef.current?.();
     };
 
     containers.forEach((container) => {
       container.addEventListener("scroll", handleScroll, { passive: true });
     });
+    window.addEventListener("scroll", handleScroll, { passive: true, capture: true });
+    window.addEventListener("resize", handleResize, { passive: true });
+    window.visualViewport?.addEventListener("scroll", handleScroll, { passive: true });
+    window.visualViewport?.addEventListener("resize", handleResize, { passive: true });
 
     scrollCleanupRef.current = () => {
       containers.forEach((container) => {
         container.removeEventListener("scroll", handleScroll);
       });
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", handleResize);
+      window.visualViewport?.removeEventListener("scroll", handleScroll);
+      window.visualViewport?.removeEventListener("resize", handleResize);
     };
   }, [clearScrollListeners]);
 
@@ -616,6 +682,7 @@ export function usePanelDrag(config: {
     dragStateRef.current = {
       activeId: null,
       sourceContainerIdx: -1,
+      preferredContainerIdx: -1,
       latestClientX: 0,
       latestClientY: 0,
       projectedVisibleOrders: null,
@@ -724,6 +791,7 @@ export function usePanelDrag(config: {
     dragStateRef.current = {
       activeId: panelId,
       sourceContainerIdx,
+      preferredContainerIdx: sourceContainerIdx,
       latestClientX: point.clientX,
       latestClientY: point.clientY,
       projectedVisibleOrders: nextProjectedVisibleOrders,
@@ -744,10 +812,22 @@ export function usePanelDrag(config: {
 
   const onDragMove = useCallback((event: DragMoveEvent) => {
     if (!dragStateRef.current.activeId) return;
+    const overContainerIdx = resolveContainerIdxForOverId(event.over?.id ? String(event.over.id) : null);
+    if (overContainerIdx !== -1) {
+      dragStateRef.current.preferredContainerIdx = overContainerIdx;
+    }
     dragStateRef.current.latestClientX = overlayPointerRef.current.startClientX + event.delta.x;
     dragStateRef.current.latestClientY = overlayPointerRef.current.startClientY + event.delta.y;
     scheduledProjectedTargetRef.current?.();
-  }, []);
+  }, [resolveContainerIdxForOverId]);
+
+  const onDragOver = useCallback((event: DragOverEvent) => {
+    if (!dragStateRef.current.activeId) return;
+    const overContainerIdx = resolveContainerIdxForOverId(event.over?.id ? String(event.over.id) : null);
+    if (overContainerIdx === -1) return;
+    dragStateRef.current.preferredContainerIdx = overContainerIdx;
+    scheduledProjectedTargetRef.current?.();
+  }, [resolveContainerIdxForOverId]);
 
   const onDragEnd = useCallback((event: DragEndEvent) => {
     if (!dragStateRef.current.activeId) return;
@@ -778,6 +858,7 @@ export function usePanelDrag(config: {
     projectedVisibleOrders,
     onDragStart,
     onDragMove,
+    onDragOver,
     onDragEnd,
     onDragCancel,
   };

@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { DndContext, DragOverlay, useDroppable } from "@dnd-kit/core";
+import {
+  DndContext,
+  DragOverlay,
+  useDroppable,
+  pointerWithin,
+  closestCorners,
+  MeasuringStrategy,
+  type CollisionDetection,
+} from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
 import dynamic from "next/dynamic";
 import { ProcessedMarket } from "@/types";
@@ -631,12 +639,24 @@ export default function Home() {
 
   const panelDrag = usePanelDrag({
     grids: [
-      { ref: bottomPanelsRef, visibleOrder: bottomVisiblePanels, fullOrder: bottomPanelOrder, onReorder: handleBottomReorder, maxCols: 3 },
-      { ref: panelsRef, visibleOrder: rightVisiblePanels, fullOrder: panelOrder, onReorder: handlePanelReorder, maxCols: 2 },
+      { droppableId: "panel-grid-bottom", ref: bottomPanelsRef, visibleOrder: bottomVisiblePanels, fullOrder: bottomPanelOrder, onReorder: handleBottomReorder, maxCols: 3 },
+      { droppableId: "panel-grid-right", ref: panelsRef, visibleOrder: rightVisiblePanels, fullOrder: panelOrder, onReorder: handlePanelReorder, maxCols: 2 },
     ],
     getPanelGeometry: getPanelDragGeometry,
     onTransfer: handlePanelTransfer,
   });
+  const panelCollisionDetection = useCallback<CollisionDetection>((args) => {
+    const pointerCollisions = pointerWithin(args);
+    if (pointerCollisions.length > 0) {
+      return pointerCollisions;
+    }
+    return closestCorners(args);
+  }, []);
+  const panelMeasuring = useMemo(() => ({
+    droppable: {
+      strategy: MeasuringStrategy.Always,
+    },
+  }), []);
 
   const renderBottomVisiblePanels = panelDrag.projectedVisibleOrders?.[0] ?? bottomVisiblePanels;
   const renderRightVisiblePanels = panelDrag.projectedVisibleOrders?.[1] ?? rightVisiblePanels;
@@ -654,7 +674,13 @@ export default function Home() {
     const maxCols = renderBottomPanelSet.has(id) ? 3 : 2;
     return Math.max(1, Math.min(requested, maxCols));
   }, [getColSpan, renderBottomPanelSet]);
-  const panelRenderCacheRef = useRef<Record<string, React.ReactElement | null>>({});
+  const panelRenderCacheRef = useRef<Record<string, { signature: string; node: React.ReactElement | null }>>({});
+
+  useEffect(() => {
+    if (!panelDrag.isDragging) {
+      panelRenderCacheRef.current = {};
+    }
+  }, [panelDrag.isDragging]);
 
   // Related markets for detail panel — correlation-based similarity
   const relatedMarkets = useMemo(() => {
@@ -1363,6 +1389,7 @@ export default function Home() {
   }
 
   function renderDesktopPanel(key: string) {
+    const cacheSignature = `${renderBottomPanelSet.has(key) ? "bottom" : "right"}:${colSpanFor(key)}:${rowSpanFor(key)}`;
     return (
       <DraggablePanelItem id={key} disableTransforms={panelDrag.isDragging || panelDrag.disableTransforms}>
         {panelDrag.activeId === key ? (
@@ -1375,9 +1402,12 @@ export default function Home() {
         ) : (
           (() => {
             const cached = panelRenderCacheRef.current[key];
-            if (panelDrag.isDragging && cached) return cached;
+            if (panelDrag.isDragging && cached?.signature === cacheSignature) return cached.node;
             const node = renderPanel(key);
-            panelRenderCacheRef.current[key] = node;
+            panelRenderCacheRef.current[key] = {
+              signature: cacheSignature,
+              node,
+            };
             return node;
           })()
         )}
@@ -1468,8 +1498,11 @@ export default function Home() {
 
       <DndContext
         sensors={panelDrag.sensors}
+        collisionDetection={panelCollisionDetection}
+        measuring={panelMeasuring}
         onDragStart={panelDrag.onDragStart}
         onDragMove={panelDrag.onDragMove}
+        onDragOver={panelDrag.onDragOver}
         onDragEnd={panelDrag.onDragEnd}
         onDragCancel={panelDrag.onDragCancel}
         autoScroll
