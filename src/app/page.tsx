@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, useId } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -158,6 +158,7 @@ function PanelDropPreview({
 }
 
 export default function Home() {
+  const dndId = useId();
   const { prefs, updatePref, hydrated: prefsReady } = usePreferences();
   const [refreshError, setRefreshError] = useState(false);
 
@@ -1497,6 +1498,7 @@ export default function Home() {
       />
 
       <DndContext
+        id={dndId}
         sensors={panelDrag.sensors}
         collisionDetection={panelCollisionDetection}
         measuring={panelMeasuring}

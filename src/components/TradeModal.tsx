@@ -277,7 +277,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
         className="relative w-full mx-4 bg-[var(--bg)] border border-[var(--border)] font-mono outline-none flex flex-col"
         style={{
           maxWidth: 560,
-          maxHeight: "calc(100vh - 48px)",
+          height: "min(520px, calc(100vh - 48px))",
           boxShadow: "0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)",
         }}
         onMouseDown={(e) => e.stopPropagation()}
@@ -293,7 +293,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
               <div className="flex gap-2">
                 <button
                   onClick={() => selectToken(state.yesToken!)}
-                  className={`flex-1 min-h-[44px] text-[12px] font-bold transition-colors flex flex-col items-center justify-center gap-0.5 ${
+                  className={`flex-1 h-[52px] text-[12px] font-bold transition-colors flex flex-col items-center justify-center gap-0.5 ${
                     isYesActive
                       ? "bg-[#22c55e] text-black"
                       : "bg-[#22c55e]/10 text-[#22c55e] hover:bg-[#22c55e]/20"
@@ -308,7 +308,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                 </button>
                 <button
                   onClick={() => selectToken(state.noToken!)}
-                  className={`flex-1 min-h-[44px] text-[12px] font-bold transition-colors flex flex-col items-center justify-center gap-0.5 ${
+                  className={`flex-1 h-[52px] text-[12px] font-bold transition-colors flex flex-col items-center justify-center gap-0.5 ${
                     !isYesActive
                       ? "bg-[#ff4444] text-white"
                       : "bg-[#ff4444]/10 text-[#ff4444] hover:bg-[#ff4444]/20"

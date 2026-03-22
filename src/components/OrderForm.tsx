@@ -77,12 +77,28 @@ function humanizeError(msg: string): string {
   if (m.includes("not enough balance") || m.includes("allowance")) return "Token approval missing — click \"Approve Tokens\" in the header";
   if (m.includes("execution reverted")) return "Order rejected by exchange — price may have moved";
   if (m.includes("nonce") || m.includes("already known")) return "Duplicate order — please try again";
+  if (m.includes("geo") || m.includes("restricted") || m.includes("unavailable in your region")) return "Trading restricted in your region — refer to https://docs.polymarket.com";
   if (m.includes("network") || m.includes("fetch") || m.includes("failed to fetch")) return "Network error — check your connection";
   if (m.includes("401") || m.includes("unauthorized") || m.includes("session")) return "Session expired — please authorize again";
   if (m.includes("min order") || m.includes("minimum")) return "Order too small — increase amount";
   if (m.includes("timeout")) return "Request timed out — please retry";
   // Keep message but strip long hex strings
   return msg.replace(/0x[0-9a-f]{20,}/gi, "…").slice(0, 80);
+}
+
+/** Check Polymarket's official geoblock endpoint.
+ *  @see https://docs.polymarket.com/api-reference/geoblock */
+async function checkGeoBlock(): Promise<{ blocked: boolean; country?: string }> {
+  try {
+    const res = await fetch("https://polymarket.com/api/geoblock", {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return { blocked: false };
+    const data = await res.json();
+    return { blocked: data?.blocked === true, country: data?.country };
+  } catch {
+    return { blocked: false };
+  }
 }
 
 interface OrderFormProps {
@@ -488,6 +504,18 @@ export default function OrderForm({
         setStatus("error");
         setErrorMsg("Token approval required — click \"Approve & Sell\" below");
         return;
+      }
+      const isNetworkError = /network|fetch|failed to fetch/i.test(raw);
+      if (isNetworkError) {
+        // Probe Polymarket geoblock API to distinguish geo-block from real network failure
+        const geo = await checkGeoBlock();
+        if (geo.blocked) {
+          const geoMsg = `Trading restricted in your region${geo.country ? ` (${geo.country})` : ""} — see https://docs.polymarket.com`;
+          setStatus("error");
+          setErrorMsg(geoMsg);
+          addTradeToast("error", "geo-restricted", `${effectiveSide} ${outcomeName}`, geoMsg.slice(0, 60), traceId);
+          return;
+        }
       }
       const msg = humanizeError(raw);
       setStatus("error");
