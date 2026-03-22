@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { DndContext, DragOverlay, useDroppable } from "@dnd-kit/core";
+import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
 import dynamic from "next/dynamic";
 import { ProcessedMarket } from "@/types";
 import type { OverlayLayer } from "@/components/MapToolbar";
@@ -44,6 +46,9 @@ import { detectSignals } from "@/lib/smartSignals";
 import OnboardingModal from "@/components/OnboardingModal";
 import Footer from "@/components/Footer";
 import PanelErrorBoundary from "@/components/PanelErrorBoundary";
+import DraggablePanelItem from "@/components/DraggablePanelItem";
+import PanelDragOverlay from "@/components/PanelDragOverlay";
+import type { PanelDragHandleProps } from "@/components/panelDragTypes";
 import { usePanelColSpans } from "@/hooks/usePanelColSpans";
 import { usePanelRowSpans } from "@/hooks/usePanelRowSpans";
 import { useMarketStore } from "@/stores/marketStore";
@@ -69,6 +74,28 @@ const DEFAULT_COL_SPANS: Record<string, number> = {
   markets: 1, country: 1, news: 1, tweets: 1, live: 1, watchlist: 1, detail: 2, leaderboard: 1, trader: 1, smartMoney: 1, whaleTrades: 1, orderbook: 1, sentiment: 1, chart: 1, arbitrage: 1, calendar: 1, signals: 1, resolution: 1, portfolio: 1,
 };
 
+const PANEL_TITLES: Record<string, string> = {
+  detail: "Market Detail",
+  markets: "Markets",
+  country: "Region",
+  news: "News",
+  tweets: "Tweets",
+  live: "Live",
+  watchlist: "Watchlist",
+  leaderboard: "Leaderboard",
+  smartMoney: "Smart Money",
+  whaleTrades: "Whale Trades",
+  orderbook: "Order Book",
+  trader: "Trader",
+  sentiment: "Sentiment",
+  chart: "Price Chart",
+  arbitrage: "Arbitrage",
+  calendar: "Calendar",
+  signals: "Signals",
+  resolution: "Resolution",
+  portfolio: "Portfolio",
+};
+
 // Time range → max age in milliseconds (0 = no filter)
 const TIME_MAX_AGE: Record<string, number> = {
   "1h": 60 * 60 * 1000,
@@ -78,6 +105,49 @@ const TIME_MAX_AGE: Record<string, number> = {
   "7d": 7 * 24 * 60 * 60 * 1000,
   ALL: 0,
 };
+
+function PanelDropPreview({
+  panelId,
+  title,
+  colSpan,
+  rowSpan,
+  dragRootRef,
+  dragHandleProps,
+  dragStyle,
+  dragClassName,
+}: {
+  panelId: string;
+  title: string;
+  colSpan: number;
+  rowSpan: number;
+  dragRootRef?: React.Ref<HTMLDivElement>;
+  dragHandleProps?: PanelDragHandleProps;
+  dragStyle?: React.CSSProperties;
+  dragClassName?: string;
+}) {
+  void dragHandleProps;
+  const style: React.CSSProperties = {};
+  if (colSpan > 1) style.gridColumn = `span ${colSpan}`;
+  if (rowSpan !== 2) style.gridRow = `span ${rowSpan}`;
+  if (dragStyle) Object.assign(style, dragStyle);
+
+  return (
+    <div
+      ref={dragRootRef}
+      data-panel={panelId}
+      className={`panel-drop-placeholder${dragClassName ? ` ${dragClassName}` : ""}`}
+      style={style}
+      aria-hidden="true"
+    >
+      <div className="panel-drop-placeholder__header">
+        <span className="panel-drop-placeholder__label">{title}</span>
+      </div>
+      <div className="panel-drop-placeholder__body">
+        <span className="panel-drop-placeholder__hint">drop preview</span>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const { prefs, updatePref, hydrated: prefsReady } = usePreferences();
@@ -219,6 +289,8 @@ export default function Home() {
 
   const panelsRef = useRef<HTMLDivElement>(null);
   const bottomPanelsRef = useRef<HTMLDivElement>(null);
+  const { setNodeRef: setRightDroppableRef } = useDroppable({ id: "panel-grid-right" });
+  const { setNodeRef: setBottomDroppableRef } = useDroppable({ id: "panel-grid-bottom" });
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(false);
@@ -508,20 +580,15 @@ export default function Home() {
   }, []);
 
   // Derived panel locations
-  const bottomPanelSet = useMemo(() => new Set(bottomPanelOrder), [bottomPanelOrder]);
+  const actualBottomPanelSet = useMemo(() => new Set(bottomPanelOrder), [bottomPanelOrder]);
   const rightVisiblePanels = useMemo(
-    () => panelOrder.filter((k) => panelVisibility[k as keyof PanelVisibility] && !bottomPanelSet.has(k)),
-    [panelOrder, panelVisibility, bottomPanelSet]
+    () => panelOrder.filter((k) => panelVisibility[k as keyof PanelVisibility] && !actualBottomPanelSet.has(k)),
+    [panelOrder, panelVisibility, actualBottomPanelSet]
   );
   const bottomVisiblePanels = useMemo(
     () => bottomPanelOrder.filter((k) => panelVisibility[k as keyof PanelVisibility]),
     [bottomPanelOrder, panelVisibility]
   );
-  const colSpanFor = useCallback((id: string) => {
-    const requested = getColSpan(id, DEFAULT_COL_SPANS[id] ?? 1);
-    const maxCols = bottomPanelSet.has(id) ? 3 : 2;
-    return Math.max(1, Math.min(requested, maxCols));
-  }, [bottomPanelSet, getColSpan]);
 
   const handlePanelReorder = useCallback((newOrder: string[]) => {
     useUIStore.getState().setPanelOrder(newOrder);
@@ -553,13 +620,41 @@ export default function Home() {
     }
   }, [getColSpan, setColSpan]);
 
-  usePanelDrag({
+  const getPanelDragGeometry = useCallback((panelId: string, containerIdx: number) => {
+    const maxCols = containerIdx === 0 ? 3 : 2;
+    return {
+      title: PANEL_TITLES[panelId] ?? panelId,
+      colSpan: Math.max(1, Math.min(getColSpan(panelId, DEFAULT_COL_SPANS[panelId] ?? 1), maxCols)),
+      rowSpan: getRowSpan(panelId, 2),
+    };
+  }, [getColSpan, getRowSpan]);
+
+  const panelDrag = usePanelDrag({
     grids: [
-      { ref: bottomPanelsRef, panelOrder: bottomPanelOrder, onReorder: handleBottomReorder, maxCols: 3 },
-      { ref: panelsRef, panelOrder, onReorder: handlePanelReorder, maxCols: 2 },
+      { ref: bottomPanelsRef, visibleOrder: bottomVisiblePanels, fullOrder: bottomPanelOrder, onReorder: handleBottomReorder, maxCols: 3 },
+      { ref: panelsRef, visibleOrder: rightVisiblePanels, fullOrder: panelOrder, onReorder: handlePanelReorder, maxCols: 2 },
     ],
+    getPanelGeometry: getPanelDragGeometry,
     onTransfer: handlePanelTransfer,
   });
+
+  const renderBottomVisiblePanels = panelDrag.projectedVisibleOrders?.[0] ?? bottomVisiblePanels;
+  const renderRightVisiblePanels = panelDrag.projectedVisibleOrders?.[1] ?? rightVisiblePanels;
+  const renderBottomPanelSet = useMemo(() => new Set(renderBottomVisiblePanels), [renderBottomVisiblePanels]);
+  const setBottomPanelsNode = useCallback((node: HTMLDivElement | null) => {
+    bottomPanelsRef.current = node;
+    setBottomDroppableRef(node);
+  }, [setBottomDroppableRef]);
+  const setRightPanelsNode = useCallback((node: HTMLDivElement | null) => {
+    panelsRef.current = node;
+    setRightDroppableRef(node);
+  }, [setRightDroppableRef]);
+  const colSpanFor = useCallback((id: string) => {
+    const requested = getColSpan(id, DEFAULT_COL_SPANS[id] ?? 1);
+    const maxCols = renderBottomPanelSet.has(id) ? 3 : 2;
+    return Math.max(1, Math.min(requested, maxCols));
+  }, [getColSpan, renderBottomPanelSet]);
+  const panelRenderCacheRef = useRef<Record<string, React.ReactElement | null>>({});
 
   // Related markets for detail panel — correlation-based similarity
   const relatedMarkets = useMemo(() => {
@@ -683,7 +778,7 @@ export default function Home() {
   ];
 
   function renderPanel(key: string) {
-    const maxColSpan = bottomPanelSet.has(key) ? 3 : 2;
+    const maxColSpan = renderBottomPanelSet.has(key) ? 3 : 2;
     switch (key) {
       case "detail":
         return (
@@ -1267,6 +1362,29 @@ export default function Home() {
     }
   }
 
+  function renderDesktopPanel(key: string) {
+    return (
+      <DraggablePanelItem id={key} disableTransforms={panelDrag.isDragging || panelDrag.disableTransforms}>
+        {panelDrag.activeId === key ? (
+          <PanelDropPreview
+            panelId={key}
+            title={PANEL_TITLES[key] ?? key}
+            colSpan={colSpanFor(key)}
+            rowSpan={rowSpanFor(key)}
+          />
+        ) : (
+          (() => {
+            const cached = panelRenderCacheRef.current[key];
+            if (panelDrag.isDragging && cached) return cached;
+            const node = renderPanel(key);
+            panelRenderCacheRef.current[key] = node;
+            return node;
+          })()
+        )}
+      </DraggablePanelItem>
+    );
+  }
+
   return (
     <div id="app-root">
       <Header
@@ -1348,6 +1466,14 @@ export default function Home() {
         }}
       />
 
+      <DndContext
+        sensors={panelDrag.sensors}
+        onDragStart={panelDrag.onDragStart}
+        onDragMove={panelDrag.onDragMove}
+        onDragEnd={panelDrag.onDragEnd}
+        onDragCancel={panelDrag.onDragCancel}
+        autoScroll
+      >
       <div className="main-content" ref={mainRef} style={{ gridTemplateColumns: isFullscreen ? "1fr" : `${mapWidthPct}% 6px 1fr` } as React.CSSProperties}>
         {/* Map section */}
         <div className="map-section" ref={mapSectionRef}>
@@ -1418,15 +1544,17 @@ export default function Home() {
               </div>
               {!bottomPanelCollapsed && (
                 <div
-                  className={`bottom-panels-grid${bottomVisiblePanels.length === 0 ? " bottom-panels-grid-empty" : ""}`}
-                  ref={bottomPanelsRef}
-                  style={bottomVisiblePanels.length > 0 ? { height: bottomPanelHeight } : undefined}
+                  className={`bottom-panels-grid${renderBottomVisiblePanels.length === 0 ? " bottom-panels-grid-empty" : ""}`}
+                  ref={setBottomPanelsNode}
+                  style={renderBottomVisiblePanels.length > 0 ? { height: bottomPanelHeight } : undefined}
                 >
-                  {bottomVisiblePanels.map((key) => (
-                    <PanelErrorBoundary key={`eb-${key}`} panelName={key}>
-                      {renderPanel(key)}
-                    </PanelErrorBoundary>
-                  ))}
+                  <SortableContext items={renderBottomVisiblePanels} strategy={rectSortingStrategy}>
+                    {renderBottomVisiblePanels.map((key) => (
+                      <PanelErrorBoundary key={`eb-${key}`} panelName={key}>
+                        {renderDesktopPanel(key)}
+                      </PanelErrorBoundary>
+                    ))}
+                  </SortableContext>
                 </div>
               )}
             </>
@@ -1437,8 +1565,14 @@ export default function Home() {
         {!isFullscreen && !isMobile && (
           <>
             <ResizeHandle direction="vertical" onResize={handleVerticalResize} />
-            <div className="panels-grid" ref={panelsRef}>
-              {rightVisiblePanels.map((key) => <PanelErrorBoundary key={`eb-${key}`} panelName={key}>{renderPanel(key)}</PanelErrorBoundary>)}
+            <div className="panels-grid" ref={setRightPanelsNode}>
+              <SortableContext items={renderRightVisiblePanels} strategy={rectSortingStrategy}>
+                {renderRightVisiblePanels.map((key) => (
+                  <PanelErrorBoundary key={`eb-${key}`} panelName={key}>
+                    {renderDesktopPanel(key)}
+                  </PanelErrorBoundary>
+                ))}
+              </SortableContext>
             </div>
           </>
         )}
@@ -1465,6 +1599,15 @@ export default function Home() {
           </div>
         )}
       </div>
+      <DragOverlay
+        adjustScale={false}
+        dropAnimation={null}
+        modifiers={panelDrag.overlayModifiers}
+        zIndex={9999}
+      >
+        {panelDrag.overlay ? <PanelDragOverlay {...panelDrag.overlay} /> : null}
+      </DragOverlay>
+      </DndContext>
 
       {/* Mobile bottom tab bar */}
       {isMobile && (

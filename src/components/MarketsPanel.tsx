@@ -10,6 +10,7 @@ import { getCountryFlag } from "@/lib/countries";
 import { formatVolume } from "@/lib/format";
 import { useColResize } from "@/hooks/useColResize";
 import { useRowResize } from "@/hooks/useRowResize";
+import type { PanelDragHandleProps } from "@/components/panelDragTypes";
 
 interface MarketsPanelProps {
   mapped: ProcessedMarket[];
@@ -29,6 +30,19 @@ interface MarketsPanelProps {
   onRowSpanReset?: () => void;
   maxColSpan?: number;
   onTrade?: (state: import("./TradeModal").TradeModalState) => void;
+  dragRootRef?: React.Ref<HTMLDivElement>;
+  dragHandleProps?: PanelDragHandleProps;
+  dragStyle?: React.CSSProperties;
+  dragClassName?: string;
+}
+
+function assignRef<T>(ref: React.Ref<T> | undefined, value: T | null) {
+  if (!ref) return;
+  if (typeof ref === "function") {
+    ref(value);
+    return;
+  }
+  (ref as React.MutableRefObject<T | null>).current = value;
 }
 
 type SortOrder = "sections" | "volume" | "impact" | "change" | "new";
@@ -53,6 +67,10 @@ function MarketsPanelInner({
   onRowSpanReset,
   maxColSpan,
   onTrade,
+  dragRootRef,
+  dragHandleProps,
+  dragStyle,
+  dragClassName,
 }: MarketsPanelProps) {
   const [search, setSearch] = useState("");
   const [renderNow] = useState(() => Date.now());
@@ -210,16 +228,35 @@ function MarketsPanelInner({
 
   const { onMouseDown: handleResizeStart } = useColResize(colSpan ?? 2, onColSpanChange, maxColSpan);
   const { onMouseDown: handleRowResizeStart } = useRowResize(rowSpan ?? 2, onRowSpanChange);
+  const {
+    ref: dragHandleRef,
+    className: dragHandleClassName,
+    ...dragHandleRest
+  } = dragHandleProps ?? {};
+  const setDragHandleRef = useCallback((node: HTMLElement | null) => {
+    assignRef(dragHandleRef, node);
+  }, [dragHandleRef]);
 
   const spanStyle: React.CSSProperties = {};
   if (colSpan && colSpan > 1) spanStyle.gridColumn = `span ${colSpan}`;
   if (rowSpan && rowSpan !== 2) spanStyle.gridRow = `span ${rowSpan}`;
+  if (dragStyle) Object.assign(spanStyle, dragStyle);
 
   return (
-    <div data-panel="markets" className={`panel${colSpan === 2 ? " panel-wide" : ""}${expanded ? " panel-expanded" : ""}`} style={spanStyle}>
+    <div
+      ref={dragRootRef}
+      data-panel="markets"
+      className={`panel${colSpan === 2 ? " panel-wide" : ""}${expanded ? " panel-expanded" : ""}${dragClassName ? ` ${dragClassName}` : ""}`}
+      style={spanStyle}
+    >
       <div className="panel-header">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="drag-handle" title="Drag to reorder">
+          <span
+            ref={setDragHandleRef}
+            className={`drag-handle${dragHandleClassName ? ` ${dragHandleClassName}` : ""}`}
+            title="Drag to reorder"
+            {...dragHandleRest}
+          >
             <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor">
               <circle cx="1" cy="1" r="1" /><circle cx="5" cy="1" r="1" />
               <circle cx="1" cy="5" r="1" /><circle cx="5" cy="5" r="1" />
@@ -482,6 +519,10 @@ export default memo(MarketsPanelInner, (prev, next) => {
   if (prev.rowSpan !== next.rowSpan) return false;
   if (prev.maxColSpan !== next.maxColSpan) return false;
   if (prev.isWatched !== next.isWatched) return false;
+  if (prev.dragRootRef !== next.dragRootRef) return false;
+  if (prev.dragHandleProps !== next.dragHandleProps) return false;
+  if (prev.dragStyle !== next.dragStyle) return false;
+  if (prev.dragClassName !== next.dragClassName) return false;
   return true;
 });
 

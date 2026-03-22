@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useColResize } from "@/hooks/useColResize";
 import { useRowResize } from "@/hooks/useRowResize";
+import type { PanelDragHandleProps } from "@/components/panelDragTypes";
 
 interface PanelProps {
   title: string;
@@ -20,6 +21,19 @@ interface PanelProps {
   onRowSpanChange?: (span: number) => void;
   onRowSpanReset?: () => void;
   maxColSpan?: number;
+  dragRootRef?: React.Ref<HTMLDivElement>;
+  dragHandleProps?: PanelDragHandleProps;
+  dragStyle?: React.CSSProperties;
+  dragClassName?: string;
+}
+
+function assignRef<T>(ref: React.Ref<T> | undefined, value: T | null) {
+  if (!ref) return;
+  if (typeof ref === "function") {
+    ref(value);
+    return;
+  }
+  (ref as React.MutableRefObject<T | null>).current = value;
 }
 
 export default function Panel({
@@ -38,11 +52,28 @@ export default function Panel({
   onRowSpanChange,
   onRowSpanReset,
   maxColSpan,
+  dragRootRef,
+  dragHandleProps,
+  dragStyle,
+  dragClassName,
 }: PanelProps) {
   const [expanded, setExpanded] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const { onMouseDown: onColMouseDown } = useColResize(colSpan ?? 1, onColSpanChange, maxColSpan);
   const { onMouseDown: onRowMouseDown } = useRowResize(rowSpan ?? 2, onRowSpanChange);
+  const setPanelRefs = useCallback((node: HTMLDivElement | null) => {
+    panelRef.current = node;
+    assignRef(dragRootRef, node);
+  }, [dragRootRef]);
+
+  const {
+    ref: dragHandleRef,
+    className: dragHandleClassName,
+    ...dragHandleRest
+  } = dragHandleProps ?? {};
+  const setDragHandleRef = useCallback((node: HTMLElement | null) => {
+    assignRef(dragHandleRef, node);
+  }, [dragHandleRef]);
 
   // Escape key to close
   useEffect(() => {
@@ -57,17 +88,23 @@ export default function Panel({
   const combinedStyle: React.CSSProperties = {};
   if (colSpan && colSpan > 1) combinedStyle.gridColumn = `span ${colSpan}`;
   if (rowSpan && rowSpan !== 2) combinedStyle.gridRow = `span ${rowSpan}`;
+  if (dragStyle) Object.assign(combinedStyle, dragStyle);
 
   return (
     <div
-      ref={panelRef}
+      ref={setPanelRefs}
       data-panel={panelId}
-      className={`panel${wide ? " panel-wide" : ""}${expanded ? " panel-expanded" : ""}${className ? ` ${className}` : ""}`}
+      className={`panel${wide ? " panel-wide" : ""}${expanded ? " panel-expanded" : ""}${dragClassName ? ` ${dragClassName}` : ""}${className ? ` ${className}` : ""}`}
       style={combinedStyle}
     >
       <div className="panel-header">
         <div className="flex items-center gap-2">
-          <span className="drag-handle" title="Drag to reorder">
+          <span
+            ref={setDragHandleRef}
+            className={`drag-handle${dragHandleClassName ? ` ${dragHandleClassName}` : ""}`}
+            title="Drag to reorder"
+            {...dragHandleRest}
+          >
             <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor">
               <circle cx="1" cy="1" r="1" /><circle cx="5" cy="1" r="1" />
               <circle cx="1" cy="5" r="1" /><circle cx="5" cy="5" r="1" />
