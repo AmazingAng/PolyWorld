@@ -35,12 +35,14 @@ const rateMaps = {
   ai: new Map<string, RateBucket>(),
   read: new Map<string, RateBucket>(),
   admin: new Map<string, RateBucket>(),
+  balance: new Map<string, RateBucket>(),
 };
 
 const RATE_LIMITS: Record<keyof typeof rateMaps, { max: number; windowMs: number }> = {
   ai: { max: 6, windowMs: 60_000 },
   read: { max: 300, windowMs: 60_000 },
   admin: { max: 10, windowMs: 60_000 },
+  balance: { max: 30, windowMs: 60_000 },
 };
 
 // Periodic cleanup of expired entries every 5 minutes
@@ -61,6 +63,7 @@ function cleanup() {
 function getTier(pathname: string): keyof typeof rateMaps {
   if (pathname === "/api/summarize") return "ai";
   if (pathname === "/api/sync" || pathname === "/api/geo-enhance") return "admin";
+  if (pathname === "/api/trade/balance") return "balance";
   return "read";
 }
 

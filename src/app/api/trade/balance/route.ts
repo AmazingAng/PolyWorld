@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTradeSession } from "@/lib/tradeSession";
 
 const USDC_E = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
-const BALANCE_CACHE_TTL_MS = 10_000;
+const BALANCE_CACHE_TTL_MS = 30_000;
 
 declare global {
   var _balanceCache:
@@ -70,8 +70,17 @@ async function getOnChainUsdcBalance(address: string): Promise<number> {
   throw new Error("all RPCs failed");
 }
 
-// GET /api/trade/balance?address=0x... — public on-chain USDC.e balance (no auth required)
+// GET /api/trade/balance?address=0x... — public on-chain USDC.e balance (origin-restricted)
 export async function GET(req: NextRequest) {
+  const origin = req.headers.get("origin") || req.headers.get("referer") || "";
+  const isDev = process.env.NODE_ENV !== "production";
+  const originOk =
+    origin.startsWith("https://polyworld.bet") ||
+    (isDev && (origin === "" || origin.startsWith("http://localhost")));
+  if (!originOk) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   const addr = req.nextUrl.searchParams.get("address") ?? "";
   if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) {
     return NextResponse.json({ error: "valid address required" }, { status: 400 });

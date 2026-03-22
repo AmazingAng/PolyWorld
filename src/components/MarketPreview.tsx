@@ -149,7 +149,7 @@ export default function MarketPreview({ market, onTrade, singleSeries }: MarketP
         />
       </div>
 
-      {/* Simple Yes/No trade buttons */}
+      {/* Simple Yes/No trade button */}
       {!multiBinary && simpleTrade && onTrade && (
         <div className="flex gap-2 mb-3">
           <button
@@ -161,18 +161,7 @@ export default function MarketPreview({ market, onTrade, singleSeries }: MarketP
             className="flex-1 py-1.5 text-[11px] font-bold transition-colors hover:opacity-80"
             style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
           >
-            Buy Yes {(simpleTrade.yesPrice * 100).toFixed(0)}¢
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); openTrade(
-              simpleTrade.noTokenId, simpleTrade.noPrice, "No", market.title, "BUY",
-              { tokenId: simpleTrade.yesTokenId, price: simpleTrade.yesPrice, name: "Yes" },
-              { tokenId: simpleTrade.noTokenId, price: simpleTrade.noPrice, name: "No" },
-            ); }}
-            className="flex-1 py-1.5 text-[11px] font-bold transition-colors hover:opacity-80"
-            style={{ background: "rgba(255,68,68,0.15)", color: "#ff4444" }}
-          >
-            Buy No {(simpleTrade.noPrice * 100).toFixed(0)}¢
+            Buy {(simpleTrade.yesPrice * 100).toFixed(0)}%
           </button>
         </div>
       )}
@@ -187,45 +176,22 @@ export default function MarketPreview({ market, onTrade, singleSeries }: MarketP
             const pct = o.prob * 100;
             return (
               <div key={i} className="flex items-center gap-1.5 text-[11px]">
-                <span className="w-16 shrink-0 truncate text-[var(--text-secondary)]" title={o.label}>
+                <span className="flex-1 truncate text-[var(--text-secondary)]" title={o.label}>
                   {o.label}
                 </span>
-                <div className="flex-1 h-3 bg-[var(--bg)] rounded-sm overflow-hidden border border-[var(--border-subtle)]">
-                  <div
-                    className="h-full rounded-sm"
-                    style={{
-                      width: `${Math.max(pct, 1)}%`,
-                      background: `linear-gradient(90deg, ${color}aa, ${color}55)`,
-                    }}
-                  />
-                </div>
                 {onTrade && !market.closed && o.yesTokenId ? (
-                  <>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); openTrade(
-                        o.yesTokenId, o.prob, o.label, market.title, "BUY",
-                        o.yesTokenId ? { tokenId: o.yesTokenId, price: o.prob, name: o.label } : undefined,
-                        o.noTokenId ? { tokenId: o.noTokenId, price: 1 - o.prob, name: `${o.label} No` } : undefined,
-                      ); }}
-                      className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 transition-colors hover:opacity-80"
-                      style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
-                      title={`Buy ${o.label} Yes`}
-                    >
-                      {pct.toFixed(0)}¢
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); openTrade(
-                        o.noTokenId, 1 - o.prob, `${o.label} No`, market.title, "BUY",
-                        o.yesTokenId ? { tokenId: o.yesTokenId, price: o.prob, name: o.label } : undefined,
-                        o.noTokenId ? { tokenId: o.noTokenId, price: 1 - o.prob, name: `${o.label} No` } : undefined,
-                      ); }}
-                      className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 transition-colors hover:opacity-80"
-                      style={{ background: "rgba(255,68,68,0.15)", color: "#ff4444" }}
-                      title={`Buy ${o.label} No`}
-                    >
-                      {(100 - pct).toFixed(0)}¢
-                    </button>
-                  </>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openTrade(
+                      o.yesTokenId, o.prob, o.label, market.title, "BUY",
+                      o.yesTokenId ? { tokenId: o.yesTokenId, price: o.prob, name: o.label } : undefined,
+                      o.noTokenId ? { tokenId: o.noTokenId, price: 1 - o.prob, name: `${o.label} No` } : undefined,
+                    ); }}
+                    className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 transition-colors hover:opacity-80"
+                    style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
+                    title={`Buy ${o.label}`}
+                  >
+                    Buy {pct.toFixed(0)}%
+                  </button>
                 ) : (
                   <span className="w-10 text-right tabular-nums text-[var(--text-dim)]">
                     {pct.toFixed(1)}%
