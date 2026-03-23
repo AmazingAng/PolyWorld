@@ -1507,7 +1507,7 @@ export default function Home() {
         onDragOver={panelDrag.onDragOver}
         onDragEnd={panelDrag.onDragEnd}
         onDragCancel={panelDrag.onDragCancel}
-        autoScroll
+        autoScroll={{ enabled: true, layoutShiftCompensation: false }}
       >
       <div className="main-content" ref={mainRef} style={{ gridTemplateColumns: isFullscreen ? "1fr" : `${mapWidthPct}% 6px 1fr` } as React.CSSProperties}>
         {/* Map section */}

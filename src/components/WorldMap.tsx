@@ -57,7 +57,7 @@ interface WorldMapProps {
 // Tier 2 (zoom 4–6): Country-level — each country is its own bubble
 // Tier 3 (zoom > 6): Individual bubbles (offsetColocated only)
 
-const ZOOM_TIER_THRESHOLDS = [1.5];
+const ZOOM_TIER_THRESHOLDS = [0];
 
 const CONTINENT_MAP: Record<string, string> = {
   "United States": "Americas", Canada: "Americas", Mexico: "Americas",

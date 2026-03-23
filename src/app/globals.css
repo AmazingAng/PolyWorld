@@ -259,6 +259,7 @@ body.resize-active .map-container {
   padding: 4px;
   align-content: start;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-top: 1px solid var(--border);
   background: var(--bg);
 }
@@ -303,6 +304,7 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
   min-height: 0;
   position: relative;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* News panel (grid-column now controlled by inline style) */

@@ -159,7 +159,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
     }).catch((e) => {
       if (e instanceof Error && e.message === "PROXY_NOT_FOUND") setProxyNotFound(true);
     });
-  }, [isConnected, address, isPolygon]);
+  }, [isConnected, address, isPolygon, setProxyAddress]);
 
   // Fetch USDC.e balance + portfolio value — works with or without tradeSession
   // Uses resolvedProxy or tradeSession.proxyAddress (whichever is available)
@@ -302,7 +302,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
     setProxyAddress(proxy);
     setProxyNotFound(false);
     setManualProxyInput("");
-  }, [address, manualProxyInput]);
+  }, [address, manualProxyInput, setProxyAddress]);
 
   const handleAuthorize = useCallback(async () => {
     if (!address) return;

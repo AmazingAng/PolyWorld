@@ -81,6 +81,9 @@ interface OverlayPointerState {
   originTop: number;
   anchorX: number;
   anchorY: number;
+  scrollDeltaX: number;
+  scrollDeltaY: number;
+  initialScrollPositions: Array<{ scrollLeft: number; scrollTop: number }>;
 }
 
 interface DragRuntimeState {
@@ -387,6 +390,9 @@ export function usePanelDrag(config: {
     originTop: 0,
     anchorX: OVERLAY_CURSOR_MIN_MARGIN_PX,
     anchorY: OVERLAY_CURSOR_MIN_MARGIN_PX,
+    scrollDeltaX: 0,
+    scrollDeltaY: 0,
+    initialScrollPositions: [],
   });
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<PanelDragOverlayData | null>(null);
@@ -651,6 +657,17 @@ export function usePanelDrag(config: {
       .filter((container): container is HTMLElement => Boolean(container));
 
     const handleScroll = () => {
+      const grids = configRef.current.grids;
+      const initial = overlayPointerRef.current.initialScrollPositions;
+      let dx = 0, dy = 0;
+      grids.forEach((grid, i) => {
+        const el = grid.ref.current;
+        if (!el || !initial[i]) return;
+        dx += el.scrollLeft - initial[i].scrollLeft;
+        dy += el.scrollTop - initial[i].scrollTop;
+      });
+      overlayPointerRef.current.scrollDeltaX = dx;
+      overlayPointerRef.current.scrollDeltaY = dy;
       scheduledProjectedTargetRef.current?.();
     };
     const handleResize = () => {
@@ -777,6 +794,11 @@ export function usePanelDrag(config: {
         )
       : OVERLAY_CURSOR_MIN_MARGIN_PX;
 
+    const initialScrollPositions = configRef.current.grids.map((grid) => {
+      const el = grid.ref.current;
+      return { scrollLeft: el?.scrollLeft ?? 0, scrollTop: el?.scrollTop ?? 0 };
+    });
+
     overlayPointerRef.current = {
       active: true,
       startClientX: point.clientX,
@@ -785,6 +807,9 @@ export function usePanelDrag(config: {
       originTop: sourceRect?.top ?? point.clientY - anchorY,
       anchorX,
       anchorY,
+      scrollDeltaX: 0,
+      scrollDeltaY: 0,
+      initialScrollPositions,
     };
 
     const nextProjectedVisibleOrders = configRef.current.grids.map((grid) => [...grid.visibleOrder]);
@@ -816,8 +841,8 @@ export function usePanelDrag(config: {
     if (overContainerIdx !== -1) {
       dragStateRef.current.preferredContainerIdx = overContainerIdx;
     }
-    dragStateRef.current.latestClientX = overlayPointerRef.current.startClientX + event.delta.x;
-    dragStateRef.current.latestClientY = overlayPointerRef.current.startClientY + event.delta.y;
+    dragStateRef.current.latestClientX = overlayPointerRef.current.startClientX + event.delta.x - overlayPointerRef.current.scrollDeltaX;
+    dragStateRef.current.latestClientY = overlayPointerRef.current.startClientY + event.delta.y - overlayPointerRef.current.scrollDeltaY;
     scheduledProjectedTargetRef.current?.();
   }, [resolveContainerIdxForOverId]);
 
@@ -831,8 +856,8 @@ export function usePanelDrag(config: {
 
   const onDragEnd = useCallback((event: DragEndEvent) => {
     if (!dragStateRef.current.activeId) return;
-    dragStateRef.current.latestClientX = overlayPointerRef.current.startClientX + event.delta.x;
-    dragStateRef.current.latestClientY = overlayPointerRef.current.startClientY + event.delta.y;
+    dragStateRef.current.latestClientX = overlayPointerRef.current.startClientX + event.delta.x - overlayPointerRef.current.scrollDeltaX;
+    dragStateRef.current.latestClientY = overlayPointerRef.current.startClientY + event.delta.y - overlayPointerRef.current.scrollDeltaY;
     scheduledProjectedTargetRef.current?.cancel();
     syncProjectedTarget();
     commitProjectedOrders();
