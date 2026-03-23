@@ -83,6 +83,10 @@ npm run start    # Production server
 npm run lint     # ESLint
 ```
 
+## Acknowledgements
+
+Inspired by [WorldMonitor](https://worldmonitor.app/).
+
 ## License
 
 [MIT](LICENSE)
