@@ -110,11 +110,11 @@ export default function Header({
       {/* Left: Logo + stats */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--status-live)] shrink-0 w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--status-live)] shrink-0 w-6 h-6 sm:w-7 sm:h-7" aria-hidden="true">
             <polygon points="22,12 17,3.4 7,3.4 2,12 7,20.6 17,20.6" />
             <path d="M2 12h20M12 3.4L16 12l-4 8.6M12 3.4L8 12l4 8.6" />
           </svg>
-          <span style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 800, letterSpacing: '-0.02em' }} className="text-[14px] sm:text-[17px] text-[var(--text)] whitespace-nowrap">
+          <span style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 800, letterSpacing: '-0.02em' }} className="text-[16px] sm:text-[19px] text-[var(--text)] whitespace-nowrap">
             PolyWorld
           </span>
         </div>
