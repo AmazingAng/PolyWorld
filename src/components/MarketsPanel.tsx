@@ -29,6 +29,7 @@ interface MarketsPanelProps {
   onRowSpanChange?: (span: number) => void;
   onRowSpanReset?: () => void;
   maxColSpan?: number;
+  selectedMarketId?: string | null;
   onTrade?: (state: import("./TradeModal").TradeModalState) => void;
   dragRootRef?: React.Ref<HTMLDivElement>;
   dragHandleProps?: PanelDragHandleProps;
@@ -66,6 +67,7 @@ function MarketsPanelInner({
   onRowSpanChange,
   onRowSpanReset,
   maxColSpan,
+  selectedMarketId,
   onTrade,
   dragRootRef,
   dragHandleProps,
@@ -353,7 +355,7 @@ function MarketsPanelInner({
               <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
             ) : (
               sortedAll.map((m) => (
-                <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
+                <MarketCard key={m.id} market={m} showChange selected onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
               ))
             )}
           </>
@@ -367,7 +369,7 @@ function MarketsPanelInner({
                   <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no markets match</div>
                 ) : (
                   searchFiltered.slice(0, 30).map((m) => (
-                    <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
+                    <MarketCard key={m.id} market={m} showChange selected onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
                   ))
                 )}
               </>
@@ -377,7 +379,7 @@ function MarketsPanelInner({
                   <>
                     <SectionLabel title="New Markets" />
                     {newMarkets.map((m) => (
-                      <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
+                      <MarketCard key={m.id} market={m} showChange selected onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
                     ))}
                   </>
                 )}
@@ -395,7 +397,7 @@ function MarketsPanelInner({
                           title={`Anomaly z=${m.anomaly.zScore}`}
                         />
                       )}
-                      <MarketCard market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
+                      <MarketCard market={m} showChange selected onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
                       {m.indicators && (
                         <div className="flex items-center gap-2 px-2.5 pb-1 -mt-0.5 text-[9px] font-mono text-[var(--text-faint)]">
                           {m.indicators.momentum !== null && (
@@ -426,7 +428,7 @@ function MarketsPanelInner({
                   <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
                 ) : (
                   trending.map((m) => (
-                    <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
+                    <MarketCard key={m.id} market={m} showChange selected onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
                   ))
                 )}
 
@@ -434,7 +436,7 @@ function MarketsPanelInner({
                   <>
                     <SectionLabel title="Global Markets" />
                     {global.map((m) => (
-                      <MarketCard key={m.id} market={m} showChange onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
+                      <MarketCard key={m.id} market={m} showChange selected onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
                     ))}
                   </>
                 )}

@@ -288,6 +288,10 @@ function WorldMapInner({
   const [hoverMarket, setHoverMarket] = useState<ProcessedMarket | null>(null);
   const [hoverPos, setHoverPos] = useState<{ top: number; left: number } | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverMarketRef = useRef<ProcessedMarket | null>(null);
+  hoverMarketRef.current = hoverMarket;
+  const selectedMarketIdRef = useRef(selectedMarketId);
+  selectedMarketIdRef.current = selectedMarketId;
 
   // Country hover popup state
   const [hoverCountry, setHoverCountry] = useState<{ name: string; x: number; y: number } | null>(null);
@@ -1202,51 +1206,82 @@ function WorldMapInner({
       if (!props || geom.type !== "Point") return;
       const market = marketsLookup.current.get(props.marketId);
       if (!market) return;
+      // Dismiss hover popup on click — the detail panel will show instead
+      if (hoverTimer.current) clearTimeout(hoverTimer.current);
+      setHoverMarket(null);
+      setHoverPos(null);
       if (onMarketClick) onMarketClick(market);
     });
 
     // Hover: feature-state highlight + cursor + preview popup
     let hoveredId: string | number | null = null;
-    map.on("mouseenter", "unclustered-point", (e) => {
-      map.getCanvas().style.cursor = "pointer";
-      if (e.features?.length) {
-        const id = e.features[0].id;
-        if (id !== undefined && id !== null) {
-          hoveredId = id;
-          map.setFeatureState({ source: "markets", id: hoveredId }, { hover: true });
-        }
-        const props = e.features[0].properties;
-        if (props?.marketId) {
-          const market = marketsLookup.current.get(props.marketId);
-          if (market) {
-            // Clear any pending timers (market + country)
-            if (hoverTimer.current) clearTimeout(hoverTimer.current);
-            if (countryHoverTimer.current) clearTimeout(countryHoverTimer.current);
-            setHoverCountry(null);
-            hoverTimer.current = setTimeout(() => {
-              const point = e.point;
-              const canvas = map.getCanvas().getBoundingClientRect();
-              const screenX = canvas.left + point.x;
-              const screenY = canvas.top + point.y;
-              const vw = window.innerWidth;
-              const vh = window.innerHeight;
-              // Position: prefer right of cursor; if no space, go left
-              let left = screenX + 16;
-              if (left + PREVIEW_W > vw - 4) {
-                left = screenX - PREVIEW_W - 16;
-              }
-              left = Math.max(4, Math.min(left, vw - PREVIEW_W - 4));
-              let top = screenY - 40;
-              top = Math.max(4, Math.min(top, vh - PREVIEW_MAX_H - 4));
-              setHoverMarket(market);
-              setHoverPos({ top, left });
-            }, 600);
+    let hoveredMarketId: string | null = null;
+
+    const updateHover = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+      if (!e.features?.length) return;
+      const feature = e.features[0];
+      const id = feature.id;
+      const props = feature.properties;
+      const marketId = props?.marketId as string | undefined;
+
+      // Same feature — skip
+      if (marketId && marketId === hoveredMarketId) return;
+
+      // Clear previous highlight
+      if (hoveredId !== null) {
+        map.setFeatureState({ source: "markets", id: hoveredId }, { hover: false });
+        hoveredId = null;
+      }
+
+      // Set new highlight
+      if (id !== undefined && id !== null) {
+        hoveredId = id;
+        map.setFeatureState({ source: "markets", id: hoveredId }, { hover: true });
+      }
+
+      hoveredMarketId = marketId ?? null;
+
+      if (marketId) {
+        const market = marketsLookup.current.get(marketId);
+        if (market && market.id !== selectedMarketIdRef.current) {
+          if (hoverTimer.current) clearTimeout(hoverTimer.current);
+          if (countryHoverTimer.current) clearTimeout(countryHoverTimer.current);
+          setHoverCountry(null);
+          const showPopup = () => {
+            const point = e.point;
+            const canvas = map.getCanvas().getBoundingClientRect();
+            const screenX = canvas.left + point.x;
+            const screenY = canvas.top + point.y;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            let left = screenX + 16;
+            if (left + PREVIEW_W > vw - 4) {
+              left = screenX - PREVIEW_W - 16;
+            }
+            left = Math.max(4, Math.min(left, vw - PREVIEW_W - 4));
+            let top = screenY - 40;
+            top = Math.max(4, Math.min(top, vh - PREVIEW_MAX_H - 4));
+            setHoverMarket(market);
+            setHoverPos({ top, left });
+          };
+          // If a popup is already showing, switch immediately; otherwise delay
+          if (hoverMarketRef.current) {
+            showPopup();
+          } else {
+            hoverTimer.current = setTimeout(showPopup, 350);
           }
         }
       }
+    };
+
+    map.on("mouseenter", "unclustered-point", (e) => {
+      map.getCanvas().style.cursor = "pointer";
+      updateHover(e);
     });
+    map.on("mousemove", "unclustered-point", updateHover);
     map.on("mouseleave", "unclustered-point", () => {
       map.getCanvas().style.cursor = "";
+      hoveredMarketId = null;
       if (hoveredId !== null) {
         map.setFeatureState({ source: "markets", id: hoveredId }, { hover: false });
         hoveredId = null;
@@ -1257,7 +1292,7 @@ function WorldMapInner({
         hoverTimer.current = null;
         setHoverMarket(null);
         setHoverPos(null);
-      }, 800);
+      }, 300);
     });
     map.on("mouseenter", "clusters", () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", "clusters", () => { map.getCanvas().style.cursor = ""; });

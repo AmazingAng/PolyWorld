@@ -63,6 +63,7 @@ const POPUP_GAP = 8;
 interface MarketCardProps {
   market: ProcessedMarket;
   showChange?: boolean;
+  selected?: boolean;
   onClick?: () => void;
   isWatched?: boolean;
   onToggleWatch?: () => void;
@@ -74,6 +75,7 @@ interface MarketCardProps {
 function MarketCardInner({
   market,
   showChange = false,
+  selected = false,
   onClick,
   isWatched,
   onToggleWatch,
@@ -126,6 +128,7 @@ function MarketCardInner({
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleMouseEnter = () => {
+    if (selected) return;
     if (dismissTimer.current) clearTimeout(dismissTimer.current);
     hoverTimer.current = setTimeout(() => {
       const pos = computePosition();

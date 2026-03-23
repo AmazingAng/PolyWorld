@@ -896,6 +896,7 @@ export default function Home() {
             {...panelHandlers["markets"]}
             rowSpan={rowSpanFor("markets")}
             maxColSpan={maxColSpan}
+            selectedMarketId={selectedMarket?.id}
             onTrade={setQuickTrade}
           />
         );

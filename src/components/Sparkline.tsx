@@ -26,6 +26,10 @@ interface SparklineProps {
 
 import { SERIES_COLORS } from "@/lib/chartConstants";
 
+// In-memory cache for sparkline API responses (survives re-mounts within same session)
+const sparklineCache = new Map<string, { ts: number; single: SnapshotRow[]; multi: SeriesData[] }>();
+const CACHE_TTL_MS = 60_000; // 1 minute
+
 /** Largest-Triangle-Three-Buckets downsampling */
 function lttb(data: { t: number; v: number }[], target: number): { t: number; v: number }[] {
   if (data.length <= target) return data;
@@ -117,6 +121,16 @@ function SparklineContent({
 
   useEffect(() => {
     let cancelled = false;
+    const cacheKey = `${eventId}:${hours}:${multiSeries ? "m" : "s"}`;
+
+    // Check cache first
+    const cached = sparklineCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+      setSingleData(cached.single);
+      setMultiData(cached.multi);
+      setLoading(false);
+      return;
+    }
 
     const baseUrl = `/api/snapshots?eventId=${encodeURIComponent(eventId)}&hours=${hours}`;
 
@@ -132,16 +146,17 @@ function SparklineContent({
       if (series) {
         setMultiData(series);
         setSingleData([]);
+        sparklineCache.set(cacheKey, { ts: Date.now(), single: [], multi: series });
         setLoading(false);
         return;
       }
       // Fall back to event-level snapshots
       return fetch(baseUrl).then(r => r.json()).then((rows) => {
         if (cancelled) return;
-        if (Array.isArray(rows)) {
-          setSingleData(rows.filter((r: SnapshotRow) => r.prob != null && !isNaN(r.prob)));
-        }
+        const filtered = Array.isArray(rows) ? rows.filter((r: SnapshotRow) => r.prob != null && !isNaN(r.prob)) : [];
+        setSingleData(filtered);
         setMultiData([]);
+        sparklineCache.set(cacheKey, { ts: Date.now(), single: filtered, multi: [] });
         setLoading(false);
       });
     }).catch(() => {
