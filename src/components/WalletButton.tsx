@@ -70,11 +70,19 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
   const { signTypedDataAsync } = useSignTypedData();
-  const { setWallet, clearWallet, tradeSession, setTradeSession, proxyAddress, setProxyAddress } = useWalletStore();
+  const { setWallet, clearWallet, tradeSession, setTradeSession, clearTradeSession, proxyAddress, setProxyAddress } = useWalletStore();
   const [authorizing, setAuthorizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [polyBalance, setPolyBalance] = useState<number | null>(null);
-  const [portfolioValue, setPortfolioValue] = useState<number | null>(null);
+  const [polyBalance, setPolyBalance] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const v = sessionStorage.getItem("pw:balance");
+    return v !== null ? Number(v) : null;
+  });
+  const [portfolioValue, setPortfolioValue] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const v = sessionStorage.getItem("pw:portfolio");
+    return v !== null ? Number(v) : null;
+  });
   const { approve, status: approveStatus, error: approveError, markDone } = useApproveProxy();
   const allConnectors = useConnectors();
   const [open, setOpen] = useState(false);
@@ -104,17 +112,16 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
       setWallet(address, chainId);
       const saved = loadTradeSession(address);
       if (saved) {
-        // Verify session is still valid on the server
+        // Optimistically set session immediately so effectiveProxy is available on first render
+        setTradeSession(saved);
+        // Verify session in background; if expired, re-authorize or clear
         fetch("/api/trade/balance", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionToken: saved.sessionToken }),
         }).then(async (res) => {
-          if (res.ok) {
-            setTradeSession(saved);
-          } else {
+          if (!res.ok) {
             // Session expired on server — silently re-authorize
-            // (user already authorized before, so we have proxy cached)
             const proxy = saved.proxyAddress;
             if (proxy && signTypedDataAsync) {
               try {
@@ -122,16 +129,16 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                 setTradeSession(session);
                 saveTradeSession(address, session);
               } catch {
-                // Signature rejected or failed — clear stale session
                 clearSavedTradeSession(address);
+                clearTradeSession();
               }
             } else {
               clearSavedTradeSession(address);
+              clearTradeSession();
             }
           }
         }).catch(() => {
-          // Network error — still load optimistically
-          setTradeSession(saved);
+          // Network error — keep optimistic session
         });
       }
     } else {
@@ -178,14 +185,18 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
     let cancelled = false;
     let seq = 0;
 
-    const fetchBal = async () => {
+    const fetchBal = async (force = false) => {
       const mySeq = ++seq;
       try {
         // Public GET endpoint — no auth required, reads on-chain USDC.e balance
-        const res = await fetch(`/api/trade/balance?address=${proxyAddr}`);
+        const url = `/api/trade/balance?address=${proxyAddr}${force ? "&force=1" : ""}`;
+        const res = await fetch(url);
         if (!res.ok) return;
         const data = await res.json();
-        if (!cancelled && mySeq === seq && data.balance !== undefined) setPolyBalance(data.balance);
+        if (!cancelled && mySeq === seq && data.balance !== undefined) {
+          setPolyBalance(data.balance);
+          try { sessionStorage.setItem("pw:balance", String(data.balance)); } catch {}
+        }
       } catch { /* ignore */ }
     };
 
@@ -200,14 +211,18 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
         const val = Array.isArray(data)
           ? data.reduce((s: number, p: { currentValue?: number; value?: number }) => s + (p.currentValue ?? p.value ?? 0), 0)
           : (data.portfolioValue ?? data.value ?? null);
-        if (!cancelled && typeof val === "number") setPortfolioValue(val);
+        if (!cancelled && typeof val === "number") {
+          setPortfolioValue(val);
+          try { sessionStorage.setItem("pw:portfolio", String(val)); } catch {}
+        }
       } catch { /* ignore */ }
     };
 
     fetchBal();
     fetchPortfolio();
     const iv = setInterval(() => { void fetchBal(); void fetchPortfolio(); }, 30_000);
-    const onRefreshEv = () => { void fetchBal(); void fetchPortfolio(); };
+    // Force bypass server cache when triggered by trade completion
+    const onRefreshEv = () => { void fetchBal(true); void fetchPortfolio(); };
     window.addEventListener("polyworld:refresh-header-balance", onRefreshEv);
     return () => { cancelled = true; clearInterval(iv); window.removeEventListener("polyworld:refresh-header-balance", onRefreshEv); };
   }, [effectiveProxy]);
@@ -257,7 +272,9 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
     };
     fetchPositions();
     const iv = setInterval(fetchPositions, 30_000);
-    return () => { cancelled = true; clearInterval(iv); };
+    const onRefreshPositions = () => { void fetchPositions(); };
+    window.addEventListener("polyworld:refresh-header-balance", onRefreshPositions);
+    return () => { cancelled = true; clearInterval(iv); window.removeEventListener("polyworld:refresh-header-balance", onRefreshPositions); };
   }, [effectiveProxy]);
 
   // Restore approval state from localStorage
@@ -290,6 +307,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
     clearWallet();
     setPolyBalance(null);
     setPortfolioValue(null);
+    try { sessionStorage.removeItem("pw:balance"); sessionStorage.removeItem("pw:portfolio"); } catch {}
     setResolvedProxy(null);
     setProxyNotFound(false);
     lookupDoneRef.current = null;

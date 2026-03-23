@@ -82,10 +82,12 @@ export async function GET(req: NextRequest) {
   }
 
   const addr = req.nextUrl.searchParams.get("address") ?? "";
+  const force = req.nextUrl.searchParams.get("force") === "1";
   if (!addr || !/^0x[a-fA-F0-9]{40}$/.test(addr)) {
     return NextResponse.json({ error: "valid address required" }, { status: 400 });
   }
   try {
+    if (force) balanceCache.delete(addr.toLowerCase());
     const balance = await getOnChainUsdcBalance(addr);
     return NextResponse.json({ balance });
   } catch (e) {
