@@ -1949,7 +1949,7 @@ function WorldMapInner({
           }}
         >
           <Suspense fallback={<div className="text-[12px] text-[var(--text-faint)] font-mono py-4">loading...</div>}>
-            <MarketPreview market={hoverMarket} onTrade={onTrade} />
+            <MarketPreview market={hoverMarket} onTrade={onTrade} hideChart />
           </Suspense>
         </div>,
         document.body

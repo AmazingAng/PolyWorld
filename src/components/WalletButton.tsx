@@ -163,7 +163,9 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
 
   // Fetch USDC.e balance + portfolio value — works with or without tradeSession
   // Uses resolvedProxy or tradeSession.proxyAddress (whichever is available)
-  const effectiveProxy = tradeSession?.proxyAddress ?? resolvedProxy;
+  // Prefer the resolved proxy wallet (actual Polymarket safe) over tradeSession.proxyAddress
+  // which may fall back to the owner EOA when proxy lookup failed during authorize
+  const effectiveProxy = resolvedProxy ?? tradeSession?.proxyAddress ?? null;
 
   // Portfolio positions for hover dropdown
   const [positions, setPositions] = useState<PositionItem[]>([]);

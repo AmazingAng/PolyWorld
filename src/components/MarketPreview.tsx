@@ -45,9 +45,11 @@ interface MarketPreviewProps {
   onTrade?: (state: TradeModalState) => void;
   /** Force single-line chart (don't show other options) */
   singleSeries?: boolean;
+  /** Hide the sparkline chart entirely */
+  hideChart?: boolean;
 }
 
-export default function MarketPreview({ market, onTrade, singleSeries }: MarketPreviewProps) {
+export default function MarketPreview({ market, onTrade, singleSeries, hideChart }: MarketPreviewProps) {
   const color = CATEGORY_COLORS[market.category] || CATEGORY_COLORS.Other;
   const chg = formatChange(market.change);
   const activeMarkets = useMemo(
@@ -138,16 +140,19 @@ export default function MarketPreview({ market, onTrade, singleSeries }: MarketP
         </span>
       </div>
 
+
       {/* Chart */}
-      <div className="bg-[var(--bg)] border border-[var(--border)] rounded-sm p-1.5 mb-3" style={{ boxShadow: "inset 0 1px 3px rgba(0,0,0,0.2)" }}>
-        <Sparkline
-          eventId={market.id}
-          hours={24}
-          width={440}
-          height={140}
-          multiSeries={!singleSeries && activeMarkets.length > 1}
-        />
-      </div>
+      {!hideChart && (
+        <div className="bg-[var(--bg)] border border-[var(--border)] rounded-sm p-1.5 mb-3" style={{ boxShadow: "inset 0 1px 3px rgba(0,0,0,0.2)" }}>
+          <Sparkline
+            eventId={market.id}
+            hours={24}
+            width={440}
+            height={140}
+            multiSeries={!singleSeries && activeMarkets.length > 1}
+          />
+        </div>
+      )}
 
       {/* Simple Yes/No trade button */}
       {!multiBinary && simpleTrade && onTrade && (
