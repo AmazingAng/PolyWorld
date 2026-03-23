@@ -30,7 +30,7 @@ interface TabbedPanelProps {
 const TABS = [
   { id: "markets", label: "Markets" },
   { id: "detail", label: "Detail" },
-  { id: "country", label: "Country" },
+  { id: "country", label: "Region" },
   { id: "live", label: "Live" },
   { id: "settings", label: "Settings" },
 ];

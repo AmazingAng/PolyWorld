@@ -1,6 +1,6 @@
 import { getDb } from "./db";
 import { fetchEventsFromAPI, processEvents } from "./polymarket";
-import type { ProcessedMarket, PolymarketMarket, SmartMoneyFlow, WhaleTrade } from "@/types";
+import type { ProcessedMarket, PolymarketMarket, SmartMoneyFlow, WhaleTrade, AnomalyInfo, MarketIndicators } from "@/types";
 import { computeImpactScores } from "./impact";
 import { detectAnomalies } from "./anomaly";
 import { computeIndicators } from "./indicators";
@@ -20,10 +20,12 @@ const GEOCODE_WATCHDOG_MS = 120_000; // 120s max for geocoding
 
 // --- Caches for readMarketsFromDb ---
 let resultCache: { data: { mapped: ProcessedMarket[]; unmapped: ProcessedMarket[] }; ts: number } | null = null;
-const RESULT_CACHE_TTL = 10_000; // 10s
+const RESULT_CACHE_TTL = 60_000; // 60s — sync runs every 30s and refreshes cache
 
-let anomalyCache: { data: Map<string, import("@/types").AnomalyInfo>; ts: number } | null = null;
-const ANOMALY_CACHE_TTL = 120_000; // 2 min
+// Precomputed caches — populated by runSync(), consumed by readMarketsFromDb()
+let precomputedAnomalies: Map<string, AnomalyInfo> | null = null;
+let precomputedIndicators: Map<string, MarketIndicators> | null = null;
+let precomputedSmartMoney: Map<string, SmartMoneyFlow> | null = null;
 
 let lastCleanup = Date.now(); // don't run cleanup on first sync
 const CLEANUP_INTERVAL = 3600_000; // 1 hour
@@ -211,8 +213,22 @@ export async function runSync(): Promise<{
       `INSERT INTO sync_log (started_at, finished_at, event_count, status) VALUES (?, ?, ?, ?)`
     ).run(startedAt, new Date().toISOString(), all.length, "ok");
 
-    // Invalidate read cache so next request picks up fresh data
+    // Precompute heavy data so readMarketsFromDb() can skip DB queries
+    try {
+      const topIds = db
+        .prepare(`SELECT id FROM events WHERE is_closed = 0 ORDER BY volume_24h DESC LIMIT 50`)
+        .all() as Array<{ id: string }>;
+      const top50Ids = topIds.map((r) => r.id);
+      precomputedAnomalies = detectAnomalies(db, top50Ids);
+      precomputedIndicators = computeIndicators(db, top50Ids);
+      precomputedSmartMoney = computeSmartMoney(db);
+    } catch (e) {
+      console.warn("[sync] Precomputation failed (non-critical):", e instanceof Error ? e.message : e);
+    }
+
+    // Rebuild result cache with fresh data (includes precomputed values)
     invalidateMarketCaches();
+    resultCache = { data: readMarketsFromDb(), ts: Date.now() };
 
     // Geocode new markets — fire-and-forget to avoid blocking sync
     geocodePending(db);
@@ -335,6 +351,88 @@ interface WhaleTradeRow {
   is_smart_wallet: number;
 }
 
+/** Compute smart money flow for all markets with recent whale trades */
+function computeSmartMoney(db: ReturnType<typeof getDb>): Map<string, SmartMoneyFlow> {
+  const result = new Map<string, SmartMoneyFlow>();
+  const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const trades = db
+    .prepare(
+      `SELECT wallet, condition_id, event_id, side, size, price, usdc_size, outcome,
+              title, slug, timestamp, is_smart_wallet
+       FROM whale_trades WHERE timestamp >= ?
+       ORDER BY timestamp DESC`
+    )
+    .all(cutoff24h) as WhaleTradeRow[];
+
+  const byEvent = new Map<string, WhaleTradeRow[]>();
+  for (const t of trades) {
+    const eid = t.event_id;
+    if (!eid) continue;
+    if (!byEvent.has(eid)) byEvent.set(eid, []);
+    byEvent.get(eid)!.push(t);
+  }
+
+  const walletNames = new Map<string, string | null>();
+  try {
+    const wallets = db
+      .prepare(`SELECT address, username FROM smart_wallets`)
+      .all() as Array<{ address: string; username: string | null }>;
+    for (const w of wallets) walletNames.set(w.address.toLowerCase(), w.username);
+  } catch { /* smart_wallets table may not exist yet */ }
+
+  for (const [eventId, eventTrades] of byEvent) {
+    let smartBuys = 0, smartSells = 0, whaleBuys = 0, whaleSells = 0;
+    const topWallets: SmartMoneyFlow["topWallets"] = [];
+    const seenWallets = new Set<string>();
+
+    for (const t of eventTrades) {
+      const side = t.side;
+      const isSmart = t.is_smart_wallet === 1;
+      if (side === "BUY") {
+        whaleBuys++;
+        if (isSmart) smartBuys++;
+      } else {
+        whaleSells++;
+        if (isSmart) smartSells++;
+      }
+      const addr = t.wallet.toLowerCase();
+      if (isSmart && !seenWallets.has(addr) && topWallets.length < 5) {
+        seenWallets.add(addr);
+        topWallets.push({
+          address: t.wallet,
+          username: walletNames.get(addr) || null,
+          side: side as "BUY" | "SELL",
+          size: t.usdc_size || t.size,
+        });
+      }
+    }
+
+    const buyRatio = whaleBuys / (whaleBuys + whaleSells || 1);
+    const netFlow: SmartMoneyFlow["netFlow"] =
+      buyRatio > 0.6 ? "bullish" : buyRatio < 0.4 ? "bearish" : "neutral";
+
+    const recentTrades: WhaleTrade[] = eventTrades.slice(0, 5).map((t) => ({
+      wallet: t.wallet,
+      username: walletNames.get(t.wallet.toLowerCase()) || undefined,
+      conditionId: t.condition_id,
+      eventId: t.event_id,
+      side: t.side as "BUY" | "SELL",
+      size: t.size,
+      price: t.price,
+      usdcSize: t.usdc_size,
+      outcome: t.outcome,
+      title: t.title,
+      slug: t.slug,
+      timestamp: t.timestamp,
+      isSmartWallet: t.is_smart_wallet === 1,
+    }));
+
+    result.set(eventId, { smartBuys, smartSells, whaleBuys, whaleSells, netFlow, topWallets, recentTrades });
+  }
+
+  return result;
+}
+
 export function readMarketsFromDb(): {
   mapped: ProcessedMarket[];
   unmapped: ProcessedMarket[];
@@ -425,132 +523,56 @@ export function readMarketsFromDb(): {
     }
   }
 
-  // Detect anomalies — use cache (2min TTL) to avoid slow 23M-row query
-  try {
-    if (!anomalyCache || Date.now() - anomalyCache.ts > ANOMALY_CACHE_TTL) {
+  // Apply precomputed data from runSync(), or fallback to sync computation on cold start
+  if (precomputedAnomalies) {
+    for (const m of allMarkets) {
+      const a = precomputedAnomalies.get(m.id);
+      if (a) m.anomaly = a;
+    }
+  } else {
+    try {
       const top = [...allMarkets]
         .sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))
         .slice(0, 50);
-      anomalyCache = {
-        data: detectAnomalies(db, top.map((m) => m.id)),
-        ts: Date.now(),
-      };
-    }
-    for (const m of allMarkets) {
-      const a = anomalyCache.data.get(m.id);
-      if (a) m.anomaly = a;
-    }
-  } catch {
-    // anomaly detection is non-critical
+      const anomalies = detectAnomalies(db, top.map((m) => m.id));
+      for (const m of allMarkets) {
+        const a = anomalies.get(m.id);
+        if (a) m.anomaly = a;
+      }
+    } catch { /* anomaly detection is non-critical */ }
   }
 
-  // Compute momentum/volatility/orderFlow indicators for top 50 markets (by volume)
-  try {
-    const top50 = [...allMarkets]
-      .sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))
-      .slice(0, 50);
-    const indicators = computeIndicators(db, top50.map((m) => m.id));
+  if (precomputedIndicators) {
     for (const m of allMarkets) {
-      const ind = indicators.get(m.id);
+      const ind = precomputedIndicators.get(m.id);
       if (ind) m.indicators = ind;
     }
-  } catch {
-    // indicators are non-critical
+  } else {
+    try {
+      const top50 = [...allMarkets]
+        .sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))
+        .slice(0, 50);
+      const indicators = computeIndicators(db, top50.map((m) => m.id));
+      for (const m of allMarkets) {
+        const ind = indicators.get(m.id);
+        if (ind) m.indicators = ind;
+      }
+    } catch { /* indicators are non-critical */ }
   }
 
-  // Attach smart money flow indicators for top 50 markets
-  try {
-    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const trades = db
-      .prepare(
-        `SELECT wallet, condition_id, event_id, side, size, price, usdc_size, outcome,
-                title, slug, timestamp, is_smart_wallet
-         FROM whale_trades WHERE timestamp >= ?
-         ORDER BY timestamp DESC`
-      )
-      .all(cutoff24h) as WhaleTradeRow[];
-
-    // Group by event_id
-    const byEvent = new Map<string, WhaleTradeRow[]>();
-    for (const t of trades) {
-      const eid = t.event_id;
-      if (!eid) continue;
-      if (!byEvent.has(eid)) byEvent.set(eid, []);
-      byEvent.get(eid)!.push(t);
-    }
-
-    // Fetch smart wallet usernames for display
-    const walletNames = new Map<string, string | null>();
-    try {
-      const wallets = db
-        .prepare(`SELECT address, username FROM smart_wallets`)
-        .all() as Array<{ address: string; username: string | null }>;
-      for (const w of wallets) walletNames.set(w.address.toLowerCase(), w.username);
-    } catch { /* smart_wallets table may not exist yet — proceed without usernames */ }
-
+  if (precomputedSmartMoney) {
     for (const m of allMarkets) {
-      const eventTrades = byEvent.get(m.id);
-      if (!eventTrades || eventTrades.length === 0) continue;
-
-      let smartBuys = 0, smartSells = 0, whaleBuys = 0, whaleSells = 0;
-      const topWallets: SmartMoneyFlow["topWallets"] = [];
-      const seenWallets = new Set<string>();
-
-      for (const t of eventTrades) {
-        const side = t.side;
-        const isSmart = t.is_smart_wallet === 1;
-        if (side === "BUY") {
-          whaleBuys++;
-          if (isSmart) smartBuys++;
-        } else {
-          whaleSells++;
-          if (isSmart) smartSells++;
-        }
-        // Track top wallets (first occurrence per wallet)
-        const addr = t.wallet.toLowerCase();
-        if (isSmart && !seenWallets.has(addr) && topWallets.length < 5) {
-          seenWallets.add(addr);
-          topWallets.push({
-            address: t.wallet,
-            username: walletNames.get(addr) || null,
-            side: side as "BUY" | "SELL",
-            size: t.usdc_size || t.size,
-          });
-        }
-      }
-
-      const buyRatio = whaleBuys / (whaleBuys + whaleSells || 1);
-      const netFlow: SmartMoneyFlow["netFlow"] =
-        buyRatio > 0.6 ? "bullish" : buyRatio < 0.4 ? "bearish" : "neutral";
-
-      const recentTrades: WhaleTrade[] = eventTrades.slice(0, 5).map((t) => ({
-        wallet: t.wallet,
-        username: walletNames.get(t.wallet.toLowerCase()) || undefined,
-        conditionId: t.condition_id,
-        eventId: t.event_id,
-        side: t.side as "BUY" | "SELL",
-        size: t.size,
-        price: t.price,
-        usdcSize: t.usdc_size,
-        outcome: t.outcome,
-        title: t.title,
-        slug: t.slug,
-        timestamp: t.timestamp,
-        isSmartWallet: t.is_smart_wallet === 1,
-      }));
-
-      m.smartMoney = {
-        smartBuys,
-        smartSells,
-        whaleBuys,
-        whaleSells,
-        netFlow,
-        topWallets,
-        recentTrades,
-      };
+      const sm = precomputedSmartMoney.get(m.id);
+      if (sm) m.smartMoney = sm;
     }
-  } catch {
-    // smart money is non-critical
+  } else {
+    try {
+      const smartMoney = computeSmartMoney(db);
+      for (const m of allMarkets) {
+        const sm = smartMoney.get(m.id);
+        if (sm) m.smartMoney = sm;
+      }
+    } catch { /* smart money is non-critical */ }
   }
 
   // Cache the result
