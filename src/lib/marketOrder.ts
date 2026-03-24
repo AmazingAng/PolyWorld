@@ -9,8 +9,10 @@ function asNumber(value: number | string): number {
   return typeof value === "number" ? value : Number.parseFloat(value);
 }
 
-function roundPrice(value: number): number {
-  return Math.round(value * 100) / 100;
+function roundPriceTo(value: number, tickSize: number): number {
+  const decimals = tickSize <= 0.001 ? 3 : tickSize <= 0.01 ? 2 : 1;
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
 }
 
 export function calculateMarketExecutionPrice(
@@ -49,16 +51,18 @@ export function calculateMarketExecutionPrice(
 }
 
 /**
- * Add a fixed 2-tick slippage buffer to the execution price.
- * BUY → price + 2 ticks (willing to pay slightly more)
- * SELL → price − 2 ticks (willing to receive slightly less)
- * Result is clamped to [0.01, 0.99].
+ * Add a slippage buffer to the execution price.
+ * Uses the larger of 5 ticks or 1% of execution price to account for
+ * orderbook movement between quote fetch and wallet signing.
+ * BUY → price + buffer (willing to pay slightly more)
+ * SELL → price − buffer (willing to receive slightly less)
+ * Result is clamped to [tickSize, 1 - tickSize].
  */
 export function bufferMarketPrice(side: MarketSide, executionPrice: number, tickSize = 0.01): number {
   const tick = tickSize > 0 ? tickSize : 0.01;
-  const buffer = tick * 2;
+  const buffer = Math.max(tick * 5, executionPrice * 0.01);
   const buffered = side === "BUY"
     ? executionPrice + buffer
     : executionPrice - buffer;
-  return roundPrice(Math.min(0.99, Math.max(0.01, buffered)));
+  return roundPriceTo(Math.min(1 - tick, Math.max(tick, buffered)), tick);
 }

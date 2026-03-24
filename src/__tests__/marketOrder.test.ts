@@ -43,23 +43,34 @@ describe("calculateMarketExecutionPrice", () => {
 });
 
 describe("bufferMarketPrice", () => {
-  it("adds two ticks for buys and subtracts two ticks for sells", () => {
-    expect(bufferMarketPrice("BUY", 0.56, 0.01)).toBe(0.58);
-    expect(bufferMarketPrice("SELL", 0.46, 0.01)).toBe(0.44);
+  it("uses max of 5 ticks or 1% for buffer", () => {
+    // 0.56 * 0.01 = 0.0056, 5 ticks = 0.05 → 5 ticks wins → 0.61
+    expect(bufferMarketPrice("BUY", 0.56, 0.01)).toBe(0.61);
+    // 0.46 - 0.05 = 0.41
+    expect(bufferMarketPrice("SELL", 0.46, 0.01)).toBe(0.41);
   });
 
-  it("clamps BUY result to 0.99 maximum", () => {
+  it("clamps BUY result to 1 - tick maximum", () => {
     expect(bufferMarketPrice("BUY", 0.99, 0.01)).toBe(0.99);
-    expect(bufferMarketPrice("BUY", 0.98, 0.01)).toBe(0.99);
+    expect(bufferMarketPrice("BUY", 0.96, 0.01)).toBe(0.99);
   });
 
-  it("clamps SELL result to 0.01 minimum", () => {
+  it("clamps SELL result to tick minimum", () => {
     expect(bufferMarketPrice("SELL", 0.01, 0.01)).toBe(0.01);
-    expect(bufferMarketPrice("SELL", 0.02, 0.01)).toBe(0.01);
+    expect(bufferMarketPrice("SELL", 0.04, 0.01)).toBe(0.01);
   });
 
   it("uses default tick size of 0.01 when not provided", () => {
-    expect(bufferMarketPrice("BUY", 0.50)).toBe(0.52);
-    expect(bufferMarketPrice("SELL", 0.50)).toBe(0.48);
+    // 0.50 + max(0.05, 0.005) = 0.55
+    expect(bufferMarketPrice("BUY", 0.50)).toBe(0.55);
+    // 0.50 - 0.05 = 0.45
+    expect(bufferMarketPrice("SELL", 0.50)).toBe(0.45);
+  });
+
+  it("handles sub-cent tick sizes with correct precision", () => {
+    // 0.951 + max(0.005, 0.00951) = 0.951 + 0.00951 ≈ 0.960 (rounded to 3dp)
+    expect(bufferMarketPrice("BUY", 0.951, 0.001)).toBe(0.961);
+    // 0.951 - 0.00951 ≈ 0.941
+    expect(bufferMarketPrice("SELL", 0.951, 0.001)).toBe(0.941);
   });
 });

@@ -78,6 +78,15 @@ function MarketsPanelInner({
   const [renderNow] = useState(() => Date.now());
   const [localCategoryFilter, setLocalCategoryFilter] = useState<Set<string>>(new Set());
   const [localSortSet, setLocalSortSet] = useState<Set<string>>(new Set(["impact"]));
+  const sortHydrated = useRef(false);
+  useEffect(() => {
+    if (sortHydrated.current) return;
+    sortHydrated.current = true;
+    const saved = localStorage.getItem("pw:marketSort");
+    if (saved && ["sections", "volume", "impact", "change", "new"].includes(saved)) {
+      setLocalSortSet(new Set([saved]));
+    }
+  }, []);
 
   // Sync external search (e.g. tag click from detail panel)
   useEffect(() => {
@@ -99,6 +108,10 @@ function MarketsPanelInner({
   }, [expanded]);
 
   const sortOrder: SortOrder = ([...localSortSet][0] as SortOrder) || "impact";
+
+  useEffect(() => {
+    try { localStorage.setItem("pw:marketSort", sortOrder); } catch {}
+  }, [sortOrder]);
 
   const effectiveCategories = useMemo(
     () => localCategoryFilter.size > 0 ? localCategoryFilter as Set<Category> : activeCategories,
