@@ -1591,17 +1591,7 @@ export default function Home() {
           {/* Horizontal resize handle + bottom panels (hidden in map fullscreen) */}
           {!isFullscreen && (
             <>
-              <div className="flex items-center">
-                <ResizeHandle direction="horizontal" onResize={handleHorizontalResize} />
-                <button
-                  onClick={() => useUIStore.getState().toggleBottomPanel()}
-                  className="shrink-0 px-1.5 py-0 text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-muted)] transition-colors z-20"
-                  title={bottomPanelCollapsed ? t("common.expandBottomPanel") : t("common.collapseBottomPanel")}
-                  style={{ marginLeft: -4 }}
-                >
-                  {bottomPanelCollapsed ? "\u25B2" : "\u25BC"}
-                </button>
-              </div>
+              <ResizeHandle direction="horizontal" onResize={handleHorizontalResize} />
               {!bottomPanelCollapsed && (
                 <div
                   className={`bottom-panels-grid${renderBottomVisiblePanels.length === 0 ? " bottom-panels-grid-empty" : ""}`}
