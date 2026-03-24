@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useWalletStore } from "@/stores/walletStore";
 import type { ProcessedMarket } from "@/types";
 import {
@@ -22,50 +22,56 @@ export default function OpenOrdersPanel({ markets, onSelectMarket }: OpenOrdersP
   const [loading, setLoading] = useState(false);
   const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
   const [cancellingAll, setCancellingAll] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sessionTokenRef = useRef(tradeSession?.sessionToken);
+  sessionTokenRef.current = tradeSession?.sessionToken;
 
-  const refresh = useCallback(async () => {
-    if (!tradeSession?.sessionToken) return;
+  const refresh = async () => {
+    const token = sessionTokenRef.current;
+    if (!token) return;
     setLoading(true);
     try {
-      const result = await fetchOpenOrders(tradeSession.sessionToken);
+      const result = await fetchOpenOrders(token);
       setOrders(result);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [tradeSession?.sessionToken]);
+  };
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
 
   // Poll every 15s
   useEffect(() => {
     if (!tradeSession?.sessionToken) { setOrders([]); return; }
-    void refresh();
-    intervalRef.current = setInterval(refresh, 15_000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [tradeSession?.sessionToken, refresh]);
+    void refreshRef.current();
+    const iv = setInterval(() => { void refreshRef.current(); }, 15_000);
+    return () => clearInterval(iv);
+  }, [tradeSession?.sessionToken]);
 
   // Listen for order-placed events
   useEffect(() => {
-    const handler = () => { void refresh(); };
+    const handler = () => { void refreshRef.current(); };
     window.addEventListener("polyworld:order-placed", handler);
     return () => window.removeEventListener("polyworld:order-placed", handler);
-  }, [refresh]);
+  }, []);
 
-  const handleCancel = useCallback(async (orderId: string) => {
-    if (!tradeSession?.sessionToken) return;
+  const handleCancel = async (orderId: string) => {
+    const token = sessionTokenRef.current;
+    if (!token) return;
     setCancellingIds((s) => new Set(s).add(orderId));
     try {
-      await cancelOpenOrder(orderId, tradeSession.sessionToken);
+      await cancelOpenOrder(orderId, token);
       setOrders((prev) => prev.filter((o) => o.id !== orderId));
     } catch { /* ignore */ }
     setCancellingIds((s) => { const n = new Set(s); n.delete(orderId); return n; });
-  }, [tradeSession?.sessionToken]);
+  };
 
-  const handleCancelAll = useCallback(async () => {
-    if (!tradeSession?.sessionToken || orders.length === 0) return;
+  const handleCancelAll = async () => {
+    const token = sessionTokenRef.current;
+    if (!token || orders.length === 0) return;
     setCancellingAll(true);
-    await cancelAllOpenOrders(orders.map((o) => o.id), tradeSession.sessionToken);
-    await refresh();
+    await cancelAllOpenOrders(orders.map((o) => o.id), token);
+    await refreshRef.current();
     setCancellingAll(false);
-  }, [tradeSession?.sessionToken, orders, refresh]);
+  };
 
   const tokenIndex = useMemo(() => buildTokenIndex(markets), [markets]);
   const resolved = useMemo(
