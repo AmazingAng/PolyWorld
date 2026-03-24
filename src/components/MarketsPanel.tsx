@@ -284,7 +284,7 @@ function MarketsPanelInner({
           </span>
           <span className="panel-title">{t("panels.markets")}</span>
           {/* Search input */}
-          <div className="relative w-[110px] shrink-0">
+          <div className="relative min-w-[60px] max-w-[110px] flex-1 shrink">
             <svg
               className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[var(--text-faint)]"
               width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"

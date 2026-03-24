@@ -607,7 +607,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
           onMouseLeave={() => { portfolioTimer.current = setTimeout(() => setPortfolioOpen(false), 300); }}
         >
           <div
-            className="flex items-center gap-3 px-3 py-1.5 text-[13px] tabular-nums border border-[var(--border-subtle)] cursor-default"
+            className="flex items-center gap-1 px-3 py-1.5 text-[13px] tabular-nums border border-[var(--border-subtle)] cursor-default"
             style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.4)" }}
           >
             {portfolioValue !== null && (

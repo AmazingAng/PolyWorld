@@ -1313,9 +1313,10 @@ body.panel-drag-active iframe {
   position: absolute;
   top: 0;
   right: 0;
-  width: 16px;
+  width: 15px;
   height: 100%;
   cursor: ew-resize;
+  background: transparent;
   z-index: 15;
   display: flex;
   align-items: center;
@@ -1363,8 +1364,9 @@ body.panel-drag-active iframe {
 .panel-row-resize-handle {
   flex-shrink: 0;
   width: 100%;
-  height: 16px;
+  height: 15px;
   cursor: ns-resize;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
