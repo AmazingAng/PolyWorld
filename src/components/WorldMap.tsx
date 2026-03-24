@@ -372,10 +372,10 @@ function WorldMapInner({
       if (e.ctrlKey || e.metaKey) {
         // Pinch gesture → zoom
         e.preventDefault();
-        const center = map.getCenter();
         const zoom = map.getZoom();
-        const delta = -e.deltaY * 0.01;
-        map.easeTo({ zoom: zoom + delta, center, duration: 0 });
+        const delta = -e.deltaY * 0.02;
+        const around = map.unproject(new maplibregl.Point(e.offsetX, e.offsetY));
+        map.easeTo({ zoom: zoom + delta, around, duration: 0 });
       } else {
         // Two-finger swipe → pan
         e.preventDefault();
