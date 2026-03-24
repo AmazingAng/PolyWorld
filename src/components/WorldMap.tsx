@@ -361,6 +361,25 @@ function WorldMapInner({
       dragRotate: false,
     });
 
+    // Two-finger trackpad swipe → pan; pinch (ctrlKey) → zoom
+    // Browsers report pinch as wheel events with ctrlKey=true
+    map.scrollZoom.disable();
+    const canvas = map.getCanvasContainer();
+    canvas.addEventListener("wheel", (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        // Pinch gesture → zoom
+        e.preventDefault();
+        const center = map.getCenter();
+        const zoom = map.getZoom();
+        const delta = -e.deltaY * 0.01;
+        map.easeTo({ zoom: zoom + delta, center, duration: 0 });
+      } else {
+        // Two-finger swipe → pan
+        e.preventDefault();
+        map.panBy([e.deltaX, e.deltaY], { duration: 0 });
+      }
+    }, { passive: false });
+
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
     // Track zoom tier changes for 2-tier clustering
