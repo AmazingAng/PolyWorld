@@ -1468,12 +1468,19 @@ export default function Home() {
           // Match position to market by title (conditionId formats don't align)
           const allMarkets = [...mapped, ...unmapped];
           const needle = positionTitle.toLowerCase().trim();
+          const outcomeNeedle = outcome.toLowerCase().trim();
           for (const ev of allMarkets) {
             // Match against event title or sub-market question
             const evMatch = ev.title.toLowerCase().trim() === needle;
             for (const m of ev.markets) {
               const mMatch = evMatch || (m.question || m.groupItemTitle || "").toLowerCase().trim() === needle;
               if (!mMatch) continue;
+              // For multi-outcome events, also match the specific sub-market by groupItemTitle
+              if (evMatch && ev.markets.length > 1 && m.groupItemTitle) {
+                const optionLabel = m.groupItemTitle.toLowerCase().trim();
+                // outcome could be "No change", "No change No", or plain "Yes"/"No"
+                if (optionLabel !== outcomeNeedle && !outcomeNeedle.startsWith(optionLabel)) continue;
+              }
               const ids = (() => {
                 if (!m.clobTokenIds) return [];
                 if (Array.isArray(m.clobTokenIds)) return m.clobTokenIds as string[];
@@ -1489,16 +1496,20 @@ export default function Home() {
                 const noTokenId = String(ids[1]);
                 const yesPrice = prices[0] ?? ev.prob ?? 0.5;
                 const noPrice = prices[1] ?? (1 - yesPrice);
-                const isNo = outcome.toLowerCase() === "no";
+                // "No" or outcome ending with " No" (e.g. "No change No") → pick No token
+                const isNo = outcomeNeedle === "no" || outcomeNeedle.endsWith(" no");
+                const optionName = m.groupItemTitle || m.question || "";
+                const yesLabel = optionName || "Yes";
+                const noLabel = optionName ? `${optionName} No` : "No";
                 setQuickTrade({
                   tokenId: isNo ? noTokenId : yesTokenId,
                   currentPrice: isNo ? noPrice : yesPrice,
-                  outcomeName: isNo ? "No" : "Yes",
+                  outcomeName: isNo ? noLabel : yesLabel,
                   marketTitle: ev.title,
                   negRisk: !!ev.negRisk,
                   defaultSide: "SELL",
-                  yesToken: { tokenId: yesTokenId, price: yesPrice, name: "Yes" },
-                  noToken: { tokenId: noTokenId, price: noPrice, name: "No" },
+                  yesToken: { tokenId: yesTokenId, price: yesPrice, name: yesLabel },
+                  noToken: { tokenId: noTokenId, price: noPrice, name: noLabel },
                   smartMoney: ev.smartMoney,
                   volume: ev.volume,
                   volume24h: ev.volume24h,
