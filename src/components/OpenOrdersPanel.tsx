@@ -1,0 +1,182 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useWalletStore } from "@/stores/walletStore";
+import type { ProcessedMarket } from "@/types";
+import {
+  fetchOpenOrders,
+  cancelOpenOrder,
+  cancelAllOpenOrders,
+  buildTokenIndex,
+  type OpenOrder,
+} from "@/lib/openOrders";
+
+interface OpenOrdersPanelProps {
+  markets: ProcessedMarket[];
+  onSelectMarket?: (slug: string) => void;
+}
+
+export default function OpenOrdersPanel({ markets, onSelectMarket }: OpenOrdersPanelProps) {
+  const tradeSession = useWalletStore((s) => s.tradeSession);
+  const [orders, setOrders] = useState<OpenOrder[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
+  const [cancellingAll, setCancellingAll] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!tradeSession?.sessionToken) return;
+    setLoading(true);
+    try {
+      const result = await fetchOpenOrders(tradeSession.sessionToken);
+      setOrders(result);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, [tradeSession?.sessionToken]);
+
+  // Poll every 15s
+  useEffect(() => {
+    if (!tradeSession?.sessionToken) { setOrders([]); return; }
+    void refresh();
+    intervalRef.current = setInterval(refresh, 15_000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [tradeSession?.sessionToken, refresh]);
+
+  // Listen for order-placed events
+  useEffect(() => {
+    const handler = () => { void refresh(); };
+    window.addEventListener("polyworld:order-placed", handler);
+    return () => window.removeEventListener("polyworld:order-placed", handler);
+  }, [refresh]);
+
+  const handleCancel = useCallback(async (orderId: string) => {
+    if (!tradeSession?.sessionToken) return;
+    setCancellingIds((s) => new Set(s).add(orderId));
+    try {
+      await cancelOpenOrder(orderId, tradeSession.sessionToken);
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+    } catch { /* ignore */ }
+    setCancellingIds((s) => { const n = new Set(s); n.delete(orderId); return n; });
+  }, [tradeSession?.sessionToken]);
+
+  const handleCancelAll = useCallback(async () => {
+    if (!tradeSession?.sessionToken || orders.length === 0) return;
+    setCancellingAll(true);
+    await cancelAllOpenOrders(orders.map((o) => o.id), tradeSession.sessionToken);
+    await refresh();
+    setCancellingAll(false);
+  }, [tradeSession?.sessionToken, orders, refresh]);
+
+  const tokenIndex = useMemo(() => buildTokenIndex(markets), [markets]);
+  const resolved = useMemo(
+    () => orders.map((o) => ({ order: o, market: tokenIndex.get(String(o.asset_id)) ?? null })),
+    [orders, tokenIndex],
+  );
+
+  if (!tradeSession) {
+    return (
+      <div className="text-[11px] text-[var(--text-faint)] font-mono px-1">
+        Connect wallet &amp; authorize to view open orders
+      </div>
+    );
+  }
+
+  if (loading && orders.length === 0) {
+    return (
+      <div className="text-[11px] text-[var(--text-ghost)] font-mono px-1">loading…</div>
+    );
+  }
+
+  if (orders.length === 0) {
+    return (
+      <div className="text-[11px] text-[var(--text-faint)] font-mono px-1">No open orders</div>
+    );
+  }
+
+  return (
+    <div className="font-mono text-[11px]">
+      {/* Header */}
+      <div className="flex items-center justify-between px-1 pb-2">
+        <span className="text-[var(--text-faint)] tabular-nums">{orders.length} order{orders.length !== 1 ? "s" : ""}</span>
+        <button
+          onClick={handleCancelAll}
+          disabled={cancellingAll}
+          className="text-[9px] px-1.5 py-0.5 border border-[#ff4444]/30 text-[#ff4444]/70 hover:text-[#ff4444] hover:border-[#ff4444]/50 transition-colors disabled:opacity-40"
+        >
+          {cancellingAll ? "Cancelling…" : "Cancel All"}
+        </button>
+      </div>
+
+      {/* Orders */}
+      <div className="space-y-0">
+        {resolved.map(({ order, market }) => {
+          const price = parseFloat(order.price) || 0;
+          const total = parseFloat(order.original_size) || 0;
+          const matched = parseFloat(order.size_matched) || 0;
+          const totalUsdc = total * price;
+          const isCancelling = cancellingIds.has(order.id);
+          const isBuy = order.side === "BUY";
+          const title = market?.title || `${order.asset_id.slice(0, 12)}…`;
+          const image = market?.image;
+
+          return (
+            <div
+              key={order.id}
+              className="px-1 py-2 border-t border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]/30 transition-colors group"
+            >
+              <div className="flex items-start gap-2">
+                {image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={image} alt="" width={28} height={28} className="rounded shrink-0 mt-0.5 object-cover" />
+                ) : (
+                  <div className="w-7 h-7 rounded shrink-0 mt-0.5 bg-[var(--border-subtle)] flex items-center justify-center text-[10px] text-[var(--text-ghost)]">
+                    {title.slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  {/* Title row */}
+                  <div className="flex items-center justify-between gap-1">
+                    {market ? (
+                      <button
+                        onClick={() => onSelectMarket?.(market.slug)}
+                        className="flex-1 min-w-0 text-[11px] text-[var(--text-muted)] group-hover:text-[var(--text)] transition-colors truncate block text-left"
+                        title={market.title}
+                      >
+                        {market.title}
+                      </button>
+                    ) : (
+                      <span className="flex-1 min-w-0 text-[11px] text-[var(--text-ghost)] truncate">{title}</span>
+                    )}
+                    <button
+                      onClick={() => handleCancel(order.id)}
+                      disabled={isCancelling}
+                      className="shrink-0 text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-ghost)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
+                    >
+                      {isCancelling ? "…" : "Cancel"}
+                    </button>
+                  </div>
+                  {/* Side + outcome + price */}
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="flex items-center gap-1.5 text-[10px] tabular-nums">
+                      <span className={`font-bold ${isBuy ? "text-[#22c55e]" : "text-[#ff4444]"}`}>
+                        {order.side} {market?.outcome}
+                      </span>
+                      <span className="text-[var(--text-faint)]">{(price * 100).toFixed(1)}¢</span>
+                    </span>
+                    <span className="text-[10px] tabular-nums text-[var(--text-faint)]">
+                      ${totalUsdc.toFixed(2)}
+                    </span>
+                  </div>
+                  {/* Filled progress */}
+                  <div className="flex items-center justify-between mt-0.5 text-[10px] tabular-nums text-[var(--text-faint)]">
+                    <span>Filled: {matched.toFixed(0)}/{total.toFixed(0)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

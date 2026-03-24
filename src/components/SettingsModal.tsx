@@ -26,6 +26,7 @@ export interface PanelVisibility {
   signals: boolean;
   resolution: boolean;
   portfolio: boolean;
+  openOrders: boolean;
 }
 
 interface SettingsModalProps {
@@ -80,6 +81,7 @@ const PANEL_LABELS: Record<string, string> = {
   signals: "Signals",
   resolution: "Resolution",
   portfolio: "Portfolio",
+  openOrders: "Open Orders",
 };
 
 export default function SettingsModal({

@@ -51,6 +51,7 @@ import SignalPanel from "@/components/SignalPanel";
 import TradeModal, { type TradeModalState } from "@/components/TradeModal";
 import ResolutionPanel from "@/components/ResolutionPanel";
 import PortfolioPanel from "@/components/PortfolioPanel";
+import OpenOrdersPanel from "@/components/OpenOrdersPanel";
 import FilterDropdown from "@/components/FilterDropdown";
 import { detectSignals } from "@/lib/smartSignals";
 import OnboardingModal from "@/components/OnboardingModal";
@@ -81,7 +82,7 @@ const WorldMap = dynamic(() => import("@/components/WorldMap"), {
 const REFRESH_INTERVAL = 45000;
 
 const DEFAULT_COL_SPANS: Record<string, number> = {
-  markets: 1, country: 1, news: 1, tweets: 1, live: 1, watchlist: 1, detail: 2, leaderboard: 1, trader: 1, smartMoney: 1, whaleTrades: 1, orderbook: 1, sentiment: 1, chart: 1, arbitrage: 1, calendar: 1, signals: 1, resolution: 1, portfolio: 1,
+  markets: 1, country: 1, news: 1, tweets: 1, live: 1, watchlist: 1, detail: 2, leaderboard: 1, trader: 1, smartMoney: 1, whaleTrades: 1, orderbook: 1, sentiment: 1, chart: 1, arbitrage: 1, calendar: 1, signals: 1, resolution: 1, portfolio: 1, openOrders: 1,
 };
 
 const PANEL_TITLES: Record<string, string> = {
@@ -104,6 +105,7 @@ const PANEL_TITLES: Record<string, string> = {
   signals: "Signals",
   resolution: "Resolution",
   portfolio: "Portfolio",
+  openOrders: "Open Orders",
 };
 
 // Time range → max age in milliseconds (0 = no filter)
@@ -321,7 +323,7 @@ export default function Home() {
 
   // Pre-generate stable handler objects for all panels (avoids inline arrow functions in renderPanel)
   const panelHandlers = useMemo(() => {
-    const ids = ["detail", "markets", "country", "news", "tweets", "live", "watchlist", "leaderboard", "smartMoney", "whaleTrades", "orderbook", "trader", "sentiment", "chart", "arbitrage", "calendar", "signals", "resolution", "portfolio"];
+    const ids = ["detail", "markets", "country", "news", "tweets", "live", "watchlist", "leaderboard", "smartMoney", "whaleTrades", "orderbook", "trader", "sentiment", "chart", "arbitrage", "calendar", "signals", "resolution", "portfolio", "openOrders"];
     const h: Record<string, { onColSpanChange: (s: number) => void; onColSpanReset: () => void; onRowSpanChange: (s: number) => void; onRowSpanReset: () => void }> = {};
     for (const id of ids) {
       h[id] = {
@@ -1392,6 +1394,23 @@ export default function Home() {
             maxColSpan={maxColSpan}
           >
             <PortfolioPanel
+              markets={[...mapped, ...unmapped]}
+              onSelectMarket={handleSmartMoneySelectMarket}
+            />
+          </Panel>
+        );
+      case "openOrders":
+        return (
+          <Panel
+            key="openOrders"
+            panelId="openOrders"
+            title="Open Orders"
+            colSpan={colSpanFor("openOrders")}
+            {...panelHandlers["openOrders"]}
+            rowSpan={rowSpanFor("openOrders")}
+            maxColSpan={maxColSpan}
+          >
+            <OpenOrdersPanel
               markets={[...mapped, ...unmapped]}
               onSelectMarket={handleSmartMoneySelectMarket}
             />

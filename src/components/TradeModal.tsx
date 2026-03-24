@@ -7,6 +7,11 @@ import { useReadContract } from "wagmi";
 import { polygon } from "wagmi/chains";
 import { useWalletStore } from "@/stores/walletStore";
 import type { SmartMoneyFlow } from "@/types";
+import {
+  fetchOpenOrders,
+  cancelOpenOrder,
+  type OpenOrder,
+} from "@/lib/openOrders";
 
 const OrderForm = dynamic(() => import("./OrderForm"), { ssr: false });
 
@@ -213,6 +218,14 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
   const [activeName, setActiveName] = useState(state.outcomeName);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>(() => loadRecentOrders());
+  const [activeOpenOrders, setActiveOpenOrders] = useState<OpenOrder[]>([]);
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+
+  // Read share balances for Yes/No tokens
+  const CTF_ADDRESS = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045" as const;
+  const CTF_BALANCE_ABI = [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ name: "account", type: "address" }, { name: "id", type: "uint256" }], outputs: [{ name: "", type: "uint256" }] }] as const;
+  const { proxyAddress, address, isConnected, tradeSession } = useWalletStore();
+  const balanceTarget = (proxyAddress ?? address) as `0x${string}` | undefined;
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); },
@@ -237,6 +250,33 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
     setRecentOrders(loadRecentOrders());
   }, [activeName]);
 
+  // Fetch open orders for the active token
+  const refreshOpenOrders = useCallback(async () => {
+    if (!tradeSession?.sessionToken) { setActiveOpenOrders([]); return; }
+    try {
+      const all = await fetchOpenOrders(tradeSession.sessionToken);
+      setActiveOpenOrders(all.filter((o) => o.asset_id === activeTokenId));
+    } catch { /* ignore */ }
+  }, [tradeSession?.sessionToken, activeTokenId]);
+
+  useEffect(() => {
+    void refreshOpenOrders();
+    const iv = setInterval(refreshOpenOrders, 15_000);
+    const handler = () => { void refreshOpenOrders(); };
+    window.addEventListener("polyworld:order-placed", handler);
+    return () => { clearInterval(iv); window.removeEventListener("polyworld:order-placed", handler); };
+  }, [refreshOpenOrders]);
+
+  const handleCancelOrder = useCallback(async (orderId: string) => {
+    if (!tradeSession?.sessionToken) return;
+    setCancellingOrderId(orderId);
+    try {
+      await cancelOpenOrder(orderId, tradeSession.sessionToken);
+      setActiveOpenOrders((prev) => prev.filter((o) => o.id !== orderId));
+    } catch { /* ignore */ }
+    setCancellingOrderId(null);
+  }, [tradeSession?.sessionToken]);
+
   const selectToken = (token: TokenInfo) => {
     setActiveTokenId(token.tokenId);
     setActivePrice(token.price);
@@ -245,12 +285,6 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
 
   const isYesActive = state.yesToken ? activeTokenId === state.yesToken.tokenId : !activeName.endsWith(" No");
   const displayedRecentOrders = useMemo(() => recentOrders.slice(0, 3), [recentOrders]);
-
-  // Read share balances for Yes/No tokens
-  const CTF_ADDRESS = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045" as const;
-  const CTF_BALANCE_ABI = [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ name: "account", type: "address" }, { name: "id", type: "uint256" }], outputs: [{ name: "", type: "uint256" }] }] as const;
-  const { proxyAddress, address, isConnected } = useWalletStore();
-  const balanceTarget = (proxyAddress ?? address) as `0x${string}` | undefined;
 
   const { data: yesShares } = useReadContract({
     address: CTF_ADDRESS, abi: CTF_BALANCE_ABI, functionName: "balanceOf",
@@ -425,6 +459,37 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                 autoFocusAmount
                 onSuccess={handleSuccess}
               />
+
+              {activeOpenOrders.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]">
+                  <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-ghost)] mb-1.5">open orders · {activeOpenOrders.length}</div>
+                  <div className="space-y-1">
+                    {activeOpenOrders.map((o) => {
+                      const price = parseFloat(o.price) || 0;
+                      const total = parseFloat(o.original_size) || 0;
+                      const matched = parseFloat(o.size_matched) || 0;
+                      const isBuy = o.side === "BUY";
+                      return (
+                        <div key={o.id} className="flex items-center justify-between gap-1.5 text-[9px] tabular-nums">
+                          <div className="flex items-center gap-1.5">
+                            <span className={isBuy ? "text-[#22c55e]" : "text-[#ff4444]"}>{o.side}</span>
+                            <span className="text-[var(--text-faint)]">{(price * 100).toFixed(1)}¢</span>
+                            <span className="text-[var(--text-ghost)]">{matched.toFixed(0)}/{total.toFixed(0)}</span>
+                            <span className="text-[var(--text-faint)]">${(total * price).toFixed(2)}</span>
+                          </div>
+                          <button
+                            onClick={() => handleCancelOrder(o.id)}
+                            disabled={cancellingOrderId === o.id}
+                            className="text-[9px] px-1 py-0 border border-[var(--border)] text-[var(--text-ghost)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
+                          >
+                            {cancellingOrderId === o.id ? "…" : "Cancel"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {displayedRecentOrders.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]">

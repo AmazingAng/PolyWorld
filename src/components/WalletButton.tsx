@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useConnect, useDisconnect, useAccount,
   useSwitchChain, useSignTypedData, useConnectors,
@@ -18,6 +18,13 @@ import {
   getApprovedFlag,
 } from "@/lib/tradeAuth";
 import { useApproveProxy } from "@/hooks/useApproveProxy";
+import {
+  fetchOpenOrders,
+  cancelOpenOrder,
+  buildTokenIndex,
+  type OpenOrder,
+} from "@/lib/openOrders";
+import { useMarketStore } from "@/stores/marketStore";
 
 interface WalletButtonProps {
   onRefresh?: () => void;
@@ -62,6 +69,98 @@ interface PositionItem {
   currentPrice: number;
   cashPnl: number;
   image: string | null;
+}
+
+function OpenOrdersTab({
+  openOrders,
+  cancellingOrderId,
+  onCancel,
+  onTradePosition,
+  onClose,
+}: {
+  openOrders: OpenOrder[];
+  cancellingOrderId: string | null;
+  onCancel: (id: string) => void;
+  onTradePosition?: (title: string, outcome: string) => void;
+  onClose: () => void;
+}) {
+  const mapped = useMarketStore((s) => s.mapped);
+  const unmapped = useMarketStore((s) => s.unmapped);
+  const tokenIndex = useMemo(() => buildTokenIndex([...mapped, ...unmapped]), [mapped, unmapped]);
+  const resolved = useMemo(
+    () => openOrders.map((o) => ({ order: o, market: tokenIndex.get(String(o.asset_id)) ?? null })),
+    [openOrders, tokenIndex],
+  );
+
+  if (openOrders.length === 0) {
+    return <div className="px-3 py-4 text-[11px] text-[var(--text-ghost)] text-center">No open orders</div>;
+  }
+
+  return (
+    <>
+      {resolved.map(({ order, market }) => {
+        const price = parseFloat(order.price) || 0;
+        const total = parseFloat(order.original_size) || 0;
+        const matched = parseFloat(order.size_matched) || 0;
+        const isBuy = order.side === "BUY";
+        const title = market?.title || `${order.asset_id.slice(0, 12)}…`;
+        const image = market?.image;
+
+        return (
+          <div
+            key={order.id}
+            className="w-full px-3 py-2.5 text-left border-b border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]/30 transition-colors group"
+          >
+            <div className="flex items-start gap-2.5">
+              {image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={image} alt="" width={28} height={28} className="rounded shrink-0 mt-0.5 object-cover" />
+              ) : (
+                <div className="w-7 h-7 rounded shrink-0 mt-0.5 bg-[var(--border-subtle)] flex items-center justify-center text-[10px] text-[var(--text-ghost)]">
+                  {title.slice(0, 1).toUpperCase()}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                {market ? (
+                  <button
+                    onClick={() => {
+                      onTradePosition?.(market.title, market.outcome);
+                      onClose();
+                    }}
+                    className="text-[12px] text-[var(--text-muted)] group-hover:text-[var(--text)] truncate leading-snug transition-colors block text-left w-full"
+                    title={market.title}
+                  >
+                    {market.title}
+                  </button>
+                ) : (
+                  <div className="text-[12px] text-[var(--text-ghost)] truncate leading-snug">{title}</div>
+                )}
+                <div className="flex items-center justify-between mt-1">
+                  <span className="flex items-center gap-1.5 text-[11px] tabular-nums">
+                    <span className={`font-bold ${isBuy ? "text-[#22c55e]" : "text-[#ff4444]"}`}>
+                      {order.side} {market?.outcome}
+                    </span>
+                    <span className="text-[var(--text-faint)]">{(price * 100).toFixed(1)}¢</span>
+                  </span>
+                  <button
+                    onClick={() => onCancel(order.id)}
+                    disabled={cancellingOrderId === order.id}
+                    className="shrink-0 text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-ghost)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
+                  >
+                    {cancellingOrderId === order.id ? "…" : "Cancel"}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between mt-0.5 text-[10px] tabular-nums text-[var(--text-faint)]">
+                  <span>Filled: {matched.toFixed(0)}/{total.toFixed(0)}</span>
+                  <span>${(total * price).toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
 }
 
 export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade, onTradePosition }: WalletButtonProps) {
@@ -178,6 +277,9 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
   const [positions, setPositions] = useState<PositionItem[]>([]);
   const [portfolioOpen, setPortfolioOpen] = useState(false);
   const portfolioTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [portfolioTab, setPortfolioTab] = useState<"positions" | "orders">("positions");
+  const [openOrders, setOpenOrders] = useState<OpenOrder[]>([]);
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!effectiveProxy) { setPolyBalance(null); setPortfolioValue(null); return; }
@@ -276,6 +378,33 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
     window.addEventListener("polyworld:refresh-header-balance", onRefreshPositions);
     return () => { cancelled = true; clearInterval(iv); window.removeEventListener("polyworld:refresh-header-balance", onRefreshPositions); };
   }, [effectiveProxy]);
+
+  // Fetch open orders for portfolio hover dropdown
+  useEffect(() => {
+    if (!effectiveProxy || !tradeSession?.sessionToken) { setOpenOrders([]); return; }
+    let cancelled = false;
+    const fetchOrders = async () => {
+      try {
+        const result = await fetchOpenOrders(tradeSession.sessionToken);
+        if (!cancelled) setOpenOrders(result);
+      } catch { /* ignore */ }
+    };
+    fetchOrders();
+    const iv = setInterval(fetchOrders, 15_000);
+    const onOrderPlaced = () => { void fetchOrders(); };
+    window.addEventListener("polyworld:order-placed", onOrderPlaced);
+    return () => { cancelled = true; clearInterval(iv); window.removeEventListener("polyworld:order-placed", onOrderPlaced); };
+  }, [effectiveProxy, tradeSession?.sessionToken]);
+
+  const handleCancelOrder = useCallback(async (orderId: string) => {
+    if (!tradeSession?.sessionToken) return;
+    setCancellingOrderId(orderId);
+    try {
+      await cancelOpenOrder(orderId, tradeSession.sessionToken);
+      setOpenOrders((prev) => prev.filter((o) => o.id !== orderId));
+    } catch { /* ignore */ }
+    setCancellingOrderId(null);
+  }, [tradeSession?.sessionToken]);
 
   // Restore approval state from localStorage
   useEffect(() => {
@@ -502,53 +631,86 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
             )}
           </div>
 
-          {/* Portfolio positions dropdown */}
-          {portfolioOpen && positions.length > 0 && (
+          {/* Portfolio positions / open orders dropdown */}
+          {portfolioOpen && (positions.length > 0 || openOrders.length > 0) && (
             <div
               className="absolute right-0 top-full mt-1 w-[340px] max-h-[400px] overflow-y-auto bg-[var(--bg)] border border-[var(--border)] z-[200] font-mono"
               style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
             >
-              <div className="px-3 py-2 text-[10px] text-[var(--text-ghost)] uppercase tracking-[0.1em] border-b border-[var(--border-subtle)] sticky top-0 bg-[var(--bg)]">
-                Positions · {positions.length}
-              </div>
-              {positions.map((p) => (
+              {/* Tabs */}
+              <div className="flex items-center border-b border-[var(--border-subtle)] sticky top-0 bg-[var(--bg)] z-10">
                 <button
-                  key={`${p.conditionId}-${p.outcome}`}
-                  onClick={() => {
-                    onTradePosition?.(p.title, p.outcome);
-                    setPortfolioOpen(false);
-                  }}
-                  className="w-full px-3 py-2.5 text-left border-b border-[var(--border-subtle)] hover:bg-[#22c55e]/5 cursor-pointer transition-colors group"
+                  onClick={() => setPortfolioTab("positions")}
+                  className={`flex-1 px-3 py-2 text-[10px] uppercase tracking-[0.1em] transition-colors ${
+                    portfolioTab === "positions"
+                      ? "text-[var(--text-muted)] border-b border-[var(--text-faint)]"
+                      : "text-[var(--text-ghost)] hover:text-[var(--text-faint)]"
+                  }`}
                 >
-                  <div className="flex items-start gap-2.5">
-                    {p.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.image} alt="" width={28} height={28} className="rounded shrink-0 mt-0.5 object-cover" />
-                    ) : (
-                      <div className="w-7 h-7 rounded shrink-0 mt-0.5 bg-[var(--border-subtle)] flex items-center justify-center text-[10px] text-[var(--text-ghost)]">
-                        {p.title.slice(0, 1).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[12px] text-[var(--text-muted)] group-hover:text-[var(--text)] truncate leading-snug transition-colors">{p.title}</div>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className={`text-[11px] font-bold ${p.outcome.toLowerCase() === "no" ? "text-[#ff4444]" : "text-[#22c55e]"}`}>
-                          {p.outcome}
-                        </span>
-                        <span className="text-[11px] text-[var(--text-secondary)] font-bold tabular-nums">
-                          {p.size.toFixed(2)} shares
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between mt-0.5 text-[10px] tabular-nums text-[var(--text-faint)]">
-                        <span>Avg: {(p.avgPrice * 100).toFixed(1)}¢ · Cur: {(p.currentPrice * 100).toFixed(1)}¢</span>
-                        <span className={`font-bold ${p.cashPnl >= 0 ? "text-[#22c55e]" : "text-[#ff4444]"}`}>
-                          {p.cashPnl >= 0 ? "+" : ""}${p.cashPnl.toFixed(2)}
-                        </span>
+                  Positions · {positions.length}
+                </button>
+                <button
+                  onClick={() => setPortfolioTab("orders")}
+                  className={`flex-1 px-3 py-2 text-[10px] uppercase tracking-[0.1em] transition-colors ${
+                    portfolioTab === "orders"
+                      ? "text-[var(--text-muted)] border-b border-[var(--text-faint)]"
+                      : "text-[var(--text-ghost)] hover:text-[var(--text-faint)]"
+                  }`}
+                >
+                  Orders · {openOrders.length}
+                </button>
+              </div>
+
+              {portfolioTab === "positions" ? (
+                positions.length > 0 ? positions.map((p) => (
+                  <button
+                    key={`${p.conditionId}-${p.outcome}`}
+                    onClick={() => {
+                      onTradePosition?.(p.title, p.outcome);
+                      setPortfolioOpen(false);
+                    }}
+                    className="w-full px-3 py-2.5 text-left border-b border-[var(--border-subtle)] hover:bg-[#22c55e]/5 cursor-pointer transition-colors group"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      {p.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.image} alt="" width={28} height={28} className="rounded shrink-0 mt-0.5 object-cover" />
+                      ) : (
+                        <div className="w-7 h-7 rounded shrink-0 mt-0.5 bg-[var(--border-subtle)] flex items-center justify-center text-[10px] text-[var(--text-ghost)]">
+                          {p.title.slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12px] text-[var(--text-muted)] group-hover:text-[var(--text)] truncate leading-snug transition-colors">{p.title}</div>
+                        <div className="flex items-center justify-between mt-1">
+                          <span className={`text-[11px] font-bold ${p.outcome.toLowerCase() === "no" ? "text-[#ff4444]" : "text-[#22c55e]"}`}>
+                            {p.outcome}
+                          </span>
+                          <span className="text-[11px] text-[var(--text-secondary)] font-bold tabular-nums">
+                            {p.size.toFixed(2)} shares
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between mt-0.5 text-[10px] tabular-nums text-[var(--text-faint)]">
+                          <span>Avg: {(p.avgPrice * 100).toFixed(1)}¢ · Cur: {(p.currentPrice * 100).toFixed(1)}¢</span>
+                          <span className={`font-bold ${p.cashPnl >= 0 ? "text-[#22c55e]" : "text-[#ff4444]"}`}>
+                            {p.cashPnl >= 0 ? "+" : ""}${p.cashPnl.toFixed(2)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                )) : (
+                  <div className="px-3 py-4 text-[11px] text-[var(--text-ghost)] text-center">No positions</div>
+                )
+              ) : (
+                <OpenOrdersTab
+                  openOrders={openOrders}
+                  cancellingOrderId={cancellingOrderId}
+                  onCancel={handleCancelOrder}
+                  onTradePosition={onTradePosition}
+                  onClose={() => setPortfolioOpen(false)}
+                />
+              )}
             </div>
           )}
         </div>

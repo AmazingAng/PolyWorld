@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useAccount, useConnect, useSignTypedData, useReadContract, useWalletClient, useWriteContract } from "wagmi";
 import { polygon } from "wagmi/chains";
 import { useWalletStore } from "@/stores/walletStore";
@@ -9,6 +9,7 @@ import { authorizeTradeSession, lookupProxyWallet, saveTradeSession, setApproved
 import { useSignMessage } from "wagmi";
 import type { MarketSide } from "@/lib/marketOrder";
 import { roundDown } from "@/lib/tradeAmounts";
+import { fetchOpenOrders, type OpenOrder } from "@/lib/openOrders";
 import { Chain, ClobClient, OrderType as ClobOrderType, Side as ClobSide, SignatureType } from "@polymarket/clob-client";
 
 // Polymarket contract addresses on Polygon (from @polymarket/clob-client getContractConfig)
@@ -41,8 +42,6 @@ const ERC20_ABI = [
     outputs: [{ name: "", type: "bool" }] },
 ] as const;
 
-// Rounding helpers matching SDK's ROUNDING_CONFIG["0.01"]
-const PRICE_DECIMALS = 2;
 const SIZE_DECIMALS = 2;
 const USDC_DECIMALS  = 6;
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -147,6 +146,7 @@ export default function OrderForm({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [minOrderShares, setMinOrderShares] = useState(5);
+  const [tickSize, setTickSize] = useState(0.01);
   const [optimisticSharesHeld, setOptimisticSharesHeld] = useState<number | null>(null);
   const [ctfApprovalFallback, setCtfApprovalFallback] = useState(false);
   const [quotedMarketPrice, setQuotedMarketPrice] = useState<number | null>(null);   // execution price (display)
@@ -154,7 +154,13 @@ export default function OrderForm({
   const quotedAtRef = useRef<number | null>(null);
   const [quoteRefreshKey, setQuoteRefreshKey] = useState(0);
 
-  useEffect(() => { setPrice(currentPrice.toFixed(2)); }, [currentPrice]);
+  const priceDecimals = useMemo(() => tickSize <= 0.001 ? 3 : tickSize <= 0.01 ? 2 : 1, [tickSize]);
+  const centsStep = useMemo(() => tickSize * 100, [tickSize]);
+  const centsDecimals = useMemo(() => Math.max(0, priceDecimals - 2), [priceDecimals]);
+  const minPrice = tickSize;
+  const maxPrice = 1 - tickSize;
+
+  useEffect(() => { setPrice(currentPrice.toFixed(priceDecimals)); }, [currentPrice, priceDecimals]);
   // Reset state when the traded token changes; also clear stale orderbook prices
   useEffect(() => {
     setSide(defaultSide); setAmount(""); setStatus("idle"); setErrorMsg(null); setCtfApprovalFallback(false);
@@ -165,8 +171,9 @@ export default function OrderForm({
     if (!tokenId) return;
     fetch(`/api/orderbook?tokenId=${tokenId}`)
       .then(r => r.ok ? r.json() : null)
-      .then((d: { minimumOrderSize?: number; feeRateBps?: number } | null) => {
+      .then((d: { minimumOrderSize?: number; feeRateBps?: number; tickSize?: number } | null) => {
         if (d?.minimumOrderSize != null) setMinOrderShares(d.minimumOrderSize);
+        if (d?.tickSize != null && d.tickSize > 0) setTickSize(d.tickSize);
       })
       .catch(() => {/* keep default */});
   }, [tokenId]);
@@ -209,7 +216,7 @@ export default function OrderForm({
     return () => clearTimeout(timer);
   }, [isMarketOrder, amountNum, tokenId, side, quoteRefreshKey]);
 
-  const rawPrice = roundNormal(priceNum, PRICE_DECIMALS);
+  const rawPrice = roundNormal(priceNum, priceDecimals);
 
   const isEOA = !!address && !!proxyAddress && proxyAddress.toLowerCase() === address.toLowerCase();
 
@@ -255,8 +262,6 @@ export default function OrderForm({
   const sizeTooSmall = amountNum > 0 && (
     side === "SELL" ? amountNum < minSellShares : amountNum < MIN_BUY_USDC
   );
-  const exceedsBalance = side === "BUY" && amountNum > 0 && usdcBalance !== null && amountNum > usdcBalance;
-
   const { data: shareBalance, refetch: refetchShares } = useReadContract({
     address: CTF_ADDRESS,
     abi: CTF_ABI,
@@ -266,7 +271,41 @@ export default function OrderForm({
     query: { enabled: isConnected && isPolygon && !!balanceTarget && !!tokenId, refetchInterval: 15_000 },
   });
   const sharesHeld = shareBalance !== undefined ? Number(shareBalance) / 1e6 : null;
-  const displayedSharesHeld = optimisticSharesHeld ?? sharesHeld;
+
+  // Shares/USDC locked in existing open orders for this token — not available for new orders
+  const [lockedShares, setLockedShares] = useState(0);
+  const [lockedUsdc, setLockedUsdc] = useState(0);
+  useEffect(() => {
+    if (!tradeSession?.sessionToken || !tokenId) { setLockedShares(0); setLockedUsdc(0); return; }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const orders = await fetchOpenOrders(tradeSession.sessionToken);
+        let sellLocked = 0;
+        let buyLocked = 0;
+        for (const o of orders) {
+          const remaining = (parseFloat(o.original_size) || 0) - (parseFloat(o.size_matched) || 0);
+          if (remaining <= 0) continue;
+          if (o.asset_id === tokenId && o.side === "SELL") {
+            sellLocked += remaining;
+          }
+          if (o.side === "BUY") {
+            buyLocked += remaining * (parseFloat(o.price) || 0);
+          }
+        }
+        if (!cancelled) { setLockedShares(sellLocked); setLockedUsdc(buyLocked); }
+      } catch { /* ignore */ }
+    };
+    void load();
+    const onOrderPlaced = () => { void load(); };
+    window.addEventListener("polyworld:order-placed", onOrderPlaced);
+    return () => { cancelled = true; window.removeEventListener("polyworld:order-placed", onOrderPlaced); };
+  }, [tradeSession?.sessionToken, tokenId]);
+
+  const availableUsdc = usdcBalance !== null ? Math.max(0, usdcBalance - lockedUsdc) : null;
+  const exceedsBalance = side === "BUY" && amountNum > 0 && availableUsdc !== null && amountNum > availableUsdc;
+  const availableShares = sharesHeld !== null ? Math.max(0, sharesHeld - lockedShares) : null;
+  const displayedSharesHeld = optimisticSharesHeld ?? availableShares;
   const exceedsShares = side === "SELL" && amountNum > 0 && displayedSharesHeld !== null && amountNum > displayedSharesHeld;
 
   useEffect(() => {
@@ -373,7 +412,7 @@ export default function OrderForm({
       }
 
       const exchangeAddr = negRisk ? NEG_RISK_EXCHANGE_ADDR : EXCHANGE_ADDRESS;
-      const orderPr = roundNormal(effectivePrice, PRICE_DECIMALS);
+      const orderPr = roundNormal(effectivePrice, priceDecimals);
       const rawSz  = roundDown(effectiveSide === "BUY" ? effectiveAmount / orderPr : effectiveAmount, 2);
       const proxy = (proxyAddress ?? address) as `0x${string}`;
       const eoa   = address as `0x${string}`;
@@ -466,6 +505,9 @@ export default function OrderForm({
         }
       }
       void refreshTradeState();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("polyworld:order-placed"));
+      }
       addTradeToast(
         "success",
         finalStatus === "matched" ? "order matched" : "order placed",
@@ -523,7 +565,7 @@ export default function OrderForm({
       setErrorMsg(msg);
       addTradeToast("error", "order failed", `${effectiveSide} ${outcomeName}`, msg.slice(0, 60), traceId);
     }
-  }, [tradeSession, address, proxyAddress, priceNum, side, amountNum, tokenId, negRisk, walletClient, refreshTradeState, outcomeName, addTradeToast, sharesHeld, onSuccess]);
+  }, [tradeSession, address, proxyAddress, priceNum, side, amountNum, tokenId, negRisk, walletClient, refreshTradeState, outcomeName, addTradeToast, sharesHeld, onSuccess, priceDecimals]);
 
   // For SELL: approve CTF operator (proxy via Safe relayer, or EOA via writeContract) then place order
   const handleApproveCTFAndSell = useCallback(async () => {
@@ -678,9 +720,9 @@ export default function OrderForm({
                 side === "BUY" ? "border-[#22c55e]/25 focus:border-[#22c55e]/45" : "border-[#ff4444]/25 focus:border-[#ff4444]/45"
               }`}
             />
-            {side === "BUY" && usdcBalance !== null && (
+            {side === "BUY" && availableUsdc !== null && (
               <span className={`text-[9px] shrink-0 ${exceedsBalance ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
-                / ${usdcBalance.toFixed(2)}
+                / ${availableUsdc.toFixed(2)}
               </span>
             )}
             {side === "SELL" && hasSharesToSell && (
@@ -748,7 +790,7 @@ export default function OrderForm({
   // ─── FULL MODE ───────────────────────────────────────────────────────────────
   const effectivePriceForCalc = isMarketOrder ? currentPrice : priceNum;
   const estSharesFull = side === "BUY"
-    ? roundDown(amountNum / Math.max(effectivePriceForCalc, 0.01), SIZE_DECIMALS)
+    ? roundDown(amountNum / Math.max(effectivePriceForCalc, minPrice), SIZE_DECIMALS)
     : amountNum;
   const profitIfWin = side === "BUY" ? roundDown(estSharesFull - amountNum, 2) : 0;
   const returnPctFull = amountNum > 0 && side === "BUY" && effectivePriceForCalc > 0
@@ -759,8 +801,9 @@ export default function OrderForm({
     : 0;
 
   const adjustPrice = (deltaCents: number) => {
-    const newCents = Math.max(1, Math.min(99, Math.round(priceNum * 100) + deltaCents));
-    setPrice((newCents / 100).toFixed(2));
+    const newCents = Math.max(centsStep, Math.min(maxPrice * 100,
+      roundNormal(priceNum * 100 + deltaCents, centsDecimals)));
+    setPrice((newCents / 100).toFixed(priceDecimals));
   };
 
   // Must be defined before any conditional return to satisfy Rules of Hooks
@@ -821,15 +864,15 @@ export default function OrderForm({
           </button>
         ))}
         <div className="ml-auto pr-0.5">
-          {usdcBalanceDisplay !== null && (
+          {availableUsdc !== null && (
             <span className="text-[10px] text-[var(--text-muted)] tabular-nums">
               Balance{" "}
               <button
-                onClick={() => side === "BUY" && setAmount(usdcBalanceDisplay)}
+                onClick={() => side === "BUY" && setAmount(availableUsdc.toFixed(2))}
                 className={`text-[var(--text)] tabular-nums ${side === "BUY" ? "hover:text-[#22c55e] cursor-pointer" : "cursor-default"} transition-colors`}
                 title={side === "BUY" ? "Click to use full balance" : undefined}
               >
-                ${usdcBalanceDisplay}
+                ${availableUsdc.toFixed(2)}
               </button>
             </span>
           )}
@@ -841,41 +884,41 @@ export default function OrderForm({
         <div className="text-[9px] text-[var(--text-faint)] uppercase tracking-[0.08em] mb-1">Price</div>
         {!isMarketOrder ? (
           <div className="flex items-center gap-1">
-            {([-10, -1] as const).map((d) => (
+            {(tickSize <= 0.001 ? [-10, -1, -0.1] : [-10, -1]).map((d) => (
               <button
                 key={d}
                 onClick={() => adjustPrice(d)}
                 className="text-[9px] px-2 py-1.5 border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors tabular-nums shrink-0"
               >
-                {d}¢
+                {d < -1 || Number.isInteger(d) ? `${d}¢` : `${d.toFixed(1)}¢`}
               </button>
             ))}
             <input
               type="number"
-              min="1"
-              max="99"
-              step="0.1"
-              value={(priceNum * 100).toFixed(1)}
+              min={centsStep}
+              max={maxPrice * 100}
+              step={centsStep}
+              value={(priceNum * 100).toFixed(centsDecimals)}
               onChange={(e) => {
                 const cents = parseFloat(e.target.value);
-                if (!isNaN(cents)) setPrice((Math.max(0.01, Math.min(0.99, cents / 100)).toFixed(2)));
+                if (!isNaN(cents)) setPrice((Math.max(minPrice, Math.min(maxPrice, cents / 100)).toFixed(priceDecimals)));
               }}
               className="flex-1 bg-transparent border border-[var(--border)] px-2 py-1.5 text-[13px] font-bold text-center text-[var(--text)] tabular-nums outline-none focus:border-[var(--text-faint)]"
             />
-            {([1, 10] as const).map((d) => (
+            {(tickSize <= 0.001 ? [0.1, 1, 10] : [1, 10]).map((d) => (
               <button
                 key={d}
                 onClick={() => adjustPrice(d)}
                 className="text-[9px] px-2 py-1.5 border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors tabular-nums shrink-0"
               >
-                +{d}¢
+                +{Number.isInteger(d) ? d : d.toFixed(1)}¢
               </button>
             ))}
           </div>
         ) : (
           <div className="flex items-center justify-between px-2 py-1.5 border border-[var(--border)] text-[11px]">
             <span className="text-[var(--text-faint)]">Market price</span>
-            <span className="text-[var(--text)] tabular-nums">{(currentPrice * 100).toFixed(1)}¢</span>
+            <span className="text-[var(--text)] tabular-nums">{(currentPrice * 100).toFixed(centsDecimals)}¢</span>
           </div>
         )}
       </div>
@@ -903,9 +946,9 @@ export default function OrderForm({
               Limit
             </button>
             {/* Max button */}
-            {side === "BUY" && usdcRawBalance !== undefined && (
+            {side === "BUY" && availableUsdc !== null && availableUsdc > 0 && (
               <button
-                onClick={() => setAmount((Number(usdcRawBalance) / 1e6).toFixed(2))}
+                onClick={() => setAmount(availableUsdc.toFixed(2))}
                 className="text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors"
               >
                 Max
@@ -1117,7 +1160,7 @@ export default function OrderForm({
       {/* Status line — fixed height so button doesn't shift */}
       <div className="h-4 text-center">
         {exceedsBalance && (
-          <span className="text-[10px] text-[#ff4444]">Insufficient USDC balance (have ${usdcBalance?.toFixed(2)})</span>
+          <span className="text-[10px] text-[#ff4444]">Insufficient USDC balance (available ${availableUsdc?.toFixed(2)})</span>
         )}
         {exceedsShares && (
           <span className="text-[10px] text-[#ff4444]">Exceeds position ({displayedSharesHeld?.toFixed(2)} shares held)</span>
