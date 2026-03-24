@@ -1,5 +1,5 @@
 import { getDb } from "./db";
-import { fetchEventsFromAPI, processEvents } from "./polymarket";
+import { fetchEventsFromAPI, processEvents, fetchZhTranslations } from "./polymarket";
 import type { ProcessedMarket, PolymarketMarket, SmartMoneyFlow, WhaleTrade, AnomalyInfo, MarketIndicators } from "@/types";
 import { computeImpactScores } from "./impact";
 import { detectAnomalies } from "./anomaly";
@@ -161,6 +161,30 @@ export async function runSync(): Promise<{
     });
     txn();
     if (writeSnapshots) lastSnapshotWrite = Date.now();
+
+    // Fetch Chinese translations — bulk pagination, same as English fetch
+    try {
+      const zhMap = await fetchZhTranslations();
+      if (zhMap.size > 0) {
+        const updateZh = db.prepare(
+          `UPDATE events SET title_zh = @titleZh, description_zh = @descriptionZh, markets_json_zh = @marketsJsonZh WHERE id = @id`
+        );
+        const zhTxn = db.transaction(() => {
+          for (const [id, zh] of zhMap) {
+            updateZh.run({
+              id,
+              titleZh: zh.title,
+              descriptionZh: zh.description,
+              marketsJsonZh: JSON.stringify(zh.markets),
+            });
+          }
+        });
+        zhTxn();
+        console.info(`[sync] Updated zh translations for ${zhMap.size} events`);
+      }
+    } catch (err) {
+      console.warn("[sync] zh translation fetch failed (non-critical):", err instanceof Error ? err.message : err);
+    }
 
     // Mark stale events as closed — not in current API fetch means
     // the event is no longer active on Polymarket (closed, resolved, or delisted)
@@ -334,6 +358,9 @@ interface EventRow {
   comment_count: number;
   tags_json: string;
   neg_risk: number;
+  title_zh: string | null;
+  description_zh: string | null;
+  markets_json_zh: string | null;
 }
 
 interface WhaleTradeRow {
@@ -448,7 +475,7 @@ export function readMarketsFromDb(): {
       `SELECT id, market_id, title, slug, category, volume, volume_24h, prob, change,
               recent_change, markets_json, location, lat, lng, created_at, description,
               resolution_source, end_date, image, liquidity, is_active, is_closed,
-              comment_count, tags_json, neg_risk
+              comment_count, tags_json, neg_risk, title_zh, description_zh, markets_json_zh
        FROM events WHERE is_closed = 0 ORDER BY volume_24h DESC`
     )
     .all() as EventRow[];
@@ -501,6 +528,9 @@ export function readMarketsFromDb(): {
       commentCount: row.comment_count || 0,
       tags,
       negRisk: row.neg_risk === 1,
+      titleZh: row.title_zh || null,
+      descriptionZh: row.description_zh || null,
+      marketsZh: row.markets_json_zh ? (() => { try { return JSON.parse(row.markets_json_zh); } catch { return null; } })() : null,
       impactScore: 0,
       impactLevel: "info",
     };

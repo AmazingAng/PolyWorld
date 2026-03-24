@@ -95,7 +95,7 @@ export default function CountryPanel({
       setAiSummary(t("country.summaryFailed"));
     }
     setAiLoading(false);
-  }, [countryName, displayName, countryMarkets, aiLoading]);
+  }, [countryName, displayName, countryMarkets, aiLoading, t]);
 
   return (
     <div className="font-mono">

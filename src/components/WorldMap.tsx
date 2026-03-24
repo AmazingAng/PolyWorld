@@ -14,6 +14,8 @@ import { topojsonFeature } from "@/lib/topojson";
 import { getCountryFlag, marketMatchesCountry } from "@/lib/countries";
 import type { TimeRange } from "./TimeRangeFilter";
 import MapToolbar from "./MapToolbar";
+import { useI18n } from "@/i18n";
+import { localizeMarket } from "@/hooks/useLocalizedMarket";
 import type { OverlayLayer } from "./MapToolbar";
 
 const MarketPreview = lazy(() => import("./MarketPreview"));
@@ -243,6 +245,7 @@ function WorldMapInner({
   onToggleLayer,
   onTrade,
 }: WorldMapProps) {
+  const { locale, t } = useI18n();
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
@@ -1889,23 +1892,26 @@ function WorldMapInner({
               <span className="text-[11px] text-[var(--text)]">{hoverCountry.name}</span>
             </div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
-              <span className="text-[var(--text-faint)]">markets</span>
+              <span className="text-[var(--text-faint)]">{t("common.markets")}</span>
               <span className="text-[var(--text-secondary)] tabular-nums">{ms.length}</span>
-              <span className="text-[var(--text-faint)]">active</span>
+              <span className="text-[var(--text-faint)]">{t("common.active")}</span>
               <span className="text-[var(--text-secondary)] tabular-nums">{active.length}</span>
-              <span className="text-[var(--text-faint)]">volume</span>
+              <span className="text-[var(--text-faint)]">{t("common.volume")}</span>
               <span className="text-[var(--text-secondary)] tabular-nums">{formatVolume(vol)}</span>
-              <span className="text-[var(--text-faint)]">24h vol</span>
+              <span className="text-[var(--text-faint)]">{t("common.vol24h")}</span>
               <span className="text-[var(--text-secondary)] tabular-nums">{formatVolume(vol24h)}</span>
             </div>
-            {active.length > 0 && (
-              <div className="mt-2 pt-2 border-t border-[var(--border-subtle)]">
-                <div className="text-[9px] text-[var(--text-faint)] uppercase tracking-wider mb-0.5">top market</div>
-                <div className="text-[10px] text-[var(--text-dim)] line-clamp-2 leading-snug">
-                  {active.sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))[0].title}
+            {active.length > 0 && (() => {
+              const topMarket = active.reduce((best, m) => (m.volume24h || 0) > (best.volume24h || 0) ? m : best);
+              return (
+                <div className="mt-2 pt-2 border-t border-[var(--border-subtle)]">
+                  <div className="text-[9px] text-[var(--text-faint)] uppercase tracking-wider mb-0.5">{t("common.topMarket")}</div>
+                  <div className="text-[10px] text-[var(--text-dim)] line-clamp-2 leading-snug">
+                    {localizeMarket(topMarket, locale).title}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>,
           document.body
         );

@@ -50,7 +50,16 @@
     "weak": "弱",
     "strength": "强度",
     "category": "分类",
-    "dismiss": "关闭"
+    "dismiss": "关闭",
+    "new": "新上",
+    "spike": "异动",
+    "outcomes": "选项",
+    "more": "更多",
+    "addToWatchlist": "加入关注",
+    "removeFromWatchlist": "取消关注",
+    "topMarket": "热门市场",
+    "volume": "成交量",
+    "vol24h": "24h 量"
   },
   "header": {
     "mapped": "已映射",

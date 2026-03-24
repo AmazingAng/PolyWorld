@@ -50,7 +50,16 @@
     "weak": "Weak",
     "strength": "Strength",
     "category": "Category",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "new": "new",
+    "spike": "spike",
+    "outcomes": "outcomes",
+    "more": "more",
+    "addToWatchlist": "Add to watchlist",
+    "removeFromWatchlist": "Remove from watchlist",
+    "topMarket": "top market",
+    "volume": "volume",
+    "vol24h": "24h vol"
   },
   "header": {
     "mapped": "mapped",

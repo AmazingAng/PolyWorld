@@ -96,6 +96,10 @@ export interface ProcessedMarket {
   indicators?: MarketIndicators;
   /** true = mutually exclusive outcomes (valid for arbitrage) */
   negRisk?: boolean;
+  // Chinese locale fields (display only)
+  titleZh?: string | null;
+  descriptionZh?: string | null;
+  marketsZh?: PolymarketMarket[] | null;
 }
 
 export interface GeoResult {

@@ -7,6 +7,7 @@ import { CATEGORY_COLORS } from "@/lib/categories";
 import { IMPACT_COLORS } from "@/lib/impact";
 import { formatVolume, formatPct, formatChange } from "@/lib/format";
 import { useI18n } from "@/i18n";
+import { useLocalizedMarket } from "@/hooks/useLocalizedMarket";
 
 const MarketPreview = lazy(() => import("./MarketPreview"));
 
@@ -85,6 +86,7 @@ function MarketCardInner({
   onTrade,
 }: MarketCardProps) {
   const [renderNow] = useState(() => Date.now());
+  const displayMarket = useLocalizedMarket(market);
   const color = CATEGORY_COLORS[market.category];
   const chg = formatChange(market.change);
   const marketIsNew = isNew(market);
@@ -95,7 +97,7 @@ function MarketCardInner({
   );
 
   const { t } = useI18n();
-  const topOption = useMemo(() => getTopOption(market.markets), [market.markets]);
+  const topOption = useMemo(() => getTopOption(displayMarket.markets), [displayMarket.markets]);
 
   // Hover popup state
   const [showPopup, setShowPopup] = useState(false);
@@ -199,7 +201,7 @@ function MarketCardInner({
           >{"\u00B7"} {endLabel.label}</span>
         )}
         {activeCount > 1 && (
-          <span className="text-[var(--text-faint)] shrink-0">{"\u00B7"} {activeCount} outcomes</span>
+          <span className="text-[var(--text-faint)] shrink-0">{"\u00B7"} {activeCount} {t("common.outcomes")}</span>
         )}
         {/* Right-aligned badges + star — use a single ml-auto wrapper */}
         <span className="ml-auto flex items-center gap-1.5 shrink-0">
@@ -209,24 +211,24 @@ function MarketCardInner({
               style={{ color: "#f59e0b", background: "rgba(245,158,11,0.15)" }}
               title={`Volume spike: ${market.anomaly.zScore?.toFixed(1)}σ`}
             >
-              spike
+              {t("common.spike")}
             </span>
           )}
           {marketIsNew && (
             <span className="text-[10px] text-[var(--bg)] bg-[#22c55e] px-1 py-px uppercase tracking-wider leading-none font-bold">
-              new
+              {t("common.new")}
             </span>
           )}
           {(market.closed || (market.endDate && new Date(market.endDate).getTime() < renderNow)) && (
             <span className="text-[10px] text-[#ff4444] border border-[#ff4444]/30 px-1 py-px uppercase">
-              closed
+              {t("common.closed")}
             </span>
           )}
           {onToggleWatch && (
             <button
               onClick={(e) => { e.stopPropagation(); onToggleWatch(); }}
               className="shrink-0 star-btn"
-              title={isWatched ? "Remove from watchlist" : "Add to watchlist"}
+              title={isWatched ? t("common.removeFromWatchlist") : t("common.addToWatchlist")}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill={isWatched ? "#f59e0b" : "none"} stroke={isWatched ? "#f59e0b" : "var(--text-ghost)"} strokeWidth="2" strokeLinejoin="round">
                 <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
@@ -236,7 +238,7 @@ function MarketCardInner({
         </span>
       </div>
       <div className="text-[12px] text-[var(--text-secondary)] leading-[1.35] mb-1 line-clamp-2">
-        {market.title}
+        {displayMarket.title}
       </div>
       <div className="flex items-center justify-between text-[11px]">
         <div className="flex items-center gap-1.5 min-w-0">

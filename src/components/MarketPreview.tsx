@@ -6,6 +6,8 @@ import { CATEGORY_COLORS } from "@/lib/categories";
 import { formatVolume, formatPct, formatChange } from "@/lib/format";
 import Sparkline from "./Sparkline";
 import type { TradeModalState } from "./TradeModal";
+import { useI18n } from "@/i18n";
+import { useLocalizedMarket } from "@/hooks/useLocalizedMarket";
 
 /** Check if all sub-markets are binary Yes/No */
 function isMultiBinary(markets: PolymarketMarket[]): boolean {
@@ -50,6 +52,8 @@ interface MarketPreviewProps {
 }
 
 export default function MarketPreview({ market, onTrade, singleSeries, hideChart }: MarketPreviewProps) {
+  const { t } = useI18n();
+  const displayMarket = useLocalizedMarket(market);
   const color = CATEGORY_COLORS[market.category] || CATEGORY_COLORS.Other;
   const chg = formatChange(market.change);
   const activeMarkets = useMemo(
@@ -61,6 +65,7 @@ export default function MarketPreview({ market, onTrade, singleSeries, hideChart
   // Parse top outcomes for multi-binary
   const topOutcomes = useMemo((): ParsedOption[] => {
     if (!multiBinary) return [];
+    const dispMkts = displayMarket.markets || [];
     return activeMarkets.map(m => {
       let yesPrice = 0;
       try {
@@ -70,8 +75,9 @@ export default function MarketPreview({ market, onTrade, singleSeries, hideChart
         if (raw) yesPrice = parseFloat(raw[0]);
       } catch { /* skip */ }
       const ids = parseTokenIds(m);
+      const dm = dispMkts.find(d => d.id === m.id) || m;
       return {
-        label: m.groupItemTitle || m.question || "?",
+        label: dm.groupItemTitle || dm.question || "?",
         prob: isNaN(yesPrice) ? 0 : yesPrice,
         m,
         yesTokenId: ids[0] ? String(ids[0]) : "",
@@ -80,7 +86,7 @@ export default function MarketPreview({ market, onTrade, singleSeries, hideChart
     })
       .sort((a, b) => b.prob - a.prob)
       .slice(0, 6);
-  }, [activeMarkets, multiBinary]);
+  }, [activeMarkets, multiBinary, displayMarket.markets]);
 
   // Simple market (single sub-market with Yes/No)
   const simpleTrade = useMemo(() => {
@@ -125,7 +131,7 @@ export default function MarketPreview({ market, onTrade, singleSeries, hideChart
         {market.category.toLowerCase()}
         {market.location && <span className="text-[var(--text-faint)]">{"\u00B7"} {market.location.toLowerCase()}</span>}
       </div>
-      <div className="text-[13px] text-[var(--text)] leading-[1.4] mb-3">{market.title}</div>
+      <div className="text-[13px] text-[var(--text)] leading-[1.4] mb-3">{displayMarket.title}</div>
 
       {/* Stats row */}
       <div className="flex items-baseline gap-3 mb-3">
@@ -159,14 +165,14 @@ export default function MarketPreview({ market, onTrade, singleSeries, hideChart
         <div className="flex gap-2 mb-3">
           <button
             onClick={(e) => { e.stopPropagation(); openTrade(
-              simpleTrade.yesTokenId, simpleTrade.yesPrice, "Yes", market.title, "BUY",
+              simpleTrade.yesTokenId, simpleTrade.yesPrice, "Yes", displayMarket.title, "BUY",
               { tokenId: simpleTrade.yesTokenId, price: simpleTrade.yesPrice, name: "Yes" },
               { tokenId: simpleTrade.noTokenId, price: simpleTrade.noPrice, name: "No" },
             ); }}
             className="flex-1 py-1.5 text-[11px] font-bold transition-colors hover:opacity-80"
             style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
           >
-            Buy {(simpleTrade.yesPrice * 100).toFixed(0)}%
+            {t("common.buy")} {(simpleTrade.yesPrice * 100).toFixed(0)}%
           </button>
         </div>
       )}
@@ -175,7 +181,7 @@ export default function MarketPreview({ market, onTrade, singleSeries, hideChart
       {multiBinary && topOutcomes.length > 0 && (
         <div className="space-y-0.5">
           <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-1">
-            outcomes ({activeMarkets.length})
+            {t("common.outcomes")} ({activeMarkets.length})
           </div>
           {topOutcomes.map((o, i) => {
             const pct = o.prob * 100;
@@ -187,15 +193,15 @@ export default function MarketPreview({ market, onTrade, singleSeries, hideChart
                 {onTrade && !market.closed && o.yesTokenId ? (
                   <button
                     onClick={(e) => { e.stopPropagation(); openTrade(
-                      o.yesTokenId, o.prob, o.label, market.title, "BUY",
+                      o.yesTokenId, o.prob, o.label, displayMarket.title, "BUY",
                       o.yesTokenId ? { tokenId: o.yesTokenId, price: o.prob, name: o.label } : undefined,
                       o.noTokenId ? { tokenId: o.noTokenId, price: 1 - o.prob, name: `${o.label} No` } : undefined,
                     ); }}
                     className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 transition-colors hover:opacity-80"
                     style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
-                    title={`Buy ${o.label}`}
+                    title={`${t("common.buy")} ${o.label}`}
                   >
-                    Buy {pct.toFixed(0)}%
+                    {t("common.buy")} {pct.toFixed(0)}%
                   </button>
                 ) : (
                   <span className="w-10 text-right tabular-nums text-[var(--text-dim)]">
@@ -207,7 +213,7 @@ export default function MarketPreview({ market, onTrade, singleSeries, hideChart
           })}
           {activeMarkets.length > 6 && (
             <div className="text-[10px] text-[var(--text-faint)] mt-1">
-              +{activeMarkets.length - 6} more
+              +{activeMarkets.length - 6} {t("common.more")}
             </div>
           )}
         </div>

@@ -1,14 +1,15 @@
-import { PolymarketEvent, ProcessedMarket } from "@/types";
+import { PolymarketEvent, PolymarketMarket, ProcessedMarket } from "@/types";
 import { detectCategory } from "./categories";
 import { fetchWithRetry } from "./retry";
 
 const API_BASE = "https://gamma-api.polymarket.com";
 
-export async function fetchEventsFromAPI(): Promise<PolymarketEvent[]> {
+export async function fetchEventsFromAPI(locale?: string): Promise<PolymarketEvent[]> {
   const events: PolymarketEvent[] = [];
   const seen = new Set<string>();
   const BATCH = 100;
   const CONCURRENCY = 5;
+  const localeSuffix = locale ? `&locale=${locale}` : "";
 
   // Fetch active events
   let offset = 0;
@@ -18,7 +19,7 @@ export async function fetchEventsFromAPI(): Promise<PolymarketEvent[]> {
     const offsets = Array.from({ length: CONCURRENCY }, (_, i) => offset + i * BATCH);
     const results = await Promise.all(
       offsets.map(async (off) => {
-        const url = `${API_BASE}/events?active=true&closed=false&limit=${BATCH}&offset=${off}&order=volume24hr&ascending=false`;
+        const url = `${API_BASE}/events?active=true&closed=false&limit=${BATCH}&offset=${off}&order=volume24hr&ascending=false${localeSuffix}`;
         try {
           const res = await fetchWithRetry(url, { next: { revalidate: 30 }, signal: AbortSignal.timeout(10_000) } as RequestInit, 2);
           if (!res.ok) return [];
@@ -52,25 +53,47 @@ export async function fetchEventsFromAPI(): Promise<PolymarketEvent[]> {
   }
 
   // Also fetch recently closed events (top 100 by volume) to update status
-  try {
-    const closedUrl = `${API_BASE}/events?closed=true&limit=200&offset=0&order=volume24hr&ascending=false`;
-    const res = await fetch(closedUrl, { next: { revalidate: 60 }, signal: AbortSignal.timeout(15_000) });
-    if (res.ok) {
-      const data = await res.json();
-      const arr = Array.isArray(data) ? data : data?.data || data?.events || [];
-      for (const e of arr) {
-        if (e?.id && !seen.has(e.id)) {
-          seen.add(e.id);
-          events.push(e);
+  if (!locale) {
+    try {
+      const closedUrl = `${API_BASE}/events?closed=true&limit=200&offset=0&order=volume24hr&ascending=false`;
+      const res = await fetch(closedUrl, { next: { revalidate: 60 }, signal: AbortSignal.timeout(15_000) });
+      if (res.ok) {
+        const data = await res.json();
+        const arr = Array.isArray(data) ? data : data?.data || data?.events || [];
+        for (const e of arr) {
+          if (e?.id && !seen.has(e.id)) {
+            seen.add(e.id);
+            events.push(e);
+          }
         }
       }
+    } catch {
+      // Non-critical, skip
     }
-  } catch {
-    // Non-critical, skip
   }
 
-  console.info(`[polymarket] Fetched ${events.length} events (active + recently closed)`);
+  console.info(`[polymarket] Fetched ${events.length} events${locale ? ` (locale=${locale})` : " (active + recently closed)"}`);
   return events;
+}
+
+/** Fetch Chinese translations for all active events using the same bulk pagination as English.
+ *  Returns a map of eventId -> { title, description, markets }. */
+export async function fetchZhTranslations(): Promise<Map<string, { title: string; description: string | null; markets: PolymarketMarket[] }>> {
+  const result = new Map<string, { title: string; description: string | null; markets: PolymarketMarket[] }>();
+
+  const zhEvents = await fetchEventsFromAPI("zh");
+  for (const e of zhEvents) {
+    if (e.id && e.title) {
+      result.set(e.id, {
+        title: e.title,
+        description: e.description || null,
+        markets: e.markets || [],
+      });
+    }
+  }
+
+  console.info(`[polymarket] Fetched zh translations for ${result.size} events (bulk)`);
+  return result;
 }
 
 const previousPrices = new Map<string, number>();

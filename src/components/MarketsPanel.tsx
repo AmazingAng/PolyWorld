@@ -12,6 +12,7 @@ import { useColResize } from "@/hooks/useColResize";
 import { useRowResize } from "@/hooks/useRowResize";
 import type { PanelDragHandleProps } from "@/components/panelDragTypes";
 import { useI18n } from "@/i18n";
+import { localizeMarket } from "@/hooks/useLocalizedMarket";
 
 interface MarketsPanelProps {
   mapped: ProcessedMarket[];
@@ -75,7 +76,7 @@ function MarketsPanelInner({
   dragStyle,
   dragClassName,
 }: MarketsPanelProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [search, setSearch] = useState("");
   const [renderNow] = useState(() => Date.now());
   const [localCategoryFilter, setLocalCategoryFilter] = useState<Set<string>>(new Set());
@@ -132,6 +133,7 @@ function MarketsPanelInner({
     return filtered.filter(
       (m) =>
         m.title.toLowerCase().includes(q) ||
+        (m.titleZh && m.titleZh.toLowerCase().includes(q)) ||
         (m.location && m.location.toLowerCase().includes(q)) ||
         m.category.toLowerCase().includes(q) ||
         m.tags.some((t) => t.toLowerCase().includes(q))
@@ -492,7 +494,7 @@ function MarketsPanelInner({
           {countryStats.topMarket && (
             <div className="mt-2 pt-2 border-t border-[var(--border-subtle)]">
               <div className="text-[9px] text-[var(--text-faint)] uppercase tracking-wider mb-0.5">{t("marketsPanel.topMarket")}</div>
-              <div className="text-[10px] text-[var(--text-dim)] line-clamp-2 leading-snug">{countryStats.topMarket.title}</div>
+              <div className="text-[10px] text-[var(--text-dim)] line-clamp-2 leading-snug">{localizeMarket(countryStats.topMarket, locale).title}</div>
             </div>
           )}
         </div>,

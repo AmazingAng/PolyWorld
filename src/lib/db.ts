@@ -208,6 +208,10 @@ function migrate(db: Database.Database) {
     ["geo_city", "TEXT"],
     ["geo_country", "TEXT"],
     ["neg_risk", "INTEGER DEFAULT 0"],
+    ["title_zh", "TEXT"],
+    ["description_zh", "TEXT"],
+    ["markets_json_zh", "TEXT"],
+    ["zh_fetch_failed_at", "TEXT"],
   ];
 
   for (const [col, type] of migrations) {

@@ -322,7 +322,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
         {/* ── Header ── */}
         <div className="flex items-start justify-between gap-3 px-4 pt-3.5 pb-3 border-b border-[var(--border-subtle)] shrink-0">
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] text-[var(--text-faint)] uppercase tracking-[0.1em] truncate mb-1.5">
+            <div className="text-[13px] text-[var(--text-secondary)] text-center leading-snug mb-2 line-clamp-2">
               {state.marketTitle}
             </div>
 

@@ -9,6 +9,7 @@ import { makeAbbrev, extractLabels } from "@/lib/marketLabels";
 import ChartPanel from "./ChartPanel";
 import TradeModal, { type TradeModalState } from "./TradeModal";
 import { useI18n } from "@/i18n";
+import { useLocalizedMarket } from "@/hooks/useLocalizedMarket";
 
 interface MarketDetailPanelProps {
   market: ProcessedMarket;
@@ -66,6 +67,7 @@ function MarketDetailPanelInner({
   onTagClick,
 }: MarketDetailPanelProps) {
   const { t } = useI18n();
+  const displayMarket = useLocalizedMarket(market);
   const color = CATEGORY_COLORS[market.category] || CATEGORY_COLORS.Other;
   const chg = formatChange(market.change);
   const [rulesExpanded, setRulesExpanded] = useState(false);
@@ -159,6 +161,12 @@ function MarketDetailPanelInner({
 
   const isWide = containerWidth >= 520;
   const activeMarketsList = useMemo(() => market.markets.filter(m => m.active !== false), [market.markets]);
+  // Localized sub-markets for display labels (keyed by id for safe lookup)
+  const displayMarketsById = useMemo(() => {
+    const map = new Map<string, PolymarketMarket>();
+    for (const m of displayMarket.markets) map.set(m.id, m);
+    return map;
+  }, [displayMarket.markets]);
   const hasOutcomes = activeMarketsList.length > 0;
   const multiBinary = useMemo(() => isMultiBinary(activeMarketsList), [activeMarketsList]);
 
@@ -176,22 +184,23 @@ function MarketDetailPanelInner({
       } catch { /* skip */ }
       if (isNaN(yesPrice)) continue;
       if (!best || yesPrice > best.prob) {
-        let label = m.groupItemTitle || "";
+        const dm = displayMarketsById.get(m.id) || m;
+        let label = dm.groupItemTitle || "";
         // Without groupItemTitle, strip event title prefix from question
-        if (!m.groupItemTitle && m.question && market.title) {
-          if (m.question === market.title) {
+        if (!dm.groupItemTitle && dm.question && displayMarket.title) {
+          if (dm.question === displayMarket.title) {
             label = ""; // same as event title, skip
-          } else if (m.question.startsWith(market.title)) {
-            label = m.question.slice(market.title.length).replace(/^[\s\-:·]+/, "").trim();
+          } else if (dm.question.startsWith(displayMarket.title)) {
+            label = dm.question.slice(displayMarket.title.length).replace(/^[\s\-:·]+/, "").trim();
           } else {
-            label = m.question;
+            label = dm.question;
           }
         }
         best = { label, prob: yesPrice };
       }
     }
     return best?.label || null;
-  }, [activeMarketsList, market.title]);
+  }, [activeMarketsList, displayMarket.title, displayMarketsById]);
 
   // Parse outcomes for multi-binary display
   const parsedOutcomes = useMemo((): ParsedOutcome[] => {
@@ -212,15 +221,16 @@ function MarketDetailPanelInner({
         if (raw) prices = raw.map((p: string) => parseFloat(p));
       } catch { /* skip */ }
       const yesPrice = prices[0] ?? 0;
-      const abbr = m.groupItemTitle || (fallbackLabels ? fallbackLabels[idx]?.label : "") || "?";
-      const entity = m.groupItemTitle || (fallbackLabels ? fallbackLabels[idx]?.full : "") || m.question || "";
+      const dm = displayMarketsById.get(m.id) || m;
+      const abbr = dm.groupItemTitle || (fallbackLabels ? fallbackLabels[idx]?.label : "") || "?";
+      const entity = dm.groupItemTitle || (fallbackLabels ? fallbackLabels[idx]?.full : "") || dm.question || "";
       const mChg = formatChange(
         m.oneDayPriceChange !== undefined ? parseFloat(String(m.oneDayPriceChange)) : null
       );
       const isWinner = market.closed && yesPrice >= 0.99;
       return { m, idx, yesPrice, entity, abbr, mChg, isWinner };
     }).sort((a, b) => b.yesPrice - a.yesPrice);
-  }, [market.markets, market.closed, multiBinary]);
+  }, [market.markets, market.closed, multiBinary, displayMarketsById]);
 
   // Parse outcomes for regular (non-multi-binary) display
   const regularCards = useMemo(() => {
@@ -248,21 +258,7 @@ function MarketDetailPanelInner({
       const winnerIdx = isResolved ? prices.findIndex(p => p >= 0.99) : -1;
       return { m, i, prices, outcomeLabels, mChg, winnerIdx };
     });
-  }, [market.markets, market.closed, multiBinary]);
-
-  // Compute label column width: fit the longest label, with min/max bounds
-  const labelColWidth = useMemo(() => {
-    if (parsedOutcomes.length === 0) return 56;
-    const maxLen = Math.max(...parsedOutcomes.map(o => o.abbr.length));
-    return Math.max(48, Math.min(180, maxLen * 6.5 + 4));
-  }, [parsedOutcomes]);
-
-  // If labels are very long, use a stacked layout (label above bar) instead of inline
-  const stackedLayout = useMemo(() => {
-    if (parsedOutcomes.length === 0) return false;
-    const maxLen = Math.max(...parsedOutcomes.map(o => o.abbr.length));
-    return maxLen > 20;
-  }, [parsedOutcomes]);
+  }, [market.markets, market.closed, multiBinary, displayMarketsById, displayMarket.title]);
 
   // --- Multi-binary outcomes: rows with inline trade strips ---
   const mbCount = parsedOutcomes.length;
@@ -288,7 +284,7 @@ function MarketDetailPanelInner({
             tokenId,
             currentPrice: side === "YES" ? yesPrice : 1 - yesPrice,
             outcomeName: side === "YES" ? abbr : `${abbr} No`,
-            marketTitle: market.title,
+            marketTitle: displayMarket.title,
             negRisk: !!market.negRisk,
             defaultSide: "BUY",
             // Pass both tokens so modal can show YES/NO switcher
@@ -348,10 +344,11 @@ function MarketDetailPanelInner({
         const regFontSize = optCount <= 3 ? "text-[12px]" : optCount <= 6 ? "text-[11px]" : "text-[10px]";
         const regBtnSize = optCount <= 3 ? "text-[11px]" : "text-[10px]";
         const regRowPy = optCount <= 3 ? "py-1.5" : "py-1";
-        let cardTitle = m.groupItemTitle || m.question || "\u2014";
-        if (!m.groupItemTitle && m.question && market.title) {
-          const q = m.question;
-          const prefix = market.title;
+        const dm = displayMarketsById.get(m.id) || m;
+        let cardTitle = dm.groupItemTitle || dm.question || "\u2014";
+        if (!dm.groupItemTitle && dm.question && displayMarket.title) {
+          const q = dm.question;
+          const prefix = displayMarket.title;
           if (q === prefix) {
             cardTitle = q;
           } else if (q.startsWith(prefix)) {
@@ -360,7 +357,7 @@ function MarketDetailPanelInner({
           }
         }
         const isSimpleYesNo = outcomeLabels.length === 2 && outcomeLabels[0] === "Yes" && outcomeLabels[1] === "No"
-          && (!m.question || m.question === market.title || cardTitle === market.title);
+          && (!dm.question || dm.question === displayMarket.title || cardTitle === displayMarket.title);
         const maxLabelLen = Math.max(...outcomeLabels.map(l => l.length), 0);
         const regLabelW = isSimpleYesNo ? 24 : Math.max(40, Math.min(200, maxLabelLen * 7 + 4));
         // Hoist token IDs so outcome rows can set the orderbook focus on click
@@ -460,7 +457,7 @@ function MarketDetailPanelInner({
   const outcomesContent = multiBinary ? multiBinaryContent : regularContent;
 
   // Secondary panel flags
-  const hasRules = !!market.description;
+  const hasRules = !!displayMarket.description;
   const hasTags = market.tags.length > 0;
   const hasCreated = !!market.createdAt;
   const hasRelated = relatedMarkets.length > 0;
@@ -484,7 +481,7 @@ function MarketDetailPanelInner({
             )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <h2 className="text-[11px] text-[var(--text)] leading-[1.4] line-clamp-2" title={market.title}>{market.title}</h2>
+                <h2 className="text-[11px] text-[var(--text)] leading-[1.4] line-clamp-2" title={displayMarket.title}>{displayMarket.title}</h2>
                 <div className="relative shrink-0 ai-summary-trigger">
                   <button
                     onClick={fetchAiSummary}
@@ -581,9 +578,9 @@ function MarketDetailPanelInner({
               <div className="border border-[var(--border-subtle)] rounded-sm px-3 py-3">
                 <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-2">{t("detail.rules")}</div>
                 <div className={`text-[12px] text-[var(--text-dim)] leading-[1.7] ${!rulesExpanded ? "line-clamp-1" : ""}`}>
-                  {market.description}
+                  {displayMarket.description}
                 </div>
-                {market.description && market.description.length > 60 && (
+                {displayMarket.description && displayMarket.description.length > 60 && (
                   <button onClick={() => setRulesExpanded(!rulesExpanded)} className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] mt-1.5 transition-colors">
                     {rulesExpanded ? t("detail.collapse") : t("detail.expand")}
                   </button>
