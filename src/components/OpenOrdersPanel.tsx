@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useI18n } from "@/i18n";
 import { useWalletStore } from "@/stores/walletStore";
 import type { ProcessedMarket } from "@/types";
 import {
@@ -17,6 +18,7 @@ interface OpenOrdersPanelProps {
 }
 
 export default function OpenOrdersPanel({ markets, onSelectMarket }: OpenOrdersPanelProps) {
+  const { t } = useI18n();
   const tradeSession = useWalletStore((s) => s.tradeSession);
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -82,20 +84,20 @@ export default function OpenOrdersPanel({ markets, onSelectMarket }: OpenOrdersP
   if (!tradeSession) {
     return (
       <div className="text-[11px] text-[var(--text-faint)] font-mono px-1">
-        Connect wallet &amp; authorize to view open orders
+        {t("openOrders.connectToView")}
       </div>
     );
   }
 
   if (loading && orders.length === 0) {
     return (
-      <div className="text-[11px] text-[var(--text-ghost)] font-mono px-1">loading…</div>
+      <div className="text-[11px] text-[var(--text-ghost)] font-mono px-1">{t("common.loading")}</div>
     );
   }
 
   if (orders.length === 0) {
     return (
-      <div className="text-[11px] text-[var(--text-faint)] font-mono px-1">No open orders</div>
+      <div className="text-[11px] text-[var(--text-faint)] font-mono px-1">{t("openOrders.noOpenOrders")}</div>
     );
   }
 
@@ -103,13 +105,13 @@ export default function OpenOrdersPanel({ markets, onSelectMarket }: OpenOrdersP
     <div className="font-mono text-[11px]">
       {/* Header */}
       <div className="flex items-center justify-between px-1 pb-2">
-        <span className="text-[var(--text-faint)] tabular-nums">{orders.length} order{orders.length !== 1 ? "s" : ""}</span>
+        <span className="text-[var(--text-faint)] tabular-nums">{orders.length === 1 ? t("openOrders.orderCount", { count: orders.length }) : t("openOrders.orderCountPlural", { count: orders.length })}</span>
         <button
           onClick={handleCancelAll}
           disabled={cancellingAll}
           className="text-[9px] px-1.5 py-0.5 border border-[#ff4444]/30 text-[#ff4444]/70 hover:text-[#ff4444] hover:border-[#ff4444]/50 transition-colors disabled:opacity-40"
         >
-          {cancellingAll ? "Cancelling…" : "Cancel All"}
+          {cancellingAll ? t("openOrders.cancellingAll") : t("openOrders.cancelAll")}
         </button>
       </div>
 
@@ -158,7 +160,7 @@ export default function OpenOrdersPanel({ markets, onSelectMarket }: OpenOrdersP
                       disabled={isCancelling}
                       className="shrink-0 text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-ghost)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
                     >
-                      {isCancelling ? "…" : "Cancel"}
+                      {isCancelling ? "…" : t("common.cancel")}
                     </button>
                   </div>
                   {/* Side + outcome + price */}
@@ -175,7 +177,7 @@ export default function OpenOrdersPanel({ markets, onSelectMarket }: OpenOrdersP
                   </div>
                   {/* Filled progress */}
                   <div className="flex items-center justify-between mt-0.5 text-[10px] tabular-nums text-[var(--text-faint)]">
-                    <span>Filled: {matched.toFixed(0)}/{total.toFixed(0)}</span>
+                    <span>{t("trade.filled", { matched: matched.toFixed(0), total: total.toFixed(0) })}</span>
                   </div>
                 </div>
               </div>

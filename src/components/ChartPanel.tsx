@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import type { ProcessedMarket } from "@/types";
 import { SERIES_COLORS, MA_COLORS } from "@/lib/chartConstants";
+import { useI18n } from "@/i18n";
 
 type TimeRange = "1h" | "24h" | "7d" | "30d";
 type ChartMode = "candle" | "line";
@@ -134,6 +135,7 @@ function getLightweightCharts() {
 }
 
 function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) {
+  const { t } = useI18n();
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
   const [chartMode, setChartMode] = useState<ChartMode>("candle");
   const [showMA, setShowMA] = useState(true);
@@ -471,7 +473,7 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
   if (!selectedMarket) {
     return (
       <div className="text-[12px] text-[var(--text-muted)] font-mono p-2">
-        select a market to view price chart
+        {t("chart.selectMarket")}
       </div>
     );
   }
@@ -503,24 +505,24 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
               <div className="w-px h-3 bg-[#2a2a2a]" />
               <div className="flex items-center gap-2 text-[9px] tabular-nums">
                 {selectedMarket.indicators.momentum !== null && (
-                  <span title="Momentum: price change acceleration">
-                    <span className="text-[#555]">Mtm </span>
+                  <span title={t("chart.momentumDesc")}>
+                    <span className="text-[#555]">{t("chart.momentumIndicator")} </span>
                     <span style={{ color: selectedMarket.indicators.momentum > 0.01 ? "#22c55e" : selectedMarket.indicators.momentum < -0.01 ? "#ff4444" : "#888" }}>
                       {selectedMarket.indicators.momentum > 0 ? "+" : ""}{(selectedMarket.indicators.momentum * 100).toFixed(2)}%
                     </span>
                   </span>
                 )}
                 {selectedMarket.indicators.volatility !== null && (
-                  <span title="Volatility: 24h prob standard deviation">
-                    <span className="text-[#555]">Vol{"\u03C3"} </span>
+                  <span title={t("chart.volatilityDesc")}>
+                    <span className="text-[#555]">{t("chart.volatilityIndicator")}{"\u03C3"} </span>
                     <span style={{ color: selectedMarket.indicators.volatility > 0.05 ? "#f59e0b" : "#888" }}>
                       {(selectedMarket.indicators.volatility * 100).toFixed(1)}%
                     </span>
                   </span>
                 )}
                 {selectedMarket.indicators.orderFlowImbalance !== null && (
-                  <span title="Order flow imbalance: (smart buys - sells) / total">
-                    <span className="text-[#555]">Flow </span>
+                  <span title={t("chart.flowDesc")}>
+                    <span className="text-[#555]">{t("chart.flowIndicator")} </span>
                     <span style={{ color: selectedMarket.indicators.orderFlowImbalance > 0.1 ? "#22c55e" : selectedMarket.indicators.orderFlowImbalance < -0.1 ? "#ff4444" : "#888" }}>
                       {selectedMarket.indicators.orderFlowImbalance > 0 ? "+" : ""}{(selectedMarket.indicators.orderFlowImbalance * 100).toFixed(0)}%
                     </span>
@@ -543,7 +545,7 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
           <button onClick={() => setUseUTC(v => !v)}
             className="px-1.5 py-0.5 text-[9px] transition-all"
             style={{ color: "#888", background: useUTC ? "#2a2a2a" : "transparent", border: "1px solid #222", borderRadius: 2 }}
-            title={useUTC ? "Showing UTC time — click for local" : "Showing local time — click for UTC"}>
+            title={useUTC ? t("chart.showingUtc") : t("chart.showingLocal")}>
             {useUTC ? "UTC" : "Local"}
           </button>
         </div>
@@ -591,7 +593,7 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
                   <span style={{ color: MA_COLORS.ma20 }}>MA20</span>
                 </>
               )}
-              <span className="text-[#444]">hover chart for details</span>
+              <span className="text-[#444]">{t("chart.hoverForDetails")}</span>
             </>
           )}
         </div>
@@ -607,7 +609,7 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
         {error && !loading && (
           <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: "#0d0d0d99" }}>
             <div className="text-[11px] text-[var(--red)] font-mono text-center" aria-live="polite">
-              {error} <button onClick={() => { retryCount.current = 0; setChartData(null); }} className="ml-2 underline">retry</button>
+              {t("common.loadFailed")} <button onClick={() => { retryCount.current = 0; setChartData(null); }} className="ml-2 underline">{t("common.retry")}</button>
             </div>
           </div>
         )}

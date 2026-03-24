@@ -7,6 +7,7 @@ import { CATEGORY_COLORS, CATEGORY_SHAPES } from "@/lib/categories";
 import ShapeIcon from "./ShapeIcon";
 import { REGIONAL_VIEWS } from "@/lib/regions";
 import type { ColorMode } from "./WorldMap";
+import { useI18n } from "@/i18n";
 
 const TIME_OPTIONS: TimeRange[] = ["1h", "6h", "24h", "48h", "7d", "ALL"];
 const CATEGORIES: Category[] = ["Politics", "Crypto", "Sports", "Finance", "Tech", "Culture", "Other"];
@@ -14,28 +15,39 @@ const CATEGORY_EMOJI: Record<string, string> = {
   Politics: "🏛️", Crypto: "₿", Sports: "🏆", Finance: "📈", Tech: "💻", Culture: "🎭", Other: "🌐",
 };
 
+const REGION_EMOJI: Record<string, string> = {
+  global: "🌐", americas: "🌎", europe: "🇪🇺", mena: "🌙",
+  "asia-pacific": "🌏", africa: "🌍", oceania: "🏝️",
+};
+const REGION_I18N: Record<string, string> = {
+  global: "toolbar.regionGlobal", americas: "toolbar.regionAmericas",
+  europe: "toolbar.regionEurope", mena: "toolbar.regionMena",
+  "asia-pacific": "toolbar.regionAsiaPacific", africa: "toolbar.regionAfrica",
+  oceania: "toolbar.regionOceania",
+};
+
 export type OverlayLayer =
   | "conflicts" | "intel" | "military" | "weather" | "natural" | "fires"
   | "elections" | "outages" | "protests"
   | "soccer" | "basketball" | "baseball" | "hockey" | "tennis" | "golf" | "combat";
 
-const OVERLAY_LAYERS: { id: OverlayLayer; label: string; color: string }[] = [
-  { id: "conflicts",  label: "💥 conflict zones",    color: "#ef4444" },
-  { id: "military",   label: "✈️ military flights",  color: "#22d3ee" },
-  { id: "protests",   label: "✊ protests / unrest", color: "#fb7185" },
-  { id: "intel",      label: "🔍 intel hotspots",    color: "#a855f7" },
-  { id: "outages",    label: "📡 internet outages",  color: "#e879f9" },
-  { id: "elections",  label: "🗳️ elections",         color: "#fbbf24" },
-  { id: "soccer",     label: "⚽ soccer",            color: "#10b981" },
-  { id: "basketball", label: "🏀 basketball",        color: "#f97316" },
-  { id: "baseball",   label: "⚾ baseball",          color: "#ef4444" },
-  { id: "hockey",     label: "🏒 ice hockey",        color: "#38bdf8" },
-  { id: "tennis",     label: "🎾 tennis",            color: "#a3e635" },
-  { id: "golf",       label: "⛳ golf",              color: "#4ade80" },
-  { id: "combat",     label: "🥊 boxing / MMA",      color: "#f43f5e" },
-  { id: "weather",    label: "🌩️ weather alerts",    color: "#f59e0b" },
-  { id: "natural",    label: "🌍 natural events",    color: "#f97316" },
-  { id: "fires",      label: "🔥 fires",             color: "#ff6b35" },
+const OVERLAY_LAYERS: { id: OverlayLayer; emoji: string; i18nKey: string; color: string }[] = [
+  { id: "conflicts",  emoji: "💥", i18nKey: "toolbar.conflictZones",    color: "#ef4444" },
+  { id: "military",   emoji: "✈️", i18nKey: "toolbar.militaryFlights",  color: "#22d3ee" },
+  { id: "protests",   emoji: "✊", i18nKey: "toolbar.protests",         color: "#fb7185" },
+  { id: "intel",      emoji: "🔍", i18nKey: "toolbar.intelHotspots",    color: "#a855f7" },
+  { id: "outages",    emoji: "📡", i18nKey: "toolbar.internetOutages",  color: "#e879f9" },
+  { id: "elections",  emoji: "🗳️", i18nKey: "toolbar.elections",        color: "#fbbf24" },
+  { id: "soccer",     emoji: "⚽", i18nKey: "toolbar.soccer",           color: "#10b981" },
+  { id: "basketball", emoji: "🏀", i18nKey: "toolbar.basketball",       color: "#f97316" },
+  { id: "baseball",   emoji: "⚾", i18nKey: "toolbar.baseball",         color: "#ef4444" },
+  { id: "hockey",     emoji: "🏒", i18nKey: "toolbar.iceHockey",        color: "#38bdf8" },
+  { id: "tennis",     emoji: "🎾", i18nKey: "toolbar.tennis",           color: "#a3e635" },
+  { id: "golf",       emoji: "⛳", i18nKey: "toolbar.golf",             color: "#4ade80" },
+  { id: "combat",     emoji: "🥊", i18nKey: "toolbar.boxingMma",        color: "#f43f5e" },
+  { id: "weather",    emoji: "🌩️", i18nKey: "toolbar.weatherAlerts",    color: "#f59e0b" },
+  { id: "natural",    emoji: "🌍", i18nKey: "toolbar.naturalEvents",    color: "#f97316" },
+  { id: "fires",      emoji: "🔥", i18nKey: "toolbar.fires",            color: "#ff6b35" },
 ];
 
 interface MapToolbarProps {
@@ -67,6 +79,7 @@ export default function MapToolbar({
   activeLayers,
   onToggleLayer,
 }: MapToolbarProps) {
+  const { t } = useI18n();
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [layersOpen, setLayersOpen] = useState(false);
   const [regionOpen, setRegionOpen] = useState(false);
@@ -126,7 +139,7 @@ export default function MapToolbar({
               <polygon points="22,12 17,3.4 7,3.4 2,12 7,20.6 17,20.6" />
               <path d="M2 12h20M12 3.4L16 12l-4 8.6M12 3.4L8 12l4 8.6" />
             </svg>
-            REGION
+            {t("toolbar.region")}
           </button>
           {regionOpen && (
             <div className="map-toolbar-dropdown absolute bottom-full mb-1 left-0 bg-[#0a0a0a]/95 border border-[#2a2a2a] p-1 backdrop-blur-sm min-w-[148px] shadow-lg animate-fade-in max-h-64 overflow-y-auto">
@@ -141,7 +154,7 @@ export default function MapToolbar({
                     region === r.id ? "text-[#22c55e]" : "text-[#999]"
                   }`}
                 >
-                  {r.label}
+                  {REGION_EMOJI[r.id] ?? ""} {t(REGION_I18N[r.id] ?? r.id)}
                 </button>
               ))}
             </div>
@@ -162,13 +175,13 @@ export default function MapToolbar({
               <circle cx="12" cy="12" r="3" />
               <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" />
             </svg>
-            CATEGORIES
+            {t("toolbar.categories")}
           </button>
           {categoriesOpen && (
             <div className="map-toolbar-dropdown absolute bottom-full mb-1 left-0 bg-[#0a0a0a]/95 border border-[#2a2a2a] p-2 backdrop-blur-sm min-w-[168px] shadow-lg animate-fade-in max-h-72 overflow-y-auto">
               {/* Color mode toggle */}
               <div className="mb-2 pb-1.5 border-b border-[#2a2a2a]">
-                <div className="text-[10px] uppercase tracking-wider text-[#666] mb-1">color by</div>
+                <div className="text-[10px] uppercase tracking-wider text-[#666] mb-1">{t("toolbar.colorBy")}</div>
                 <div className="flex gap-0.5">
                   {(["category", "impact"] as ColorMode[]).map((mode) => (
                     <button
@@ -180,7 +193,7 @@ export default function MapToolbar({
                           : "text-[#777] hover:text-[#aaa]"
                       }`}
                     >
-                      {mode}
+                      {mode === "category" ? t("toolbar.category") : t("toolbar.impact")}
                     </button>
                   ))}
                 </div>
@@ -200,7 +213,7 @@ export default function MapToolbar({
                       size={10}
                     />
                     <span className={active ? "text-[#ccc]" : "text-[#777]"}>
-                      {CATEGORY_EMOJI[cat]} {cat.toLowerCase()}
+                      {CATEGORY_EMOJI[cat]} {t(`toolbar.${cat.toLowerCase()}`)}
                     </span>
                   </label>
                 );
@@ -226,7 +239,7 @@ export default function MapToolbar({
               <polyline points="2 17 12 22 22 17" />
               <polyline points="2 12 12 17 22 12" />
             </svg>
-            LAYERS
+            {t("toolbar.layers")}
             {activeLayerCount > 0 && (
               <span className="text-[9px] font-bold text-[#a78bfa] bg-[#a78bfa]/20 rounded-full px-1 leading-none py-0.5">
                 {activeLayerCount}
@@ -236,10 +249,10 @@ export default function MapToolbar({
           {layersOpen && (
             <div className="map-toolbar-dropdown absolute bottom-full mb-1 left-0 bg-[#0a0a0a]/95 border border-[#2a2a2a] backdrop-blur-sm min-w-[182px] shadow-lg animate-fade-in max-h-80 overflow-y-auto">
               <div className="sticky top-0 bg-[#0a0a0a] px-2 pt-2 pb-1 border-b border-[#1a1a1a]">
-                <div className="text-[10px] uppercase tracking-wider text-[#555]">intel overlays</div>
+                <div className="text-[10px] uppercase tracking-wider text-[#555]">{t("toolbar.intelOverlays")}</div>
               </div>
               <div className="p-2">
-              {OVERLAY_LAYERS.map(({ id, label, color }) => {
+              {OVERLAY_LAYERS.map(({ id, emoji, i18nKey, color }) => {
                 const active = activeLayers?.has(id) ?? false;
                 return (
                   <label
@@ -256,7 +269,7 @@ export default function MapToolbar({
                       }}
                     />
                     <span className={active ? "text-[#ddd]" : "text-[#666]"}>
-                      {label}
+                      {emoji} {t(i18nKey)}
                     </span>
                   </label>
                 );

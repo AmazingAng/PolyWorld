@@ -8,6 +8,7 @@ import { formatVolume, formatPct, formatChange } from "@/lib/format";
 import { makeAbbrev, extractLabels } from "@/lib/marketLabels";
 import ChartPanel from "./ChartPanel";
 import TradeModal, { type TradeModalState } from "./TradeModal";
+import { useI18n } from "@/i18n";
 
 interface MarketDetailPanelProps {
   market: ProcessedMarket;
@@ -17,20 +18,20 @@ interface MarketDetailPanelProps {
   onTagClick?: (tag: string) => void;
 }
 
-function formatEndDate(d: string | null): string {
+function formatEndDate(d: string | null, t: (key: string, vars?: Record<string, string | number>) => string): string {
   if (!d) return "\u2014";
   const date = new Date(d);
   if (isNaN(date.getTime())) return "\u2014";
   const now = new Date();
   const diffMs = date.getTime() - now.getTime();
   const diffHours = diffMs / (1000 * 60 * 60);
-  if (diffHours < 0) return "ended";
-  if (diffHours < 24) return "today";
+  if (diffHours < 0) return t("common.ended");
+  if (diffHours < 24) return t("common.today");
   const days = Math.ceil(diffHours / 24);
-  if (days === 1) return "tomorrow";
-  if (days < 30) return `${days}d`;
-  if (days < 365) return `${Math.floor(days / 30)}mo`;
-  return `${(days / 365).toFixed(1)}y`;
+  if (days === 1) return t("common.tomorrow");
+  if (days < 30) return t("detail.daysShort", { d: days });
+  if (days < 365) return t("detail.monthsShort", { m: Math.floor(days / 30) });
+  return t("detail.yearsShort", { y: (days / 365).toFixed(1) });
 }
 
 
@@ -64,6 +65,7 @@ function MarketDetailPanelInner({
   onSelectMarket,
   onTagClick,
 }: MarketDetailPanelProps) {
+  const { t } = useI18n();
   const color = CATEGORY_COLORS[market.category] || CATEGORY_COLORS.Other;
   const chg = formatChange(market.change);
   const [rulesExpanded, setRulesExpanded] = useState(false);
@@ -440,7 +442,7 @@ function MarketDetailPanelInner({
           {prices.length > 0 && !market.closed && cardAllIds.length === 0 && (
             <div className="mt-1 pt-1 border-t border-[var(--border-subtle)] flex justify-end">
               <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors">
-                trade {"\u2192"}
+                {t("detail.tradeArrow")}
               </a>
             </div>
           )}
@@ -488,7 +490,7 @@ function MarketDetailPanelInner({
                     onClick={fetchAiSummary}
                     disabled={aiLoading}
                     className={`shrink-0 transition-colors disabled:opacity-50 ${aiSummary ? "text-[#f59e0b]" : "text-[var(--text-faint)] hover:text-[#f59e0b]"}`}
-                    title={aiSummary ? undefined : "Generate AI Summary"}
+                    title={aiSummary ? undefined : t("detail.generateSummary")}
                   >
                     {aiLoading ? (
                       <span className="inline-block w-3 h-3 border border-[#f59e0b] border-t-transparent rounded-full animate-spin" />
@@ -524,19 +526,19 @@ function MarketDetailPanelInner({
               <span>{market.category.toLowerCase()}</span>
               {market.location && <><span>{"\u00B7"}</span><span>{market.location.toLowerCase()}</span></>}
               {(market.closed || (market.endDate && new Date(market.endDate).getTime() < Date.now())) ? (
-                <span className="text-[#ff4444]">closed</span>
+                <span className="text-[#ff4444]">{t("common.closed")}</span>
               ) : market.active ? (
-                <span className="text-[#22c55e]">active</span>
+                <span className="text-[#22c55e]">{t("common.active")}</span>
               ) : null}
-              {market.endDate && <><span>{"\u00B7"}</span><span>{formatEndDate(market.endDate)}</span></>}
+              {market.endDate && <><span>{"\u00B7"}</span><span>{formatEndDate(market.endDate, t)}</span></>}
             </div>
           </div>
 
           {/* Row 3: vol / 24h / liq — compact stats */}
           <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)] tabular-nums">
-            <span>Vol <span className="text-[var(--text-dim)]">{formatVolume(market.volume)}</span></span>
-            <span>24h <span className="text-[var(--text-dim)]">{formatVolume(market.volume24h)}</span></span>
-            <span>Liq <span className="text-[var(--text-dim)]">{formatVolume(market.liquidity)}</span></span>
+            <span>{t("detail.vol")} <span className="text-[var(--text-dim)]">{formatVolume(market.volume)}</span></span>
+            <span>{t("detail.h24")} <span className="text-[var(--text-dim)]">{formatVolume(market.volume24h)}</span></span>
+            <span>{t("detail.liq")} <span className="text-[var(--text-dim)]">{formatVolume(market.liquidity)}</span></span>
           </div>
 
 
@@ -552,7 +554,7 @@ function MarketDetailPanelInner({
         {isWide && hasOutcomes && (
           <div className="shrink-0 flex flex-col" style={{ width: "42%", minWidth: 200, maxWidth: 380 }}>
             <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-2">
-              outcomes ({activeMarketsList.length})
+              {t("detail.outcomes", { count: activeMarketsList.length })}
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto pr-1" style={{ maxHeight: 460 }}>
               {outcomesContent}
@@ -565,7 +567,7 @@ function MarketDetailPanelInner({
       {!isWide && hasOutcomes && (
         <div className="mt-5">
           <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-2">
-            outcomes ({activeMarketsList.length})
+            {t("detail.outcomes", { count: activeMarketsList.length })}
           </div>
           {outcomesContent}
         </div>
@@ -577,18 +579,18 @@ function MarketDetailPanelInner({
           <div className="grid gap-5" style={{ gridTemplateColumns: isWide ? "1fr 1fr" : "1fr" }}>
             {hasRules && (
               <div className="border border-[var(--border-subtle)] rounded-sm px-3 py-3">
-                <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-2">rules</div>
+                <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-2">{t("detail.rules")}</div>
                 <div className={`text-[12px] text-[var(--text-dim)] leading-[1.7] ${!rulesExpanded ? "line-clamp-1" : ""}`}>
                   {market.description}
                 </div>
                 {market.description && market.description.length > 60 && (
                   <button onClick={() => setRulesExpanded(!rulesExpanded)} className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] mt-1.5 transition-colors">
-                    {rulesExpanded ? "collapse" : "expand"}
+                    {rulesExpanded ? t("detail.collapse") : t("detail.expand")}
                   </button>
                 )}
                 {market.resolutionSource && (
                   <div className="mt-2 text-[11px] text-[var(--text-faint)]">
-                    source: <span className="text-[var(--text-dim)]">{market.resolutionSource}</span>
+                    {t("detail.sourceLabel", { source: "" })}<span className="text-[var(--text-dim)]">{market.resolutionSource}</span>
                     <ResolutionMonitorBadge eventId={market.id} />
                   </div>
                 )}
@@ -597,7 +599,7 @@ function MarketDetailPanelInner({
             <div className="space-y-4">
               {hasTags && (
                 <div className="border border-[var(--border-subtle)] rounded-sm px-3 py-3">
-                  <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-2">tags</div>
+                  <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-2">{t("detail.tags")}</div>
                   <div className="flex flex-wrap gap-1.5">
                     {market.tags.map((tag) => (
                       <button
@@ -613,7 +615,7 @@ function MarketDetailPanelInner({
               )}
               {hasCreated && (
                 <div className="border border-[var(--border-subtle)] rounded-sm px-3 py-3">
-                  <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-1">created</div>
+                  <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-1">{t("detail.created")}</div>
                   <div className="text-[12px] text-[var(--text-dim)]">
                     {new Date(market.createdAt!).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
                   </div>
@@ -624,7 +626,7 @@ function MarketDetailPanelInner({
 
           {hasRelated && (
             <div className="mt-5 border border-[var(--border-subtle)] rounded-sm px-3 py-3">
-              <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-2">related markets</div>
+              <div className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-2">{t("detail.relatedMarkets")}</div>
               <div className="space-y-1.5">
                 {relatedMarkets.slice(0, 5).map((rm) => (
                   <button key={rm.id} onClick={() => onSelectMarket(rm)} className="w-full text-left border border-[var(--border-subtle)] rounded-sm px-3 py-2 text-[12px] hover:bg-[var(--surface)] transition-colors">
@@ -642,11 +644,11 @@ function MarketDetailPanelInner({
           <div className="flex items-center gap-4 mt-4">
             {market.commentCount > 0 && (
               <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--text-faint)] hover:text-[var(--text-dim)] transition-colors">
-                {market.commentCount} comments {"\u2192"}
+                {t("detail.commentsLink", { count: market.commentCount })}
               </a>
             )}
             <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--text-faint)] hover:text-[var(--text-dim)] transition-colors">
-              polymarket {"\u2192"}
+              {t("detail.polymarketLink")}
             </a>
             <CopyLinkButton marketId={market.id} />
           </div>
@@ -668,6 +670,7 @@ function MarketDetailPanelInner({
 }
 
 function CopyLinkButton({ marketId }: { marketId: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -682,12 +685,13 @@ function CopyLinkButton({ marketId }: { marketId: string }) {
       }}
       className="text-[11px] text-[var(--text-faint)] hover:text-[var(--text-dim)] transition-colors"
     >
-      {copied ? "copied!" : "copy link"}
+      {copied ? t("common.copied") : t("detail.copyLink")}
     </button>
   );
 }
 
 function SmartMoneySection({ smartMoney }: { smartMoney: SmartMoneyFlow }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(true);
   const flowColor = smartMoney.netFlow === "bullish" ? "#22c55e" : smartMoney.netFlow === "bearish" ? "#ff4444" : "var(--text-faint)";
 
@@ -695,7 +699,7 @@ function SmartMoneySection({ smartMoney }: { smartMoney: SmartMoneyFlow }) {
     <div className="mt-5 border border-[var(--border-subtle)] rounded-sm px-3 py-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)]">smart money</span>
+          <span className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-faint)]">{t("detail.smartMoneyLabel")}</span>
           <span className="smart-money-badge">$</span>
           <span className="text-[11px] font-bold uppercase" style={{ color: flowColor }}>
             {smartMoney.netFlow}
@@ -705,23 +709,23 @@ function SmartMoneySection({ smartMoney }: { smartMoney: SmartMoneyFlow }) {
           onClick={() => setExpanded(!expanded)}
           className="text-[10px] text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors"
         >
-          {expanded ? "collapse" : "expand"}
+          {expanded ? t("detail.collapse") : t("detail.expand")}
         </button>
       </div>
       {expanded && (
         <div className="mt-3 space-y-3">
           {/* Flow stats */}
           <div className="flex gap-4 text-[11px] tabular-nums">
-            <span className="text-[#22c55e]">{smartMoney.smartBuys} smart buys</span>
-            <span className="text-[#ff4444]">{smartMoney.smartSells} smart sells</span>
-            <span className="text-[var(--text-dim)]">{smartMoney.whaleBuys} whale buys</span>
-            <span className="text-[var(--text-dim)]">{smartMoney.whaleSells} whale sells</span>
+            <span className="text-[#22c55e]">{smartMoney.smartBuys} {t("detail.smartBuys")}</span>
+            <span className="text-[#ff4444]">{smartMoney.smartSells} {t("detail.smartSells")}</span>
+            <span className="text-[var(--text-dim)]">{smartMoney.whaleBuys} {t("detail.whaleBuys")}</span>
+            <span className="text-[var(--text-dim)]">{smartMoney.whaleSells} {t("detail.whaleSells")}</span>
           </div>
 
           {/* Top wallets */}
           {smartMoney.topWallets.length > 0 && (
             <div>
-              <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-1.5">top wallets</div>
+              <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-1.5">{t("detail.topWallets")}</div>
               <div className="space-y-1">
                 {smartMoney.topWallets.map((w, i) => (
                   <div key={i} className="flex items-center gap-2 text-[11px]">
@@ -743,7 +747,7 @@ function SmartMoneySection({ smartMoney }: { smartMoney: SmartMoneyFlow }) {
           {/* Recent trades */}
           {smartMoney.recentTrades.length > 0 && (
             <div>
-              <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-1.5">recent trades</div>
+              <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-1.5">{t("detail.recentTrades")}</div>
               <div className="space-y-1">
                 {smartMoney.recentTrades.map((t, i) => (
                   <div key={i} className="flex items-center gap-2 text-[11px]">
@@ -786,6 +790,7 @@ export default memo(MarketDetailPanelInner, (prev, next) => {
 });
 
 function ResolutionBanner({ markets }: { markets: ProcessedMarket["markets"] }) {
+  const { t } = useI18n();
   const resolved: { question: string; winner: string }[] = [];
   for (const m of markets) {
     try {
@@ -812,7 +817,7 @@ function ResolutionBanner({ markets }: { markets: ProcessedMarket["markets"] }) 
     <div className="px-3 py-2 border border-[#22c55e]/20 bg-[#22c55e]/5 rounded-sm text-[11px] space-y-1">
       {resolved.map((r, i) => (
         <div key={i}>
-          <span className="uppercase tracking-[0.1em] text-[var(--text-faint)]">resolved: </span>
+          <span className="uppercase tracking-[0.1em] text-[var(--text-faint)]">{t("detail.resolved")}</span>
           <span className="text-[#22c55e] font-bold">{r.winner}</span>
           {r.question && <span className="text-[var(--text-dim)] ml-1">({r.question})</span>}
         </div>
@@ -822,6 +827,7 @@ function ResolutionBanner({ markets }: { markets: ProcessedMarket["markets"] }) 
 }
 
 function ResolutionMonitorBadge({ eventId }: { eventId: string }) {
+  const { t } = useI18n();
   const [status, setStatus] = useState<{ sourceType: string; lastCheckedAt: string | null } | null>(null);
   const [renderNow] = useState(() => Date.now());
 
@@ -839,17 +845,17 @@ function ResolutionMonitorBadge({ eventId }: { eventId: string }) {
     const ago = status.lastCheckedAt
       ? `${Math.round((renderNow - new Date(status.lastCheckedAt).getTime()) / 60_000)}m ago`
       : "pending";
-    const label = status.sourceType === "price_feed" ? "price" : status.sourceType === "sports_feed" ? "sports" : "rss";
+    const monitorKey = status.sourceType === "price_feed" ? "detail.priceMonitored" : status.sourceType === "sports_feed" ? "detail.sportsMonitored" : "detail.rssMonitored";
     return (
       <span className="ml-2 text-[10px] text-[#22c55e]/70">
-        {label} monitored · {ago}
+        {t(monitorKey, { ago })}
       </span>
     );
   }
 
   return (
     <span className="ml-2 text-[10px] text-[var(--text-ghost)]">
-      not monitorable
+      {t("detail.notMonitorable")}
     </span>
   );
 }

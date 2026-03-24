@@ -9,6 +9,7 @@ import {
   fetchTraderValue,
 } from "@/lib/smartMoney";
 import { formatVolume } from "@/lib/format";
+import { useI18n } from "@/i18n";
 
 interface TraderPanelProps {
   selectedWallet: string | null;
@@ -50,6 +51,7 @@ export default function TraderPanel({
 function TraderPanelContent({
   selectedWallet,
 }: TraderPanelProps) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<"positions" | "activity">("positions");
   const [positions, setPositions] = useState<TraderPosition[]>([]);
   const [activity, setActivity] = useState<TraderActivity[]>([]);
@@ -92,49 +94,49 @@ function TraderPanelContent({
       {!selectedWallet ? (
         <div className="flex-1 flex items-center justify-center px-4">
           <div className="text-center text-[var(--text-muted)] leading-relaxed">
-            <div className="mb-1">paste a 0x address above, or</div>
-            <div>click a wallet in <span className="text-[var(--text-dim)]">Leaderboard</span>, <span className="text-[var(--text-dim)]">Smart Trades</span>, or <span className="text-[var(--text-dim)]">Whale Trades</span></div>
+            <div className="mb-1">{t("traderPanel.pasteAddress")}</div>
+            <div>{t("traderPanel.clickWallet")}</div>
           </div>
         </div>
       ) : loading ? (
         <div className="flex-1 flex items-center justify-center text-[var(--text-muted)]">
           <div className="w-4 h-4 border border-[#2a2a2a] border-t-[#a0a0a0] rounded-full animate-spin mr-2" />
-          loading…
+          {t("common.loading")}
         </div>
       ) : (
         <>
           {/* Stats bar */}
           <div className="flex items-center gap-3 px-2 py-1.5 border-b border-[var(--border)] text-[10px] tabular-nums">
             <div>
-              <span className="text-[var(--text-muted)]">VALUE </span>
+              <span className="text-[var(--text-muted)]">{t("traderPanel.value")} </span>
               <span className="text-[var(--text)]">{formatVolume(displayedValue)}</span>
             </div>
             <div>
-              <span className="text-[var(--text-muted)]">PNL </span>
+              <span className="text-[var(--text-muted)]">{t("traderPanel.pnl")} </span>
               <span style={{ color: totalPnl >= 0 ? "#22c55e" : "#ff4444" }}>
                 {totalPnl >= 0 ? "+" : ""}{formatVolume(totalPnl)}
               </span>
             </div>
             <div>
-              <span className="text-[var(--text-muted)]">{openPositions.length} open</span>
+              <span className="text-[var(--text-muted)]">{openPositions.length} {t("traderPanel.open")}</span>
               <span className="text-[var(--text-ghost)]"> / </span>
-              <span className="text-[var(--text-muted)]">{closedPositions.length} closed</span>
+              <span className="text-[var(--text-muted)]">{closedPositions.length} {t("traderPanel.closed")}</span>
             </div>
           </div>
 
           {/* Tab bar */}
           <div className="flex border-b border-[var(--border)]">
-            {(["positions", "activity"] as const).map((t) => (
+            {(["positions", "activity"] as const).map((tabKey) => (
               <button
-                key={t}
-                onClick={() => setTab(t)}
+                key={tabKey}
+                onClick={() => setTab(tabKey)}
                 className="px-3 py-1 text-[10px] uppercase tracking-wider transition-colors"
                 style={{
-                  color: tab === t ? "#22c55e" : "var(--text-faint)",
-                  borderBottom: tab === t ? "1px solid #22c55e" : "1px solid transparent",
+                  color: tab === tabKey ? "#22c55e" : "var(--text-faint)",
+                  borderBottom: tab === tabKey ? "1px solid #22c55e" : "1px solid transparent",
                 }}
               >
-                {t}
+                {t(tabKey === "positions" ? "traderPanel.positionsTab" : "traderPanel.activityTab")}
               </button>
             ))}
           </div>
@@ -146,7 +148,7 @@ function TraderPanelContent({
                 {openPositions.length > 0 && (
                   <>
                     <div className="px-2 py-1 text-[9px] text-[var(--text-muted)] uppercase tracking-wider bg-[var(--bg-panel)]">
-                      Open ({openPositions.length})
+                      {t("traderPanel.openCount", { count: openPositions.length })}
                     </div>
                     {openPositions.map((p, i) => (
                       <PositionRow key={`o-${i}`} position={p} />
@@ -156,7 +158,7 @@ function TraderPanelContent({
                 {closedPositions.length > 0 && (
                   <>
                     <div className="px-2 py-1 text-[9px] text-[var(--text-muted)] uppercase tracking-wider bg-[var(--bg-panel)]">
-                      Closed ({closedPositions.length})
+                      {t("traderPanel.closedCount", { count: closedPositions.length })}
                     </div>
                     {closedPositions.map((p, i) => (
                       <PositionRow key={`c-${i}`} position={p} dimmed />
@@ -164,7 +166,7 @@ function TraderPanelContent({
                   </>
                 )}
                 {displayedPositions.length === 0 && (
-                  <div className="px-2 py-4 text-center text-[var(--text-muted)]">no positions</div>
+                  <div className="px-2 py-4 text-center text-[var(--text-muted)]">{t("traderPanel.noPositions")}</div>
                 )}
               </div>
             ) : (
@@ -172,7 +174,7 @@ function TraderPanelContent({
                 {displayedActivity.length > 0 ? (
                   displayedActivity.map((a, i) => <ActivityRow key={i} activity={a} />)
                 ) : (
-                  <div className="px-2 py-4 text-center text-[var(--text-muted)]">no activity</div>
+                  <div className="px-2 py-4 text-center text-[var(--text-muted)]">{t("traderPanel.noActivity")}</div>
                 )}
               </div>
             )}

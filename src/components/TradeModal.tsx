@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useCallback, useState, useRef, useMemo } from "react";
+import { useI18n } from "@/i18n";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { useReadContract } from "wagmi";
@@ -62,12 +63,12 @@ function saveRecentOrder(order: RecentOrder) {
     localStorage.setItem(RECENT_ORDERS_KEY, JSON.stringify(updated));
   } catch { /* ignore */ }
 }
-function timeAgo(ts: number): string {
+function timeAgo(ts: number, t: (key: string, vars?: Record<string, string | number>) => string): string {
   const diff = Date.now() - ts;
   const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}min ago`;
-  return `${Math.floor(mins / 60)}h ago`;
+  if (mins < 1) return t("common.justNow");
+  if (mins < 60) return t("trade.minAgo", { m: mins });
+  return t("trade.hAgo", { h: Math.floor(mins / 60) });
 }
 
 // ─── Mini Order Book ──────────────────────────────────────────────────────────
@@ -85,6 +86,7 @@ async function loadOrderBook(
 }
 
 function MiniOrderBook({ tokenId, currentPrice }: { tokenId: string; currentPrice: number }) {
+  const { t } = useI18n();
   const [book, setBook] = useState<BookData | null>(null);
   const [loading, setLoading] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
@@ -139,18 +141,18 @@ function MiniOrderBook({ tokenId, currentPrice }: { tokenId: string; currentPric
   const spread = asks[0] && bids[0] ? ((asks[0].price - bids[0].price) * 100).toFixed(1) : null;
 
   if (loading) return (
-    <div className="flex items-center justify-center h-full text-[var(--text-ghost)] text-[10px]">loading…</div>
+    <div className="flex items-center justify-center h-full text-[var(--text-ghost)] text-[10px]">{t("common.loading")}</div>
   );
   if (!book || (!asks.length && !bids.length)) return (
-    <div className="flex items-center justify-center h-full text-[var(--text-ghost)] text-[10px]">no book data</div>
+    <div className="flex items-center justify-center h-full text-[var(--text-ghost)] text-[10px]">{t("common.noData")}</div>
   );
 
   return (
     <div className="flex flex-col h-full select-none">
       {/* Column headers */}
       <div className="flex items-center justify-between text-[8px] uppercase tracking-wider text-[var(--text-ghost)] px-2 pb-1 shrink-0">
-        <span>price</span>
-        <span>shares</span>
+        <span>{t("trade.price")}</span>
+        <span>{t("common.shares")}</span>
       </div>
 
       {/* Asks (lowest ask at bottom of asks section) */}
@@ -169,9 +171,9 @@ function MiniOrderBook({ tokenId, currentPrice }: { tokenId: string; currentPric
 
       {/* Spread / mid */}
       <div className="flex items-center justify-between px-2 py-1 border-y border-[var(--border-subtle)] shrink-0">
-        <span className="text-[9px] text-[var(--text-ghost)]">mid</span>
+        <span className="text-[9px] text-[var(--text-ghost)]">{t("trade.mid")}</span>
         <span className="text-[10px] font-bold text-[var(--text)] tabular-nums">{(currentPrice * 100).toFixed(1)}¢</span>
-        {spread && <span className="text-[9px] text-[var(--text-ghost)]">spread {spread}¢</span>}
+        {spread && <span className="text-[9px] text-[var(--text-ghost)]">{t("trade.spread")} {spread}¢</span>}
       </div>
 
       {/* Bids */}
@@ -211,6 +213,7 @@ export default function TradeModal({ state, onClose }: TradeModalProps) {
 }
 
 function TradeModalContent({ state, onClose }: TradeModalProps) {
+  const { t } = useI18n();
   const hasYesNo = !!(state.yesToken && state.noToken);
 
   const [activeTokenId, setActiveTokenId] = useState(state.tokenId);
@@ -336,7 +339,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                   <span>Yes {(state.yesToken!.price * 100).toFixed(1)}¢</span>
                   {yesSharesNum !== null && yesSharesNum > 0 && (
                     <span className={`text-[9px] font-bold tabular-nums ${isYesActive ? "opacity-70" : "opacity-50"}`}>
-                      {yesSharesNum.toFixed(2)} shares
+                      {yesSharesNum.toFixed(2)} {t("common.shares")}
                     </span>
                   )}
                 </button>
@@ -351,7 +354,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                   <span>No {(state.noToken!.price * 100).toFixed(1)}¢</span>
                   {noSharesNum !== null && noSharesNum > 0 && (
                     <span className={`text-[9px] font-bold tabular-nums ${!isYesActive ? "opacity-70" : "opacity-50"}`}>
-                      {noSharesNum.toFixed(2)} shares
+                      {noSharesNum.toFixed(2)} {t("common.shares")}
                     </span>
                   )}
                 </button>
@@ -387,12 +390,12 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                 }}>
                   {sm.netFlow === "bullish" ? "↑" : "↓"}
                   {"$"}{Math.abs(netVol).toFixed(0)}
-                  {" whale "}
-                  {sm.netFlow === "bullish" ? "bullish" : "bearish"}
+                  {" "}{t("trade.whale")}{" "}
+                  {sm.netFlow === "bullish" ? t("trade.bullish") : t("trade.bearish")}
                   {" · "}
-                  {sm.smartBuys + sm.whaleBuys} buys
+                  {sm.smartBuys + sm.whaleBuys} {t("trade.buys")}
                   {" / "}
-                  {sm.smartSells + sm.whaleSells} sells
+                  {sm.smartSells + sm.whaleSells} {t("trade.sells")}
                 </div>
               );
             })()}
@@ -411,17 +414,17 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
           <div className="flex items-center gap-3 px-4 py-1.5 border-b border-[var(--border-subtle)] text-[10px] tabular-nums text-[var(--text-faint)] shrink-0 flex-wrap">
             {state.recentChange != null && state.recentChange !== 0 && (
               <span className={state.recentChange > 0 ? "text-[#22c55e]" : "text-[#ff4444]"}>
-                24h: {state.recentChange > 0 ? "+" : ""}{(state.recentChange * 100).toFixed(1)}%
+                {t("trade.change24h", { change: `${state.recentChange > 0 ? "+" : ""}${(state.recentChange * 100).toFixed(1)}` })}
               </span>
             )}
             {state.volume24h != null && state.volume24h > 0 && (
-              <span>Vol 24h: ${state.volume24h >= 1_000_000 ? `${(state.volume24h / 1_000_000).toFixed(1)}M` : state.volume24h >= 1_000 ? `${(state.volume24h / 1_000).toFixed(0)}K` : state.volume24h.toFixed(0)}</span>
+              <span>{t("trade.vol24h")}: ${state.volume24h >= 1_000_000 ? `${(state.volume24h / 1_000_000).toFixed(1)}M` : state.volume24h >= 1_000 ? `${(state.volume24h / 1_000).toFixed(0)}K` : state.volume24h.toFixed(0)}</span>
             )}
             {state.volume != null && state.volume > 0 && (
-              <span>Vol: ${state.volume >= 1_000_000 ? `${(state.volume / 1_000_000).toFixed(1)}M` : state.volume >= 1_000 ? `${(state.volume / 1_000).toFixed(0)}K` : state.volume.toFixed(0)}</span>
+              <span>{t("trade.vol")}: ${state.volume >= 1_000_000 ? `${(state.volume / 1_000_000).toFixed(1)}M` : state.volume >= 1_000 ? `${(state.volume / 1_000).toFixed(0)}K` : state.volume.toFixed(0)}</span>
             )}
             {state.liquidity != null && state.liquidity > 0 && (
-              <span>Liq: ${state.liquidity >= 1_000_000 ? `${(state.liquidity / 1_000_000).toFixed(1)}M` : state.liquidity >= 1_000 ? `${(state.liquidity / 1_000).toFixed(0)}K` : state.liquidity.toFixed(0)}</span>
+              <span>{t("trade.liq")}: ${state.liquidity >= 1_000_000 ? `${(state.liquidity / 1_000_000).toFixed(1)}M` : state.liquidity >= 1_000 ? `${(state.liquidity / 1_000).toFixed(0)}K` : state.liquidity.toFixed(0)}</span>
             )}
           </div>
         )}
@@ -432,7 +435,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
           {/* Left: Order Book */}
           <div className="w-[220px] shrink-0 border-r border-[var(--border-subtle)] flex flex-col py-2">
             <div className="text-[8px] uppercase tracking-[0.12em] text-[var(--text-ghost)] px-2 pb-1 shrink-0">
-              order book
+              {t("trade.orderBook")}
             </div>
             <div className="flex-1 min-h-0">
               <MiniOrderBook key={activeTokenId} tokenId={activeTokenId} currentPrice={activePrice} />
@@ -443,8 +446,8 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
           <div className="flex-1 min-w-0 flex flex-col overflow-y-auto">
             {orderPlaced && (
               <div className="px-4 py-2 bg-[#22c55e]/10 border-b border-[#22c55e]/20 text-[11px] text-[#22c55e] flex items-center justify-between shrink-0">
-                <span>✓ Order submitted</span>
-                <button onClick={onClose} className="text-[#22c55e]/70 hover:text-[#22c55e] transition-colors text-[10px]">Close</button>
+                <span>{t("trade.orderSubmitted")}</span>
+                <button onClick={onClose} className="text-[#22c55e]/70 hover:text-[#22c55e] transition-colors text-[10px]">{t("common.close")}</button>
               </div>
             )}
 
@@ -462,7 +465,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
 
               {activeOpenOrders.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]">
-                  <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-ghost)] mb-1.5">open orders · {activeOpenOrders.length}</div>
+                  <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-ghost)] mb-1.5">{t("trade.openOrdersCount", { count: activeOpenOrders.length })}</div>
                   <div className="space-y-1">
                     {activeOpenOrders.map((o) => {
                       const price = parseFloat(o.price) || 0;
@@ -482,7 +485,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                             disabled={cancellingOrderId === o.id}
                             className="text-[9px] px-1 py-0 border border-[var(--border)] text-[var(--text-ghost)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
                           >
-                            {cancellingOrderId === o.id ? "…" : "Cancel"}
+                            {cancellingOrderId === o.id ? "…" : t("common.cancel")}
                           </button>
                         </div>
                       );
@@ -493,7 +496,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
 
               {displayedRecentOrders.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]">
-                  <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-ghost)] mb-1.5">recent orders</div>
+                  <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-ghost)] mb-1.5">{t("trade.recentOrders")}</div>
                   <div className="space-y-1">
                     {displayedRecentOrders.map((o) => (
                       <div key={o.id} className="text-[9px] text-[var(--text-faint)] tabular-nums flex items-center gap-1.5">
@@ -501,7 +504,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                         <span className="text-[var(--text-dim)]">{o.outcome}</span>
                         <span className="text-[var(--text-ghost)]">${o.amount.toFixed(0)} @{(o.price * 100).toFixed(0)}¢</span>
                         <span className="text-[var(--text-ghost)]">·</span>
-                        <span>{timeAgo(o.ts)}</span>
+                        <span>{timeAgo(o.ts, t)}</span>
                       </div>
                     ))}
                   </div>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ResolutionAlertInput } from "@/lib/signalEngine";
+import { useI18n } from "@/i18n";
 
 interface ResolutionPanelProps {
   onSelectMarket?: (slug: string) => void;
@@ -101,6 +102,7 @@ export function useResolutionData() {
 }
 
 export default function ResolutionPanel({ onSelectMarket, categoryFilter, strengthFilter }: ResolutionPanelProps) {
+  const { t } = useI18n();
   const { enriched } = useResolutionData();
 
   const filtered = useMemo(() => {
@@ -114,7 +116,7 @@ export default function ResolutionPanel({ onSelectMarket, categoryFilter, streng
     <div className="font-mono">
       {filtered.length === 0 ? (
         <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center">
-          No resolution alerts
+          {t("resolutionPanel.noAlerts")}
         </div>
       ) : (
         <div className="space-y-0">
@@ -130,7 +132,7 @@ export default function ResolutionPanel({ onSelectMarket, categoryFilter, streng
                     className="text-[8px] font-bold rounded-sm px-0.5 leading-[14px]"
                     style={{ background: STRENGTH_BG[alert.strength], color: STRENGTH_COLORS[alert.strength] }}
                   >
-                    {alert.strength.slice(0, 3).toUpperCase()}
+                    {t(`signals.${alert.strength === "strong" ? "str" : alert.strength === "moderate" ? "mod" : "wea"}`)}
                   </span>
                   <span className="text-[9px] font-bold text-[var(--text-faint)] uppercase tracking-wide">
                     {alert.source}

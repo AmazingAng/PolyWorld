@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useI18n } from "@/i18n";
 import { fetchTraderPositions, fetchTraderValue, type TraderPosition } from "@/lib/smartMoney";
 import { formatVolume } from "@/lib/format";
 import type { ProcessedMarket } from "@/types";
@@ -22,10 +23,10 @@ interface PortfolioPanelProps {
   onSelectMarket?: (slug: string) => void;
 }
 
-function timeUntil(iso: string | null | undefined): string | null {
+function timeUntil(iso: string | null | undefined, t?: (key: string) => string): string | null {
   if (!iso) return null;
   const diff = new Date(iso).getTime() - Date.now();
-  if (diff <= 0) return "expired";
+  if (diff <= 0) return t ? t("portfolio.expired") : "expired";
   const h = Math.floor(diff / 3_600_000);
   if (h < 24) return `${h}h`;
   const d = Math.floor(diff / 86_400_000);
@@ -47,6 +48,7 @@ interface PositionWithMarket {
 }
 
 export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPanelProps) {
+  const { t } = useI18n();
   const connectedAddress = useWalletStore((s) => s.address);
   // Start with "" on both server and client to avoid hydration mismatch,
   // then load from localStorage + connected wallet in a single effect.
@@ -161,14 +163,14 @@ export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPan
             <button
               onClick={() => load(savedWallet)}
               className="text-[9px] text-[var(--text-faint)] hover:text-[var(--text)] transition-colors px-1"
-              title="Refresh"
+              title={t("common.refresh")}
             >
               ↺
             </button>
             <button
               onClick={handleClear}
               className="text-[9px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors"
-              title="Clear wallet"
+              title={t("portfolio.clearWallet")}
             >
               ×
             </button>
@@ -177,7 +179,7 @@ export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPan
           <>
             <input
               className="flex-1 bg-transparent border border-[var(--border)] rounded-sm px-1.5 py-0 text-[10px] text-[var(--text)] placeholder:text-[var(--text-ghost)] leading-[18px] min-w-0"
-              placeholder="0x… wallet to track"
+              placeholder={t("portfolio.walletPlaceholder")}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
@@ -188,14 +190,14 @@ export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPan
                 className="px-1.5 py-0 border border-[var(--border)] rounded-sm text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors leading-[18px] shrink-0"
                 title="Use connected wallet"
               >
-                mine
+                {t("wallet.mine")}
               </button>
             )}
             <button
               onClick={handleSubmit}
               className="px-1.5 py-0 border border-[var(--border)] rounded-sm text-[9px] text-[var(--text-dim)] hover:text-[var(--text)] transition-colors leading-[18px] shrink-0"
             >
-              GO
+              {t("wallet.go")}
             </button>
           </>
         )}
@@ -210,18 +212,18 @@ export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPan
                 onClick={() => setSavedWallet(connectedAddress)}
                 className="text-[11px] px-3 py-1.5 border border-[#22c55e]/40 text-[#22c55e] hover:border-[#22c55e]/70 hover:bg-[#22c55e]/5 transition-colors"
               >
-                load my positions
+                {t("wallet.loadPositions")}
               </button>
-              <span className="text-[10px] text-[var(--text-faint)]">or enter any address above</span>
+              <span className="text-[10px] text-[var(--text-faint)]">{t("wallet.orEnterAddress")}</span>
             </>
           ) : (
-            <span>Enter your wallet address to track your positions and PnL</span>
+            <span>{t("wallet.enterWalletPrompt")}</span>
           )}
         </div>
       ) : loading ? (
         <div className="flex-1 flex items-center justify-center gap-2 text-[var(--text-muted)]">
           <div className="w-4 h-4 border border-[#2a2a2a] border-t-[#a0a0a0] rounded-full animate-spin" />
-          loading…
+          {t("common.loading")}
         </div>
       ) : error ? (
         <div className="flex-1 flex items-center justify-center text-[#ff4444]">{error}</div>
@@ -230,24 +232,24 @@ export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPan
           {/* Stats bar */}
           <div className="flex items-center gap-3 px-2 py-1.5 border-b border-[var(--border)] text-[10px] tabular-nums">
             <div>
-              <span className="text-[var(--text-muted)]">VALUE </span>
+              <span className="text-[var(--text-muted)]">{t("portfolio.value")} </span>
               <span className="text-[var(--text)]">{formatVolume(totalValue)}</span>
             </div>
             <div>
-              <span className="text-[var(--text-muted)]">UNREAL PNL </span>
+              <span className="text-[var(--text-muted)]">{t("portfolio.unrealPnl")} </span>
               <span style={{ color: totalPnl >= 0 ? "#22c55e" : "#ff4444" }}>
                 {totalPnl >= 0 ? "+" : ""}{formatVolume(totalPnl)}
               </span>
             </div>
             <div className="text-[var(--text-muted)]">
-              {openPositions.length} open
+              {t("portfolio.openCount", { count: openPositions.length })}
             </div>
           </div>
 
           {/* Open positions */}
           <div className="flex-1 overflow-y-auto min-h-0">
             {openPositions.length === 0 ? (
-              <div className="px-2 py-4 text-center text-[var(--text-muted)]">no open positions</div>
+              <div className="px-2 py-4 text-center text-[var(--text-muted)]">{t("portfolio.noOpenPositions")}</div>
             ) : (
               <>
                 {openPositions.map((e, i) => (
@@ -267,7 +269,7 @@ export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPan
                   onClick={() => setShowClosed((v) => !v)}
                   className="w-full px-2 py-1 text-[9px] text-[var(--text-faint)] uppercase tracking-wider bg-[var(--bg-panel)] hover:text-[var(--text-dim)] transition-colors text-left border-t border-[var(--border)]"
                 >
-                  {showClosed ? "▼" : "▶"} Closed ({closedPositions.length})
+                  {showClosed ? "▼" : "▶"} {t("traderPanel.closedCount", { count: closedPositions.length })}
                 </button>
                 {showClosed && closedPositions.map((e, i) => (
                   <PositionRow
@@ -295,10 +297,11 @@ function PositionRow({
   dimmed?: boolean;
   onSelectMarket?: (slug: string) => void;
 }) {
+  const { t } = useI18n();
   const { position: p, market } = item;
   const expiry = market?.endDate;
   const expColor = expiryColor(expiry);
-  const expLabel = timeUntil(expiry);
+  const expLabel = timeUntil(expiry, t);
 
   // Smart money alignment badge
   const smFlow = market?.smartMoney?.netFlow;

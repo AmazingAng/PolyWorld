@@ -4,15 +4,16 @@ import { useState, useCallback, useEffect } from "react";
 import type { AlertConfig, AlertHistoryEntry, AlertType } from "@/hooks/useAlerts";
 import type { ProcessedMarket, Category } from "@/types";
 import type { SignalType } from "@/lib/smartSignals";
+import { useI18n } from "@/i18n";
 
-function formatTime(ts: number) {
+function formatTime(ts: number, t?: (key: string, vars?: Record<string, string | number>) => string) {
   const diff = Date.now() - ts;
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t ? t("common.justNow") : "just now";
+  if (mins < 60) return t ? t("trade.minAgo", { m: mins }) : `${mins}m ago`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return t ? t("trade.hAgo", { h: hours }) : `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d`;
 }
 
 const CATEGORIES: Category[] = [
@@ -67,6 +68,7 @@ function AlertManagerContent({
   onHoverEnter,
   onHoverLeave,
 }: AlertManagerProps) {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<Tab>("alerts");
 
   // Create form state
@@ -194,7 +196,7 @@ function AlertManagerContent({
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
-            <span className="alert-dropdown-title">Alerts</span>
+            <span className="alert-dropdown-title">{t("alerts.title")}</span>
           </div>
           <button onClick={onClose} className="alert-dropdown-close" aria-label="Close">&times;</button>
         </div>
@@ -207,7 +209,7 @@ function AlertManagerContent({
             onClick={() => setActiveTab("alerts")}
             className={`alert-dropdown-tab${activeTab === "alerts" ? " active" : ""}`}
           >
-            ALERTS
+            {t("alerts.alertsTab")}
             {alerts.length > 0 && (
               <span className="alert-tab-badge">{alerts.length}</span>
             )}
@@ -218,7 +220,7 @@ function AlertManagerContent({
             onClick={() => setActiveTab("history")}
             className={`alert-dropdown-tab${activeTab === "history" ? " active" : ""}`}
           >
-            HISTORY
+            {t("alerts.historyTab")}
             {unreadCount > 0 && (
               <span className="alert-tab-badge alert-tab-badge-unread">{unreadCount}</span>
             )}
@@ -236,11 +238,11 @@ function AlertManagerContent({
                   <line x1="12" y1="8" x2="12" y2="12" />
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
-                <span>Browser notifications {notifPermission === "denied" ? "blocked by browser" : "not enabled"}</span>
+                <span>{t("alerts.browserNotifs", { status: notifPermission === "denied" ? "blocked by browser" : "not enabled" })}</span>
               </div>
               {notifPermission !== "denied" && (
                 <button onClick={onRequestPermission} className="alert-notif-enable-btn">
-                  Enable
+                  {t("alerts.enable")}
                 </button>
               )}
             </div>
@@ -250,14 +252,14 @@ function AlertManagerContent({
             <div>
               {/* Alert list */}
               <div className="alert-section">
-                <span className="section-label">ACTIVE ALERTS</span>
+                <span className="section-label">{t("alerts.activeAlerts")}</span>
                 {alerts.length === 0 ? (
                   <div className="alert-empty-state">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                     </svg>
-                    <span>no alerts configured</span>
+                    <span>{t("alerts.noAlerts")}</span>
                   </div>
                 ) : (
                   <div className="alert-list">
@@ -299,48 +301,48 @@ function AlertManagerContent({
                           {alert.type === "price_cross" ? (
                             <div className="alert-item-desc">
                               <span className="alert-item-market">{alert.marketTitle || alert.marketId}</span>
-                              {" "}crosses {alert.direction}{" "}
+                              {" "}{t("alerts.crossesAboveBelow", { direction: alert.direction === "above" ? t("alerts.above") : t("alerts.below") })}{" "}
                               <span className={alert.direction === "above" ? "alert-val-green" : "alert-val-red"}>
                                 {alert.threshold}%
                               </span>
                             </div>
                           ) : alert.type === "smart_signal" ? (
                             <div className="alert-item-desc">
-                              Smart signal
+                              {t("alerts.smartSignalDesc")}
                               {alert.signalType && <span className="alert-item-market"> ({alert.signalType.replace(/_/g, " ")})</span>}
-                              {alert.signalStrength && <span className="alert-item-market"> min: {alert.signalStrength}</span>}
+                              {alert.signalStrength && <span className="alert-item-market"> {t("alerts.minLabel", { strength: alert.signalStrength })}</span>}
                             </div>
                           ) : alert.type === "whale_trade" ? (
                             <div className="alert-item-desc">
-                              Whale trade{alert.marketTitle ? <span className="alert-item-market"> on {alert.marketTitle}</span> : " (any market)"}
-                              <span className="alert-item-market"> min ${((alert.minUsdcSize || 5000) / 1000).toFixed(0)}k</span>
+                              {t("alerts.whaleTradeDesc")}{alert.marketTitle ? <span className="alert-item-market"> {t("alerts.onMarketDesc", { market: alert.marketTitle })}</span> : ` ${t("alerts.anyMarketDesc")}`}
+                              <span className="alert-item-market"> {t("alerts.minSizeDesc", { size: ((alert.minUsdcSize || 5000) / 1000).toFixed(0) })}</span>
                             </div>
                           ) : alert.type === "resolution_imminent" ? (
                             <div className="alert-item-desc">
-                              Resolution imminent
-                              {alert.marketTitle ? <span className="alert-item-market"> — {alert.marketTitle}</span> : alert.category ? <span className="alert-item-market"> — {alert.category}</span> : " (any market)"}
-                              <span className="alert-item-market"> within {alert.hoursBeforeEnd || 24}h</span>
+                              {t("alerts.resolutionImminentDesc")}
+                              {alert.marketTitle ? <span className="alert-item-market"> {t("alerts.dashMarket", { market: alert.marketTitle })}</span> : alert.category ? <span className="alert-item-market"> {t("alerts.dashCategory", { category: alert.category })}</span> : ` ${t("alerts.anyMarketDesc")}`}
+                              <span className="alert-item-market"> {t("alerts.withinHoursDesc", { hours: alert.hoursBeforeEnd || 24 })}</span>
                             </div>
                           ) : alert.type === "smart_divergence" ? (
                             <div className="alert-item-desc">
-                              Smart money divergence
-                              {alert.marketTitle ? <span className="alert-item-market"> on {alert.marketTitle}</span> : " (any market)"}
+                              {t("alerts.smartDivergenceDesc")}
+                              {alert.marketTitle ? <span className="alert-item-market"> {t("alerts.onMarketDesc", { market: alert.marketTitle })}</span> : ` ${t("alerts.anyMarketDesc")}`}
                             </div>
                           ) : alert.type === "news_impact" ? (
                             <div className="alert-item-desc">
-                              News impact
-                              {alert.marketTitle ? <span className="alert-item-market"> on {alert.marketTitle}</span> : alert.tag ? <span className="alert-item-market"> matching &quot;{alert.tag}&quot;</span> : " (any)"}
+                              {t("alerts.newsImpactDesc")}
+                              {alert.marketTitle ? <span className="alert-item-market"> {t("alerts.onMarketDesc", { market: alert.marketTitle })}</span> : alert.tag ? <span className="alert-item-market"> {t("alerts.matchingTagDesc", { tag: alert.tag })}</span> : ` ${t("alerts.anyDesc")}`}
                             </div>
                           ) : (
                             <div className="alert-item-desc">
-                              New market
-                              {alert.category && <span className="alert-item-market"> in {alert.category}</span>}
-                              {alert.tag && <span className="alert-item-market"> tagged &quot;{alert.tag}&quot;</span>}
+                              {t("alerts.newMarketDesc")}
+                              {alert.category && <span className="alert-item-market"> {t("alerts.inCategoryDesc", { category: alert.category })}</span>}
+                              {alert.tag && <span className="alert-item-market"> {t("alerts.taggedWithDesc", { tag: alert.tag })}</span>}
                             </div>
                           )}
                           {alert.lastTriggered && (
                             <div className="alert-item-meta">
-                              last triggered {formatTime(alert.lastTriggered)}
+                              {t("alerts.lastTriggeredDesc", { time: formatTime(alert.lastTriggered, t) })}
                             </div>
                           )}
                         </div>
@@ -349,13 +351,13 @@ function AlertManagerContent({
                           onClick={() => onToggleAlert(alert.id)}
                           className={`alert-toggle-btn ${alert.enabled ? "alert-toggle-on" : ""}`}
                         >
-                          {alert.enabled ? "ON" : "OFF"}
+                          {alert.enabled ? t("common.on") : t("common.off")}
                         </button>
                         {/* Delete */}
                         <button
                           onClick={() => onRemoveAlert(alert.id)}
                           className="alert-delete-btn"
-                          title="Delete alert"
+                          title={t("alerts.deleteAlert")}
                         >
                           <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M4 4l8 8M12 4l-8 8" />
@@ -375,13 +377,13 @@ function AlertManagerContent({
                       <line x1="8" y1="2" x2="8" y2="14" />
                       <line x1="2" y1="8" x2="14" y2="8" />
                     </svg>
-                    Create Alert
+                    {t("alerts.createAlertBtn")}
                   </button>
                 ) : (
                   <div className="alert-form">
                     <div className="alert-form-header">
-                      <span className="section-label" style={{ marginBottom: 0, marginTop: 0 }}>CREATE ALERT</span>
-                      <button onClick={() => setShowForm(false)} className="alert-form-cancel">cancel</button>
+                      <span className="section-label" style={{ marginBottom: 0, marginTop: 0 }}>{t("alerts.createAlert")}</span>
+                      <button onClick={() => setShowForm(false)} className="alert-form-cancel">{t("alerts.cancelCreate")}</button>
                     </div>
 
                     {/* Type selector */}
@@ -390,43 +392,43 @@ function AlertManagerContent({
                         onClick={() => setFormType("price_cross")}
                         className={`alert-type-btn ${formType === "price_cross" ? "active" : ""}`}
                       >
-                        Price Cross
+                        {t("alerts.priceCross")}
                       </button>
                       <button
                         onClick={() => setFormType("new_market")}
                         className={`alert-type-btn ${formType === "new_market" ? "active" : ""}`}
                       >
-                        New Market
+                        {t("alerts.newMarket")}
                       </button>
                       <button
                         onClick={() => setFormType("smart_signal")}
                         className={`alert-type-btn ${formType === "smart_signal" ? "active" : ""}`}
                       >
-                        Smart Signal
+                        {t("alerts.smartSignal")}
                       </button>
                       <button
                         onClick={() => setFormType("whale_trade")}
                         className={`alert-type-btn ${formType === "whale_trade" ? "active" : ""}`}
                       >
-                        Whale Trade
+                        {t("alerts.whaleTrade")}
                       </button>
                       <button
                         onClick={() => setFormType("resolution_imminent")}
                         className={`alert-type-btn ${formType === "resolution_imminent" ? "active" : ""}`}
                       >
-                        Resolution
+                        {t("alerts.resolution")}
                       </button>
                       <button
                         onClick={() => setFormType("smart_divergence")}
                         className={`alert-type-btn ${formType === "smart_divergence" ? "active" : ""}`}
                       >
-                        Divergence
+                        {t("alerts.divergence")}
                       </button>
                       <button
                         onClick={() => setFormType("news_impact")}
                         className={`alert-type-btn ${formType === "news_impact" ? "active" : ""}`}
                       >
-                        News Impact
+                        {t("alerts.newsImpact")}
                       </button>
                     </div>
 
@@ -434,7 +436,7 @@ function AlertManagerContent({
                       <div className="alert-form-fields">
                         {/* Market search */}
                         <div className="alert-field">
-                          <label className="alert-field-label">Market</label>
+                          <label className="alert-field-label">{t("alerts.market")}</label>
                           <div className="alert-search-wrap">
                             <input
                               type="text"
@@ -444,7 +446,7 @@ function AlertManagerContent({
                                 setFormMarketId("");
                                 setFormMarketTitle("");
                               }}
-                              placeholder="Search markets..."
+                              placeholder={t("alerts.searchMarkets")}
                               className="alert-input"
                             />
                             {searchResults.length > 0 && !formMarketId && (
@@ -478,7 +480,7 @@ function AlertManagerContent({
                         {/* Threshold + Direction */}
                         <div className="alert-field-row">
                           <div className="alert-field alert-field-half">
-                            <label className="alert-field-label">Threshold (%)</label>
+                            <label className="alert-field-label">{t("alerts.threshold")}</label>
                             <input
                               type="number"
                               value={formThreshold}
@@ -490,7 +492,7 @@ function AlertManagerContent({
                             />
                           </div>
                           <div className="alert-field alert-field-half">
-                            <label className="alert-field-label">Direction</label>
+                            <label className="alert-field-label">{t("alerts.direction")}</label>
                             <div className="alert-direction-btns">
                               <button
                                 onClick={() => setFormDirection("above")}
@@ -499,7 +501,7 @@ function AlertManagerContent({
                                 <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
                                   <path d="M8 12V4M4 7l4-4 4 4" />
                                 </svg>
-                                Above
+                                {t("alerts.above")}
                               </button>
                               <button
                                 onClick={() => setFormDirection("below")}
@@ -508,7 +510,7 @@ function AlertManagerContent({
                                 <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
                                   <path d="M8 4v8M4 9l4 4 4-4" />
                                 </svg>
-                                Below
+                                {t("alerts.below")}
                               </button>
                             </div>
                           </div>
@@ -519,13 +521,13 @@ function AlertManagerContent({
                     {formType === "new_market" && (
                       <div className="alert-form-fields">
                         <div className="alert-field">
-                          <label className="alert-field-label">Category (optional)</label>
+                          <label className="alert-field-label">{t("alerts.categoryOptional")}</label>
                           <div className="alert-category-grid">
                             <button
                               onClick={() => setFormCategory("")}
                               className={`alert-cat-btn ${!formCategory ? "active" : ""}`}
                             >
-                              Any
+                              {t("alerts.any")}
                             </button>
                             {CATEGORIES.map((cat) => (
                               <button
@@ -539,7 +541,7 @@ function AlertManagerContent({
                           </div>
                         </div>
                         <div className="alert-field">
-                          <label className="alert-field-label">Tag filter (optional)</label>
+                          <label className="alert-field-label">{t("alerts.tagFilter")}</label>
                           <input
                             type="text"
                             value={formTag}
@@ -554,13 +556,13 @@ function AlertManagerContent({
                     {formType === "smart_signal" && (
                       <div className="alert-form-fields">
                         <div className="alert-field">
-                          <label className="alert-field-label">Signal type (optional)</label>
+                          <label className="alert-field-label">{t("alerts.signalType")}</label>
                           <div className="alert-category-grid">
                             <button
                               onClick={() => setFormSignalType("")}
                               className={`alert-cat-btn ${!formSignalType ? "active" : ""}`}
                             >
-                              Any
+                              {t("alerts.any")}
                             </button>
                             {(["whale_accumulation", "smart_divergence", "cluster_activity", "momentum_shift"] as SignalType[]).map((st) => (
                               <button
@@ -574,7 +576,7 @@ function AlertManagerContent({
                           </div>
                         </div>
                         <div className="alert-field">
-                          <label className="alert-field-label">Minimum strength</label>
+                          <label className="alert-field-label">{t("alerts.minStrength")}</label>
                           <div className="alert-direction-btns">
                             {(["weak", "moderate", "strong"] as const).map((s) => (
                               <button
@@ -593,7 +595,7 @@ function AlertManagerContent({
                     {formType === "whale_trade" && (
                       <div className="alert-form-fields">
                         <div className="alert-field">
-                          <label className="alert-field-label">Market (optional — leave empty for any)</label>
+                          <label className="alert-field-label">{t("alerts.marketOptionalAny")}</label>
                           <div className="alert-search-wrap">
                             <input
                               type="text"
@@ -603,7 +605,7 @@ function AlertManagerContent({
                                 setFormMarketId("");
                                 setFormMarketTitle("");
                               }}
-                              placeholder="Search markets..."
+                              placeholder={t("alerts.searchMarkets")}
                               className="alert-input"
                             />
                             {searchResults.length > 0 && !formMarketId && (
@@ -634,7 +636,7 @@ function AlertManagerContent({
                           </div>
                         </div>
                         <div className="alert-field">
-                          <label className="alert-field-label">Minimum trade size (USDC)</label>
+                          <label className="alert-field-label">{t("alerts.minTradeSize")}</label>
                           <input
                             type="number"
                             value={formMinUsdcSize}
@@ -650,7 +652,7 @@ function AlertManagerContent({
                     {formType === "resolution_imminent" && (
                       <div className="alert-form-fields">
                         <div className="alert-field">
-                          <label className="alert-field-label">Market (optional)</label>
+                          <label className="alert-field-label">{t("alerts.marketOptional")}</label>
                           <div className="alert-search-wrap">
                             <input
                               type="text"
@@ -660,7 +662,7 @@ function AlertManagerContent({
                                 setFormMarketId("");
                                 setFormMarketTitle("");
                               }}
-                              placeholder="Search markets..."
+                              placeholder={t("alerts.searchMarkets")}
                               className="alert-input"
                             />
                             {searchResults.length > 0 && !formMarketId && (
@@ -692,7 +694,7 @@ function AlertManagerContent({
                         </div>
                         <div className="alert-field-row">
                           <div className="alert-field alert-field-half">
-                            <label className="alert-field-label">Hours before end</label>
+                            <label className="alert-field-label">{t("alerts.hoursBeforeEnd")}</label>
                             <input
                               type="number"
                               value={formHoursBeforeEnd}
@@ -704,13 +706,13 @@ function AlertManagerContent({
                             />
                           </div>
                           <div className="alert-field alert-field-half">
-                            <label className="alert-field-label">Category (optional)</label>
+                            <label className="alert-field-label">{t("alerts.categoryOptional")}</label>
                             <div className="alert-category-grid">
                               <button
                                 onClick={() => setFormCategory("")}
                                 className={`alert-cat-btn ${!formCategory ? "active" : ""}`}
                               >
-                                Any
+                                {t("alerts.any")}
                               </button>
                               {CATEGORIES.map((cat) => (
                                 <button
@@ -730,7 +732,7 @@ function AlertManagerContent({
                     {formType === "smart_divergence" && (
                       <div className="alert-form-fields">
                         <div className="alert-field">
-                          <label className="alert-field-label">Market (optional — leave empty for any)</label>
+                          <label className="alert-field-label">{t("alerts.marketOptionalAny")}</label>
                           <div className="alert-search-wrap">
                             <input
                               type="text"
@@ -740,7 +742,7 @@ function AlertManagerContent({
                                 setFormMarketId("");
                                 setFormMarketTitle("");
                               }}
-                              placeholder="Search markets..."
+                              placeholder={t("alerts.searchMarkets")}
                               className="alert-input"
                             />
                             {searchResults.length > 0 && !formMarketId && (
@@ -772,7 +774,7 @@ function AlertManagerContent({
                         </div>
                         <div className="alert-field">
                           <span className="alert-field-label" style={{ color: "var(--text-dim)" }}>
-                            Alerts when smart money trades against the market consensus (e.g. buying when price is low, selling when high)
+                            {t("alerts.divergenceDesc")}
                           </span>
                         </div>
                       </div>
@@ -781,7 +783,7 @@ function AlertManagerContent({
                     {formType === "news_impact" && (
                       <div className="alert-form-fields">
                         <div className="alert-field">
-                          <label className="alert-field-label">Market (optional)</label>
+                          <label className="alert-field-label">{t("alerts.marketOptional")}</label>
                           <div className="alert-search-wrap">
                             <input
                               type="text"
@@ -791,7 +793,7 @@ function AlertManagerContent({
                                 setFormMarketId("");
                                 setFormMarketTitle("");
                               }}
-                              placeholder="Search markets..."
+                              placeholder={t("alerts.searchMarkets")}
                               className="alert-input"
                             />
                             {searchResults.length > 0 && !formMarketId && (
@@ -822,7 +824,7 @@ function AlertManagerContent({
                           </div>
                         </div>
                         <div className="alert-field">
-                          <label className="alert-field-label">Keyword (optional — used if no market selected)</label>
+                          <label className="alert-field-label">{t("alerts.keywordOptional")}</label>
                           <input
                             type="text"
                             value={formTag}
@@ -840,7 +842,7 @@ function AlertManagerContent({
                       disabled={formType === "price_cross" && (!formMarketId || !formThreshold)}
                       className="alert-submit-btn"
                     >
-                      Create Alert
+                      {t("alerts.createAlertBtn")}
                     </button>
                   </div>
                 )}
@@ -852,16 +854,16 @@ function AlertManagerContent({
             <div>
               <div className="alert-section">
                 <div className="alert-history-header">
-                  <span className="section-label" style={{ marginBottom: 0, marginTop: 0 }}>TRIGGER HISTORY</span>
+                  <span className="section-label" style={{ marginBottom: 0, marginTop: 0 }}>{t("alerts.triggerHistory")}</span>
                   <div className="alert-history-actions">
                     {history.some((h) => !h.read) && (
                       <button onClick={onMarkAllRead} className="alert-history-action">
-                        mark all read
+                        {t("alerts.markAllRead")}
                       </button>
                     )}
                     {history.length > 0 && (
                       <button onClick={onClearHistory} className="alert-history-action alert-history-action-danger">
-                        clear
+                        {t("alerts.clearHistory")}
                       </button>
                     )}
                   </div>
@@ -873,7 +875,7 @@ function AlertManagerContent({
                       <circle cx="12" cy="12" r="10" />
                       <polyline points="12 6 12 12 16 14" />
                     </svg>
-                    <span>no alerts triggered yet</span>
+                    <span>{t("alerts.noTriggersYet")}</span>
                   </div>
                 ) : (
                   <div className="alert-history-list">
@@ -887,7 +889,7 @@ function AlertManagerContent({
                           {!entry.read && <span className="alert-unread-dot" />}
                           <div className="alert-history-item-body">
                             <div className="alert-history-msg">{entry.message}</div>
-                            <div className="alert-history-time">{formatTime(entry.timestamp)}</div>
+                            <div className="alert-history-time">{formatTime(entry.timestamp, t)}</div>
                           </div>
                         </div>
                       </button>

@@ -66,6 +66,7 @@ import { useMarketStore } from "@/stores/marketStore";
 import { useSmartMoneyStore } from "@/stores/smartMoneyStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useToastStore } from "@/stores/toastStore";
+import { useI18n } from "@/i18n";
 
 const WorldMap = dynamic(() => import("@/components/WorldMap"), {
   ssr: false,
@@ -85,28 +86,7 @@ const DEFAULT_COL_SPANS: Record<string, number> = {
   markets: 1, country: 1, news: 1, tweets: 1, live: 1, watchlist: 1, detail: 2, leaderboard: 1, trader: 1, smartMoney: 1, whaleTrades: 1, orderbook: 1, sentiment: 1, chart: 1, arbitrage: 1, calendar: 1, signals: 1, resolution: 1, portfolio: 1, openOrders: 1,
 };
 
-const PANEL_TITLES: Record<string, string> = {
-  detail: "Market Detail",
-  markets: "Markets",
-  country: "Region",
-  news: "News",
-  tweets: "Tweets",
-  live: "Live",
-  watchlist: "Watchlist",
-  leaderboard: "Leaderboard",
-  smartMoney: "Smart Money",
-  whaleTrades: "Whale Trades",
-  orderbook: "Order Book",
-  trader: "Trader",
-  sentiment: "Sentiment",
-  chart: "Price Chart",
-  arbitrage: "Arbitrage",
-  calendar: "Calendar",
-  signals: "Signals",
-  resolution: "Resolution",
-  portfolio: "Portfolio",
-  openOrders: "Open Orders",
-};
+// Panel titles are derived from i18n — computed inside renderPanel via t()
 
 // Time range → max age in milliseconds (0 = no filter)
 const TIME_MAX_AGE: Record<string, number> = {
@@ -138,6 +118,7 @@ function PanelDropPreview({
   dragClassName?: string;
 }) {
   void dragHandleProps;
+  const { t } = useI18n();
   const style: React.CSSProperties = {};
   if (colSpan > 1) style.gridColumn = `span ${colSpan}`;
   if (rowSpan !== 2) style.gridRow = `span ${rowSpan}`;
@@ -155,7 +136,7 @@ function PanelDropPreview({
         <span className="panel-drop-placeholder__label">{title}</span>
       </div>
       <div className="panel-drop-placeholder__body">
-        <span className="panel-drop-placeholder__hint">drop preview</span>
+        <span className="panel-drop-placeholder__hint">{t("common.dropPreview")}</span>
       </div>
     </div>
   );
@@ -163,6 +144,7 @@ function PanelDropPreview({
 
 export default function Home() {
   const dndId = useId();
+  const { t } = useI18n();
   const { prefs, updatePref, hydrated: prefsReady } = usePreferences();
   const [refreshError, setRefreshError] = useState(false);
 
@@ -643,7 +625,7 @@ export default function Home() {
   const getPanelDragGeometry = useCallback((panelId: string, containerIdx: number) => {
     const maxCols = containerIdx === 0 ? 3 : 2;
     return {
-      title: PANEL_TITLES[panelId] ?? panelId,
+      title: t("panels." + panelId),
       colSpan: Math.max(1, Math.min(getColSpan(panelId, DEFAULT_COL_SPANS[panelId] ?? 1), maxCols)),
       rowSpan: getRowSpan(panelId, 2),
     };
@@ -803,20 +785,20 @@ export default function Home() {
     });
   }, []);
 
-  const STRENGTH_OPTIONS = [
-    { key: "strong", label: "Strong", color: "#ff4444" },
-    { key: "moderate", label: "Moderate", color: "#f59e0b" },
-    { key: "weak", label: "Weak" },
-  ];
-  const CATEGORY_OPTIONS = [
-    { key: "Politics", label: "Politics" },
-    { key: "Crypto", label: "Crypto" },
-    { key: "Sports", label: "Sports" },
-    { key: "Finance", label: "Finance" },
-    { key: "Tech", label: "Tech" },
-    { key: "Culture", label: "Culture" },
-    { key: "Other", label: "Other" },
-  ];
+  const STRENGTH_OPTIONS = useMemo(() => [
+    { key: "strong", label: t("common.strong"), color: "#ff4444" },
+    { key: "moderate", label: t("common.moderate"), color: "#f59e0b" },
+    { key: "weak", label: t("common.weak") },
+  ], [t]);
+  const CATEGORY_OPTIONS = useMemo(() => [
+    { key: "Politics", label: t("categories.Politics") },
+    { key: "Crypto", label: t("categories.Crypto") },
+    { key: "Sports", label: t("categories.Sports") },
+    { key: "Finance", label: t("categories.Finance") },
+    { key: "Tech", label: t("categories.Tech") },
+    { key: "Culture", label: t("categories.Culture") },
+    { key: "Other", label: t("categories.Other") },
+  ], [t]);
 
   function renderPanel(key: string) {
     const maxColSpan = renderBottomPanelSet.has(key) ? 3 : 2;
@@ -826,10 +808,10 @@ export default function Home() {
           <Panel
             key="detail"
             panelId="detail"
-            title="Market Detail"
+            title={t("panels.detail")}
             badge={selectedMarket ? (
-              <span className="panel-data-badge live" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }} onClick={() => useMarketStore.getState().selectMarket(null)} title="Unselect market">
-                selected
+              <span className="panel-data-badge live" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }} onClick={() => useMarketStore.getState().selectMarket(null)} title={t("detail.unselectMarket")}>
+                {t("common.selected")}
                 <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 4l8 8M12 4l-8 8" /></svg>
               </span>
             ) : undefined}
@@ -844,7 +826,7 @@ export default function Home() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-1 rounded-sm opacity-40 hover:opacity-90 transition-opacity"
-                  title="View on Polymarket"
+                  title={t("detail.viewOnPolymarket")}
                 >
                   <img src="/polymarket-icon.png" alt="Polymarket" width={16} height={16} />
                 </a>
@@ -855,7 +837,7 @@ export default function Home() {
                       ? "text-[#f59e0b] hover:bg-[#f59e0b]/10"
                       : "text-[var(--text-dim)] hover:text-[var(--text)]"
                   }`}
-                  title={isWatched(selectedMarket.id) ? "Remove from watchlist" : "Add to watchlist"}
+                  title={isWatched(selectedMarket.id) ? t("detail.removeFromWatchlist") : t("detail.addToWatchlist")}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill={isWatched(selectedMarket.id) ? "#f59e0b" : "none"} stroke={isWatched(selectedMarket.id) ? "#f59e0b" : "currentColor"} strokeWidth="1.5">
                     <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
@@ -868,7 +850,7 @@ export default function Home() {
                     ui.setAlertManagerOpen(true);
                   }}
                   className="p-1 rounded-sm text-[var(--text-dim)] hover:text-[var(--text)] transition-colors"
-                  title="Create alert"
+                  title={t("detail.createAlert")}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -888,7 +870,7 @@ export default function Home() {
               />
             ) : (
               <div className="text-[12px] text-[var(--text-muted)] font-mono">
-                click a market bubble or card to view details
+                {t("detail.clickMarketToView")}
               </div>
             )}
           </Panel>
@@ -919,7 +901,7 @@ export default function Home() {
           <Panel
             key="country"
             panelId="country"
-            title="Region"
+            title={t("panels.country")}
             count={selectedCountry || "\u2014"}
             colSpan={colSpanFor("country")}
             {...panelHandlers["country"]}
@@ -937,7 +919,7 @@ export default function Home() {
               />
             ) : (
               <div className="text-[12px] text-[#777] font-mono">
-                click a region on the map to view related markets
+                {t("detail.clickRegionToView")}
               </div>
             )}
           </Panel>
@@ -948,7 +930,7 @@ export default function Home() {
           <Panel
             key="news"
             panelId="news"
-            title="News"
+            title={t("panels.news")}
             className="panel-news"
             colSpan={colSpanFor("news")}
             {...panelHandlers["news"]}
@@ -957,9 +939,9 @@ export default function Home() {
             headerRight={
               <span className="flex items-center gap-1.5">
                 <FilterDropdown
-                  label="Source"
+                  label={t("common.source")}
                   groups={[{
-                    label: "Source",
+                    label: t("common.source"),
                     options: newsActiveSources.map(s => ({ key: s, label: s })),
                     selected: newsSourceFilter,
                     onChange: setNewsSourceFilter,
@@ -969,7 +951,7 @@ export default function Home() {
                   <button
                     onClick={() => setNewsFollowMarket((v) => !v)}
                     className={`shrink-0 transition-colors leading-none ${newsFollowMarket ? "text-[var(--green)]" : "text-[var(--text-ghost)] hover:text-[var(--text)]"}`}
-                    title={newsFollowMarket ? "Unlink from market" : "Follow selected market"}
+                    title={newsFollowMarket ? t("news.unlinkFromMarket") : t("news.followMarket")}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       {newsFollowMarket
@@ -992,7 +974,7 @@ export default function Home() {
           <Panel
             key="tweets"
             panelId="tweets"
-            title="Tweets"
+            title={t("panels.tweets")}
             className="panel-tweets"
             colSpan={colSpanFor("tweets")}
             {...panelHandlers["tweets"]}
@@ -1001,9 +983,9 @@ export default function Home() {
             headerRight={
               <span className="flex items-center gap-1.5">
                 <FilterDropdown
-                  label="Account"
+                  label={t("common.account")}
                   groups={[{
-                    label: "Account",
+                    label: t("common.account"),
                     options: tweetsActiveHandles.map(h => ({ key: h, label: `@${h}` })),
                     selected: tweetsHandleFilter,
                     onChange: setTweetsHandleFilter,
@@ -1013,7 +995,7 @@ export default function Home() {
                   <button
                     onClick={() => setTweetsFollowMarket((v) => !v)}
                     className={`shrink-0 transition-colors leading-none ${tweetsFollowMarket ? "text-[var(--green)]" : "text-[var(--text-ghost)] hover:text-[var(--text)]"}`}
-                    title={tweetsFollowMarket ? "Unlink from market" : "Follow selected market"}
+                    title={tweetsFollowMarket ? t("news.unlinkFromMarket") : t("news.followMarket")}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       {tweetsFollowMarket
@@ -1035,9 +1017,9 @@ export default function Home() {
           <Panel
             key="live"
             panelId="live"
-            title="Live Streams"
+            title={t("panels.live")}
             className="panel-live"
-            badge={<span className="panel-data-badge live">live</span>}
+            badge={<span className="panel-data-badge live">{t("common.live")}</span>}
             headerRight={
               <LiveChannelDropdown
                 activeStream={liveActiveStream}
@@ -1057,7 +1039,7 @@ export default function Home() {
           <Panel
             key="watchlist"
             panelId="watchlist"
-            title="Watchlist"
+            title={t("panels.watchlist")}
             colSpan={colSpanFor("watchlist")}
             {...panelHandlers["watchlist"]}
             rowSpan={rowSpanFor("watchlist")}
@@ -1068,7 +1050,7 @@ export default function Home() {
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" strokeWidth="1.5" className="inline -mt-px mr-0.5">
                     <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
                   </svg>
-                  {watchedCount} watched
+                  {t("watchlistPanel.watched", { count: watchedCount })}
                 </span>
               ) : undefined
             }
@@ -1090,7 +1072,7 @@ export default function Home() {
           <Panel
             key="leaderboard"
             panelId="leaderboard"
-            title="Leaderboard"
+            title={t("panels.leaderboard")}
             count={smartMoneyLeaderboard.length > 0 ? `${smartMoneyLeaderboard.length}` : undefined}
             colSpan={colSpanFor("leaderboard")}
             {...panelHandlers["leaderboard"]}
@@ -1132,11 +1114,11 @@ export default function Home() {
           <Panel
             key="smartMoney"
             panelId="smartMoney"
-            title="Smart Trades"
+            title={t("panels.smartTrades")}
             badge={
               smartMoneySmartTrades.length > 0 ? (
                 <span className="panel-data-badge live">
-                  {smartMoneySmartTrades.length} smart
+                  {smartMoneySmartTrades.length} {t("smartMoney.smart")}
                 </span>
               ) : undefined
             }
@@ -1160,7 +1142,7 @@ export default function Home() {
           <Panel
             key="whaleTrades"
             panelId="whaleTrades"
-            title="Whale Trades"
+            title={t("panels.whaleTrades")}
             badge={
               smartMoneyTrades.length > 0 ? (
                 <span className="panel-data-badge">
@@ -1185,8 +1167,8 @@ export default function Home() {
           <Panel
             key="orderbook"
             panelId="orderbook"
-            title="Order Book"
-            badge={selectedMarket && !selectedMarket.closed ? <span className="panel-data-badge live">live</span> : undefined}
+            title={t("panels.orderbook")}
+            badge={selectedMarket && !selectedMarket.closed ? <span className="panel-data-badge live">{t("common.live")}</span> : undefined}
             colSpan={colSpanFor("orderbook")}
             {...panelHandlers["orderbook"]}
             rowSpan={rowSpanFor("orderbook")}
@@ -1216,7 +1198,7 @@ export default function Home() {
           <Panel
             key="trader"
             panelId="trader"
-            title="Trader"
+            title={t("panels.trader")}
             colSpan={colSpanFor("trader")}
             {...panelHandlers["trader"]}
             rowSpan={rowSpanFor("trader")}
@@ -1231,7 +1213,7 @@ export default function Home() {
                     <button
                       onClick={() => { const sm = useSmartMoneyStore.getState(); sm.setTraderPanelWallet(null); sm.setTraderWalletName(null); }}
                       className="text-[10px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors"
-                      title="Clear"
+                      title={t("traderPanel.clearTrader")}
                     >
                       &times;
                     </button>
@@ -1248,7 +1230,7 @@ export default function Home() {
                   onClick={handleTraderGo}
                   className="px-1 py-0 border border-[var(--border)] rounded-sm text-[9px] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors leading-[18px]"
                 >
-                  GO
+                  {t("wallet.go")}
                 </button>
               </div>
             }
@@ -1264,7 +1246,7 @@ export default function Home() {
           <Panel
             key="sentiment"
             panelId="sentiment"
-            title="Sentiment"
+            title={t("panels.sentiment")}
             colSpan={colSpanFor("sentiment")}
             {...panelHandlers["sentiment"]}
             rowSpan={rowSpanFor("sentiment")}
@@ -1278,7 +1260,7 @@ export default function Home() {
           <Panel
             key="chart"
             panelId="chart"
-            title="Price Chart"
+            title={t("panels.chart")}
             colSpan={colSpanFor("chart")}
             {...panelHandlers["chart"]}
             rowSpan={rowSpanFor("chart")}
@@ -1299,7 +1281,7 @@ export default function Home() {
           <Panel
             key="arbitrage"
             panelId="arbitrage"
-            title="Arbitrage"
+            title={t("panels.arbitrage")}
             colSpan={colSpanFor("arbitrage")}
             {...panelHandlers["arbitrage"]}
             rowSpan={rowSpanFor("arbitrage")}
@@ -1316,7 +1298,7 @@ export default function Home() {
           <Panel
             key="calendar"
             panelId="calendar"
-            title="Calendar"
+            title={t("panels.calendar")}
             colSpan={colSpanFor("calendar")}
             {...panelHandlers["calendar"]}
             rowSpan={rowSpanFor("calendar")}
@@ -1333,15 +1315,15 @@ export default function Home() {
           <Panel
             key="signals"
             panelId="signals"
-            title="Signals"
+            title={t("panels.signals")}
             colSpan={colSpanFor("signals")}
             {...panelHandlers["signals"]}
             rowSpan={rowSpanFor("signals")}
             maxColSpan={maxColSpan}
             headerRight={
               <FilterDropdown groups={[
-                { label: "Strength", options: STRENGTH_OPTIONS, selected: sigStrFilter, onChange: setSigStrFilter },
-                { label: "Category", options: CATEGORY_OPTIONS, selected: sigCatFilter, onChange: setSigCatFilter },
+                { label: t("common.strength"), options: STRENGTH_OPTIONS, selected: sigStrFilter, onChange: setSigStrFilter },
+                { label: t("common.category"), options: CATEGORY_OPTIONS, selected: sigCatFilter, onChange: setSigCatFilter },
               ]} />
             }
           >
@@ -1363,15 +1345,15 @@ export default function Home() {
           <Panel
             key="resolution"
             panelId="resolution"
-            title="Resolution"
+            title={t("panels.resolution")}
             colSpan={colSpanFor("resolution")}
             {...panelHandlers["resolution"]}
             rowSpan={rowSpanFor("resolution")}
             maxColSpan={maxColSpan}
             headerRight={
               <FilterDropdown groups={[
-                { label: "Strength", options: STRENGTH_OPTIONS, selected: resStrFilter, onChange: setResStrFilter },
-                { label: "Category", options: CATEGORY_OPTIONS, selected: resCatFilter, onChange: setResCatFilter },
+                { label: t("common.strength"), options: STRENGTH_OPTIONS, selected: resStrFilter, onChange: setResStrFilter },
+                { label: t("common.category"), options: CATEGORY_OPTIONS, selected: resCatFilter, onChange: setResCatFilter },
               ]} />
             }
           >
@@ -1387,7 +1369,7 @@ export default function Home() {
           <Panel
             key="portfolio"
             panelId="portfolio"
-            title="Portfolio"
+            title={t("panels.portfolio")}
             colSpan={colSpanFor("portfolio")}
             {...panelHandlers["portfolio"]}
             rowSpan={rowSpanFor("portfolio")}
@@ -1404,7 +1386,7 @@ export default function Home() {
           <Panel
             key="openOrders"
             panelId="openOrders"
-            title="Open Orders"
+            title={t("panels.openOrders")}
             colSpan={colSpanFor("openOrders")}
             {...panelHandlers["openOrders"]}
             rowSpan={rowSpanFor("openOrders")}
@@ -1428,7 +1410,7 @@ export default function Home() {
         {panelDrag.activeId === key ? (
           <PanelDropPreview
             panelId={key}
-            title={PANEL_TITLES[key] ?? key}
+            title={t("panels." + key)}
             colSpan={colSpanFor(key)}
             rowSpan={rowSpanFor(key)}
           />
@@ -1556,13 +1538,13 @@ export default function Home() {
         {/* Map section */}
         <div className="map-section" ref={mapSectionRef}>
           <div className="map-panel-header">
-            <span className="panel-title">World Map</span>
-            <span className="panel-count">{timeFiltered.length} markets</span>
+            <span className="panel-title">{t("panels.worldMap")}</span>
+            <span className="panel-count">{timeFiltered.length} {t("common.markets")}</span>
             <div className="flex-1" />
             <button
               onClick={() => useUIStore.getState().setIsFullscreen(!isFullscreen)}
               className="panel-expand-btn"
-              title={isFullscreen ? "Exit map fullscreen" : "Map fullscreen"}
+              title={isFullscreen ? t("exitMapFullscreen") : t("mapFullscreen")}
             >
               <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                 {isFullscreen ? (
@@ -1614,7 +1596,7 @@ export default function Home() {
                 <button
                   onClick={() => useUIStore.getState().toggleBottomPanel()}
                   className="shrink-0 px-1.5 py-0 text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-muted)] transition-colors z-20"
-                  title={bottomPanelCollapsed ? "Expand bottom panel" : "Collapse bottom panel"}
+                  title={bottomPanelCollapsed ? t("common.expandBottomPanel") : t("common.collapseBottomPanel")}
                   style={{ marginLeft: -4 }}
                 >
                   {bottomPanelCollapsed ? "\u25B2" : "\u25BC"}
@@ -1728,17 +1710,18 @@ export default function Home() {
   );
 }
 
-const MOBILE_TABS: Array<{ id: string; label: string; icon: string }> = [
-  { id: "map", label: "Map", icon: "\uD83C\uDF0D" },
-  { id: "markets", label: "Markets", icon: "\uD83D\uDCC8" },
-  { id: "news", label: "News", icon: "\uD83D\uDCF0" },
-  { id: "smartMoney", label: "Smart $", icon: "\uD83D\uDCB0" },
-  { id: "more", label: "More", icon: "\u2026" },
+const MOBILE_TABS: Array<{ id: string; labelKey: string; icon: string }> = [
+  { id: "map", labelKey: "mobile.map", icon: "\uD83C\uDF0D" },
+  { id: "markets", labelKey: "mobile.markets", icon: "\uD83D\uDCC8" },
+  { id: "news", labelKey: "mobile.news", icon: "\uD83D\uDCF0" },
+  { id: "smartMoney", labelKey: "mobile.smartMoney", icon: "\uD83D\uDCB0" },
+  { id: "more", labelKey: "mobile.more", icon: "\u2026" },
 ];
 
 const MORE_PANELS = ["detail", "country", "tweets", "live", "watchlist", "leaderboard", "whaleTrades", "orderbook", "trader", "sentiment", "chart", "signals", "resolution", "portfolio", "arbitrage", "calendar"];
 
 function MobileTabBar({ activePanel, onSelect }: { activePanel: string | null; onSelect: (id: string) => void }) {
+  const { t } = useI18n();
   const [showMore, setShowMore] = useState(false);
 
   return (
@@ -1752,7 +1735,7 @@ function MobileTabBar({ activePanel, onSelect }: { activePanel: string | null; o
               onClick={() => { onSelect(id); setShowMore(false); }}
               className={`mobile-more-item${activePanel === id ? " active" : ""}`}
             >
-              {id}
+              {t("panels." + id)}
             </button>
           ))}
         </div>
@@ -1785,7 +1768,7 @@ function MobileTabBar({ activePanel, onSelect }: { activePanel: string | null; o
               className={`mobile-tab${isActive ? " active" : ""}`}
             >
               <span className="mobile-tab-icon">{tab.icon}</span>
-              <span className="mobile-tab-label">{tab.label}</span>
+              <span className="mobile-tab-label">{t(tab.labelKey)}</span>
             </button>
           );
         })}

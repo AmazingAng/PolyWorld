@@ -5,6 +5,7 @@ import { Category } from "@/types";
 import { CATEGORY_COLORS } from "@/lib/categories";
 import { STREAMS } from "@/lib/streams";
 import type { TimeRange } from "./TimeRangeFilter";
+import { useI18n, type Locale } from "@/i18n";
 
 export interface PanelVisibility {
   markets: boolean;
@@ -55,33 +56,35 @@ const TIME_OPTIONS: TimeRange[] = ["1h", "6h", "24h", "48h", "7d", "ALL"];
 
 type Tab = "general" | "panels" | "sources" | "system";
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "general", label: "GENERAL" },
-  { key: "panels", label: "PANELS" },
-  { key: "sources", label: "SOURCES" },
-  { key: "system", label: "STATUS" },
+const TAB_KEYS: Tab[] = ["general", "panels", "sources", "system"];
+
+const PANEL_KEYS: string[] = [
+  "watchlist", "markets", "country", "news", "live",
+  "leaderboard", "smartMoney", "whaleTrades", "orderbook",
+  "sentiment", "tweets", "trader", "chart", "arbitrage",
+  "calendar", "signals", "resolution", "portfolio", "openOrders",
 ];
 
-const PANEL_LABELS: Record<string, string> = {
-  watchlist: "Watchlist",
-  markets: "Markets",
-  country: "Region",
-  news: "News Feed",
-  live: "Live Streams",
-  leaderboard: "Leaderboard",
-  smartMoney: "Smart Trades",
-  whaleTrades: "Whale Trades",
-  orderbook: "Order Book",
-  sentiment: "Sentiment",
-  tweets: "Tweets",
-  trader: "Trader",
-  chart: "Price Chart",
-  arbitrage: "Arbitrage",
-  calendar: "Calendar",
-  signals: "Signals",
-  resolution: "Resolution",
-  portfolio: "Portfolio",
-  openOrders: "Open Orders",
+const PANEL_I18N_MAP: Record<string, string> = {
+  watchlist: "panels.watchlist",
+  markets: "panels.markets",
+  country: "panels.country",
+  news: "panels.newsFeed",
+  live: "panels.live",
+  leaderboard: "panels.leaderboard",
+  smartMoney: "panels.smartTrades",
+  whaleTrades: "panels.whaleTrades",
+  orderbook: "panels.orderbook",
+  sentiment: "panels.sentiment",
+  tweets: "panels.tweets",
+  trader: "panels.trader",
+  chart: "panels.chart",
+  arbitrage: "panels.arbitrage",
+  calendar: "panels.calendar",
+  signals: "panels.signals",
+  resolution: "panels.resolution",
+  portfolio: "panels.portfolio",
+  openOrders: "panels.openOrders",
 };
 
 export default function SettingsModal({
@@ -101,6 +104,7 @@ export default function SettingsModal({
   globalCount,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>("general");
+  const { t } = useI18n();
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -117,32 +121,39 @@ export default function SettingsModal({
 
   if (!open) return null;
 
+  const TAB_LABELS: Record<Tab, string> = {
+    general: t("settings.general"),
+    panels: t("settings.panels"),
+    sources: t("settings.sources"),
+    system: t("settings.system"),
+  };
+
   return (
     <div className="settings-overlay" onClick={onClose}>
       <div
         className="settings-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="Settings"
+        aria-label={t("settings.title")}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="settings-header">
-          <span className="settings-title">Settings</span>
-          <button onClick={onClose} className="settings-close" aria-label="Close settings">&times;</button>
+          <span className="settings-title">{t("settings.title")}</span>
+          <button onClick={onClose} className="settings-close" aria-label={t("settings.closeSettings")}>&times;</button>
         </div>
 
-        {/* Horizontal tabs — WorldMonitor unified-settings-tabs style */}
+        {/* Horizontal tabs */}
         <div className="settings-tabs" role="tablist">
-          {TABS.map((tab) => (
+          {TAB_KEYS.map((key) => (
             <button
-              key={tab.key}
+              key={key}
               role="tab"
-              aria-selected={activeTab === tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`settings-tab${activeTab === tab.key ? " active" : ""}`}
+              aria-selected={activeTab === key}
+              onClick={() => setActiveTab(key)}
+              className={`settings-tab${activeTab === key ? " active" : ""}`}
             >
-              {tab.label}
+              {TAB_LABELS[key]}
             </button>
           ))}
         </div>
@@ -201,11 +212,12 @@ function GeneralTab({
   autoRefresh: boolean;
   onToggleAutoRefresh: () => void;
 }) {
+  const { t, locale, setLocale } = useI18n();
   return (
     <div>
       {/* Categories */}
       <div className="settings-section">
-        <span className="section-label">CATEGORIES</span>
+        <span className="section-label">{t("settings.categories")}</span>
         <div className="settings-grid-2col">
           {CATEGORIES.map((cat) => {
             const active = activeCategories.has(cat);
@@ -226,7 +238,7 @@ function GeneralTab({
                 >
                   {active && "\u2713"}
                 </span>
-                <span className="panel-toggle-label">{cat}</span>
+                <span className="panel-toggle-label">{t(`categories.${cat}`)}</span>
               </button>
             );
           })}
@@ -235,7 +247,7 @@ function GeneralTab({
 
       {/* Time Range */}
       <div className="settings-section">
-        <span className="section-label">TIME RANGE</span>
+        <span className="section-label">{t("settings.timeRange")}</span>
         <div className="settings-pill-bar">
           {TIME_OPTIONS.map((opt) => (
             <button
@@ -251,7 +263,7 @@ function GeneralTab({
 
       {/* Auto-refresh */}
       <div className="settings-section">
-        <span className="section-label">AUTO-REFRESH</span>
+        <span className="section-label">{t("settings.autoRefresh")}</span>
         <button
           type="button"
           className={`panel-toggle-item${autoRefresh ? " active" : ""}`}
@@ -269,15 +281,31 @@ function GeneralTab({
             {autoRefresh && "\u2713"}
           </span>
           <span className="panel-toggle-label">
-            {autoRefresh ? "ON (45s)" : "OFF"}
+            {autoRefresh ? t("settings.autoRefreshOn") : t("common.off")}
           </span>
         </button>
       </div>
 
       {/* Theme */}
       <div className="settings-section">
-        <span className="section-label">THEME</span>
-        <div className="settings-info-value">dark (default)</div>
+        <span className="section-label">{t("settings.theme")}</span>
+        <div className="settings-info-value">{t("settings.themeDark")}</div>
+      </div>
+
+      {/* Language */}
+      <div className="settings-section">
+        <span className="section-label">{t("settings.language")}</span>
+        <div className="settings-pill-bar">
+          {(["en", "zh"] as Locale[]).map((l) => (
+            <button
+              key={l}
+              onClick={() => setLocale(l)}
+              className={`settings-pill${locale === l ? " active" : ""}`}
+            >
+              {l === "en" ? "English" : "中文"}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -291,12 +319,13 @@ function PanelsTab({
   panelVisibility: PanelVisibility;
   onTogglePanelVisibility: (panel: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div>
       <div className="settings-section">
-        <span className="section-label">PANEL VISIBILITY</span>
+        <span className="section-label">{t("settings.panelVisibility")}</span>
         <div className="settings-grid-2col">
-          {Object.entries(PANEL_LABELS).map(([key, label]) => {
+          {PANEL_KEYS.map((key) => {
             const visible = panelVisibility[key as keyof PanelVisibility];
             return (
               <button
@@ -315,7 +344,7 @@ function PanelsTab({
                 >
                   {visible && "\u2713"}
                 </span>
-                <span className="panel-toggle-label">{label}</span>
+                <span className="panel-toggle-label">{t(PANEL_I18N_MAP[key])}</span>
               </button>
             );
           })}
@@ -333,24 +362,25 @@ function SourcesTab({
   dataMode: "live" | "sample";
   lastSyncTime: string | null;
 }) {
+  const { t } = useI18n();
   return (
     <div>
       <div className="settings-section">
-        <span className="section-label">DATA SOURCE</span>
+        <span className="section-label">{t("settings.dataSource")}</span>
         <div className="settings-info-grid">
-          <InfoRow label="Provider" value="Polymarket Gamma API" />
-          <InfoRow label="Endpoint" value="/api/markets" />
+          <InfoRow label={t("settings.provider")} value="Polymarket Gamma API" />
+          <InfoRow label={t("settings.endpoint")} value="/api/markets" />
           <InfoRow
-            label="Data mode"
+            label={t("settings.dataMode")}
             value={dataMode}
             color={dataMode === "live" ? "var(--green)" : "var(--yellow)"}
           />
           <InfoRow
-            label="Last sync"
+            label={t("settings.lastSync")}
             value={lastSyncTime ? new Date(lastSyncTime).toLocaleTimeString("en-US") : "—"}
           />
-          <InfoRow label="Refresh interval" value="45s" />
-          <InfoRow label="HLS streams" value={String(STREAMS.length)} />
+          <InfoRow label={t("settings.refreshInterval")} value="45s" />
+          <InfoRow label={t("settings.hlsStreams")} value={String(STREAMS.length)} />
         </div>
       </div>
     </div>
@@ -375,35 +405,36 @@ function SystemTab({
   activeCategories: Set<Category>;
   timeRange: TimeRange;
 }) {
+  const { t } = useI18n();
   return (
     <div>
       <div className="settings-section">
-        <span className="section-label">SYSTEM STATUS</span>
+        <span className="section-label">{t("settings.systemStatus")}</span>
         <div className="settings-info-grid">
           <InfoRow
-            label="Data mode"
+            label={t("settings.dataMode")}
             value={dataMode}
             color={dataMode === "live" ? "var(--green)" : "var(--yellow)"}
           />
           <InfoRow
-            label="Sync status"
-            value={lastSyncTime ? "synced" : "pending"}
+            label={t("settings.syncStatus")}
+            value={lastSyncTime ? t("settings.synced") : t("settings.pending")}
             color={lastSyncTime ? "var(--green)" : "var(--yellow)"}
           />
-          <InfoRow label="Mapped markets" value={String(marketCount)} />
-          <InfoRow label="Global markets" value={String(globalCount)} />
-          <InfoRow label="Total markets" value={String(marketCount + globalCount)} />
+          <InfoRow label={t("settings.mappedMarkets")} value={String(marketCount)} />
+          <InfoRow label={t("settings.globalMarkets")} value={String(globalCount)} />
+          <InfoRow label={t("settings.totalMarkets")} value={String(marketCount + globalCount)} />
           <InfoRow
-            label="Auto-refresh"
-            value={autoRefresh ? "on (45s)" : "off"}
+            label={t("settings.autoRefresh")}
+            value={autoRefresh ? t("settings.autoRefreshOn") : t("common.off")}
             color={autoRefresh ? "var(--green)" : "var(--text-faint)"}
           />
           <InfoRow
-            label="Active categories"
+            label={t("settings.activeCategories")}
             value={`${activeCategories.size} / ${CATEGORIES.length}`}
           />
-          <InfoRow label="Time range" value={timeRange} />
-          <InfoRow label="Version" value="0.1.0" />
+          <InfoRow label={t("settings.timeRange")} value={timeRange} />
+          <InfoRow label={t("settings.version")} value="0.1.0" />
         </div>
       </div>
     </div>

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type { ProcessedMarket, SmartWallet, WhaleTrade, NewsItem } from "@/types";
 import { generateSignals, getSignalIcon, type UnifiedSignal, type UnifiedSignalType } from "@/lib/signalEngine";
 import type { TradeModalState } from "./TradeModal";
+import { useI18n } from "@/i18n";
 
 const MarketPreview = lazy(() => import("./MarketPreview"));
 
@@ -30,14 +31,14 @@ const STRENGTH_BG: Record<string, string> = {
   moderate: "rgba(245,158,11,0.10)",
   weak: "rgba(128,128,128,0.08)",
 };
-const TYPE_LABELS: Record<UnifiedSignalType, string> = {
-  top_wallet_entry: "Wallet",
-  top_cluster: "Cluster",
-  news_catalyst: "News+$",
-  whale_accumulation: "Whale",
-  smart_divergence: "Diverg.",
-  cluster_activity: "Cluster",
-  momentum_shift: "Moment.",
+const TYPE_LABEL_KEYS: Record<UnifiedSignalType, string> = {
+  top_wallet_entry: "signals.wallet",
+  top_cluster: "signals.cluster",
+  news_catalyst: "signals.newsMoney",
+  whale_accumulation: "signals.whaleSig",
+  smart_divergence: "signals.divergence",
+  cluster_activity: "signals.clusterSig",
+  momentum_shift: "signals.momentum",
 };
 
 function timeAgo(ts: number): string {
@@ -114,6 +115,7 @@ export default function SignalPanel({
   strengthFilter,
   onTrade,
 }: SignalPanelProps) {
+  const { t } = useI18n();
   const { signals, slugToCategory } = useSignalData(trades, markets, leaderboard);
   const filtered = useMemo(() => {
     let result = signals;
@@ -129,7 +131,7 @@ export default function SignalPanel({
     <div className="font-mono">
       {filtered.length === 0 ? (
         <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center">
-          No signals detected
+          {t("signals.noSignals")}
         </div>
       ) : (
         <div className="space-y-0">
@@ -169,6 +171,7 @@ function SignalCard({
   onOpenTrade?: (slug: string, direction: "bullish" | "bearish") => void;
   onTrade?: (state: TradeModalState) => void;
 }) {
+  const { t } = useI18n();
   const icon = getSignalIcon(signal.type);
   const sColor = STRENGTH_COLORS[signal.strength];
   const sBg = STRENGTH_BG[signal.strength];
@@ -232,17 +235,17 @@ function SignalCard({
             className="text-[8px] font-bold rounded-sm px-0.5 mt-0.5 leading-[14px]"
             style={{ background: sBg, color: sColor }}
           >
-            {signal.strength.slice(0, 3).toUpperCase()}
+            {t(`signals.${signal.strength === "strong" ? "str" : signal.strength === "moderate" ? "mod" : "wea"}`)}
           </span>
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1 mb-0.5">
             <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--text-faint)]">
-              {TYPE_LABELS[signal.type]}
+              {t(TYPE_LABEL_KEYS[signal.type])}
             </span>
             <span className="text-[9px] font-bold" style={{ color: dirColor }}>
-              {dirArrow} {signal.direction}
+              {dirArrow} {t(signal.direction === "bullish" ? "trade.bullish" : "trade.bearish")}
             </span>
             <span className="text-[9px] text-[var(--text-ghost)] ml-auto shrink-0">
               {timeAgo(signal.timestamp)}
@@ -276,12 +279,12 @@ function SignalCard({
             )}
             {signal.details.tradeCount && (
               <span className="text-[9px] text-[var(--text-dim)] tabular-nums">
-                {signal.details.tradeCount} trades
+                {signal.details.tradeCount} {t("signals.trades")}
               </span>
             )}
             {signal.wallets.length > 0 && (
               <span className="text-[9px] text-[var(--text-dim)]">
-                {signal.wallets.length} wallet{signal.wallets.length > 1 ? "s" : ""}
+                {signal.wallets.length} {t("signals.walletCount")}
               </span>
             )}
             {signal.market.prob !== null && (
@@ -298,7 +301,7 @@ function SignalCard({
                   color: signal.direction === "bullish" ? "#22c55e" : "#ff4444",
                 }}
               >
-                {signal.direction === "bullish" ? "Buy" : "Sell"} {signal.outcomeName || (signal.direction === "bullish" ? "YES" : "NO")}
+                {signal.direction === "bullish" ? t("common.buy") : t("common.sell")} {signal.outcomeName || (signal.direction === "bullish" ? "YES" : "NO")}
               </button>
             )}
           </div>
@@ -322,7 +325,7 @@ function SignalCard({
           }}
           onMouseLeave={handleMouseLeave}
         >
-          <Suspense fallback={<div className="text-[12px] text-[var(--text-faint)] font-mono py-4">loading...</div>}>
+          <Suspense fallback={<div className="text-[12px] text-[var(--text-faint)] font-mono py-4">{t("common.loading")}</div>}>
             <MarketPreview market={resolvedMarket} onTrade={onTrade} singleSeries />
           </Suspense>
         </div>,

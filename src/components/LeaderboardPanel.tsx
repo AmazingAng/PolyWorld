@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState, useRef, useCallback } from "react";
 import type { SmartWallet } from "@/types";
 import { formatVolume } from "@/lib/format";
+import { useI18n } from "@/i18n";
 
 export type LeaderboardPeriod = "day" | "week" | "month" | "all";
 
@@ -37,6 +38,7 @@ function LeaderboardPanelContent({
   leaderboard,
   onSelectWallet,
 }: LeaderboardPanelProps) {
+  const { t } = useI18n();
   const [visible, setVisible] = useState(PAGE_SIZE);
 
   // Intersection observer for infinite scroll
@@ -61,7 +63,7 @@ function LeaderboardPanelContent({
   if (leaderboard.length === 0) {
     return (
       <div className="font-mono text-[12px] text-[var(--text-ghost)] py-4 text-center">
-        syncing leaderboard...
+        {t("leaderboard.syncing")}
       </div>
     );
   }
@@ -97,7 +99,7 @@ function LeaderboardPanelContent({
               {w.username || truncAddr(w.address)}
             </span>
             <span className={`text-[11px] tabular-nums shrink-0 ${w.pnl >= 0 ? "text-[#22c55e]" : "text-[#ff4444]"}`}>
-              {w.pnl < 0 ? "-" : ""}{formatVolume(Math.abs(w.pnl))} PnL
+              {w.pnl < 0 ? "-" : ""}{formatVolume(Math.abs(w.pnl))} {t("leaderboard.pnl")}
             </span>
             <span className="text-[10px] text-[var(--text-faint)] tabular-nums shrink-0">
               {formatVolume(w.volume)}

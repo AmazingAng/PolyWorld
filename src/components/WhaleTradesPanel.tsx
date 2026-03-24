@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import type { WhaleTrade } from "@/types";
 import { formatVolume } from "@/lib/format";
+import { useI18n } from "@/i18n";
 
 interface WhaleTradesPanelProps {
   trades: WhaleTrade[];
@@ -30,6 +31,7 @@ export default function WhaleTradesPanel({
   onSelectMarket,
   onSelectWallet,
 }: WhaleTradesPanelProps) {
+  const { t } = useI18n();
   const [walletFilter, setWalletFilter] = useState<string | null>(null);
   const [newTradeThreshold] = useState(() => Date.now() - 60_000);
 
@@ -45,26 +47,26 @@ export default function WhaleTradesPanel({
       {walletFilter && (
         <div className="flex items-center gap-2 mb-2 px-1">
           <span className="text-[10px] text-[var(--text-faint)]">
-            filtering: {truncAddr(walletFilter)}
+            {t("whaleTrades.filteringWallet", { wallet: truncAddr(walletFilter) })}
           </span>
           <button
             onClick={() => setWalletFilter(null)}
             className="text-[10px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors"
           >
-            clear
+            {t("common.clear")}
           </button>
         </div>
       )}
 
       {filteredTrades.length === 0 ? (
         <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center">
-          {walletFilter ? "no whale trades for this wallet" : "syncing whale trades..."}
+          {walletFilter ? t("whaleTrades.noWhaleTrades") : t("whaleTrades.syncingWhaleTrades")}
         </div>
       ) : (
         <div className="space-y-0.5">
-          {filteredTrades.map((t, i) => {
-            const k = `${t.wallet}-${t.conditionId}-${t.timestamp}`;
-            const isFresh = new Date(t.timestamp).getTime() >= newTradeThreshold;
+          {filteredTrades.map((tr, i) => {
+            const k = `${tr.wallet}-${tr.conditionId}-${tr.timestamp}`;
+            const isFresh = new Date(tr.timestamp).getTime() >= newTradeThreshold;
             return (
               <div
                 key={`${k}-${i}`}
@@ -72,34 +74,34 @@ export default function WhaleTradesPanel({
               >
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-[var(--text-faint)] shrink-0 tabular-nums w-5 text-right">
-                    {timeAgo(t.timestamp)}
+                    {timeAgo(tr.timestamp)}
                   </span>
                   <button
-                    onClick={() => { setWalletFilter(t.wallet); onSelectWallet?.(t.wallet); }}
+                    onClick={() => { setWalletFilter(tr.wallet); onSelectWallet?.(tr.wallet); }}
                     className="text-[10px] text-[var(--text-muted)] truncate w-16 shrink-0 text-left hover:text-[var(--text)] transition-colors"
-                    title={t.wallet}
+                    title={tr.wallet}
                   >
-                    {t.username || truncAddr(t.wallet)}
+                    {tr.username || truncAddr(tr.wallet)}
                   </button>
                   <button
-                    onClick={() => onSelectMarket?.(t.slug)}
+                    onClick={() => onSelectMarket?.(tr.slug)}
                     className="text-[11px] text-[var(--text-secondary)] truncate flex-1 min-w-0 text-left hover:text-[var(--text)] transition-colors"
-                    title={t.title}
+                    title={tr.title}
                   >
-                    {t.title}
+                    {tr.title}
                   </button>
                   <span
                     className={`text-[11px] font-bold shrink-0 ${
-                      t.side === "BUY" ? "text-[#22c55e]" : "text-[#ff4444]"
+                      tr.side === "BUY" ? "text-[#22c55e]" : "text-[#ff4444]"
                     }`}
                   >
-                    {t.side}
+                    {tr.side}
                   </span>
                   <span className="text-[11px] text-[var(--text-dim)] tabular-nums shrink-0">
-                    {formatVolume(t.usdcSize || t.size)}
+                    {formatVolume(tr.usdcSize || tr.size)}
                   </span>
-                  {t.isSmartWallet && (
-                    <span className="smart-money-badge" title="Smart wallet">$</span>
+                  {tr.isSmartWallet && (
+                    <span className="smart-money-badge" title={t("whaleTrades.smartWallet")}>$</span>
                   )}
                 </div>
               </div>

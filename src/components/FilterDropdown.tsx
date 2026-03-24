@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useI18n } from "@/i18n";
 
 export interface FilterGroup {
   label: string;
@@ -22,6 +23,7 @@ function isAllSelected(group: FilterGroup) {
 }
 
 export default function FilterDropdown({ groups, label }: FilterDropdownProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -60,7 +62,7 @@ export default function FilterDropdown({ groups, label }: FilterDropdownProps) {
           color: hasFilter ? "#22c55e" : "var(--text-faint)",
           border: `1px solid ${hasFilter ? "rgba(34,197,94,0.3)" : "var(--border-subtle, #333)"}`,
         }}
-        title="Filter"
+        title={t("common.filter")}
       >
         {label && <span className="text-[9px]">{label}</span>}
         <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
@@ -94,7 +96,7 @@ export default function FilterDropdown({ groups, label }: FilterDropdownProps) {
                     style={{ color: isAllSelected(group) ? "#22c55e" : "var(--text-muted)" }}
                   >
                     <Checkbox checked={isAllSelected(group)} />
-                    All
+                    {t("filterDropdown.all")}
                   </button>
                 )}
 

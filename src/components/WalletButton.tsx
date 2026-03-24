@@ -7,6 +7,7 @@ import {
 } from "wagmi";
 import { polygon } from "wagmi/chains";
 import { useWalletStore } from "@/stores/walletStore";
+import { useI18n } from "@/i18n";
 import {
   authorizeTradeSession,
   lookupProxyWallet,
@@ -44,12 +45,13 @@ function getRelativeTime(iso: string): string {
 }
 
 function CopyButton({ text }: { text: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   return (
     <button
       onClick={() => { void navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
       className="ml-1 text-[var(--text-ghost)] hover:text-[var(--text-faint)] transition-colors shrink-0"
-      title="Copy"
+      title={t("common.copy")}
     >
       {copied ? (
         <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="2 6 5 9 10 3"/></svg>
@@ -84,6 +86,7 @@ function OpenOrdersTab({
   onTradePosition?: (title: string, outcome: string) => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const mapped = useMarketStore((s) => s.mapped);
   const unmapped = useMarketStore((s) => s.unmapped);
   const tokenIndex = useMemo(() => buildTokenIndex([...mapped, ...unmapped]), [mapped, unmapped]);
@@ -93,7 +96,7 @@ function OpenOrdersTab({
   );
 
   if (openOrders.length === 0) {
-    return <div className="px-3 py-4 text-[11px] text-[var(--text-ghost)] text-center">No open orders</div>;
+    return <div className="px-3 py-4 text-[11px] text-[var(--text-ghost)] text-center">{t("openOrders.noOpenOrders")}</div>;
   }
 
   return (
@@ -147,11 +150,11 @@ function OpenOrdersTab({
                     disabled={cancellingOrderId === order.id}
                     className="shrink-0 text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-ghost)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
                   >
-                    {cancellingOrderId === order.id ? "…" : "Cancel"}
+                    {cancellingOrderId === order.id ? "…" : t("openOrders.cancel")}
                   </button>
                 </div>
                 <div className="flex items-center justify-between mt-0.5 text-[10px] tabular-nums text-[var(--text-faint)]">
-                  <span>Filled: {matched.toFixed(0)}/{total.toFixed(0)}</span>
+                  <span>{t("openOrders.filled", { matched: matched.toFixed(0), total: total.toFixed(0) })}</span>
                   <span>${(total * price).toFixed(2)}</span>
                 </div>
               </div>
@@ -164,6 +167,7 @@ function OpenOrdersTab({
 }
 
 export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade, onTradePosition }: WalletButtonProps) {
+  const { t } = useI18n();
   const { address, isConnected, connector, chainId } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
@@ -505,7 +509,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <rect x="1" y="6" width="22" height="14" rx="2"/><path d="M1 10h22"/>
           </svg>
-          CONNECT
+          {t("wallet.connect")}
         </button>
 
         {open && (
@@ -519,9 +523,9 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                     <polygon points="22,12 17,3.4 7,3.4 2,12 7,20.6 17,20.6" />
                     <path d="M2 12h20M12 3.4L16 12l-4 8.6M12 3.4L8 12l4 8.6" />
                   </svg>
-                  <span className="text-[15px] font-bold text-[var(--text)]">Welcome to PolyWorld</span>
+                  <span className="text-[15px] font-bold text-[var(--text)]">{t("wallet.welcomeTitle")}</span>
                 </div>
-                <p className="text-[11px] text-[var(--text-faint)]">Connect your wallet to start trading on Polymarket</p>
+                <p className="text-[11px] text-[var(--text-faint)]">{t("wallet.welcomeDesc")}</p>
               </div>
 
               {/* Wallet list */}
@@ -535,7 +539,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                     {walletIconFor(c)}
                     <div className="text-left">
                       <div className="text-[12px] font-medium text-[var(--text)]">{c.name}</div>
-                      <div className="text-[9px] text-[var(--text-ghost)]">Detected in browser</div>
+                      <div className="text-[9px] text-[var(--text-ghost)]">{t("wallet.detectedInBrowser")}</div>
                     </div>
                   </button>
                 ))}
@@ -544,7 +548,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
               {/* Footer */}
               <div className="px-4 pb-4 pt-1 border-t border-[var(--border-subtle)]">
                 <button onClick={() => setOpen(false)} className="w-full py-2 text-[11px] text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors">
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>
@@ -560,7 +564,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
       <button
         onClick={() => switchChain({ chainId: polygon.id })}
         className="flex items-center justify-center w-7 h-7 border border-[#f59e0b]/50 text-[#f59e0b] hover:border-[#f59e0b]/80 transition-colors"
-        title="Switch to Polygon"
+        title={t("trade.switchToPolygon")}
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -647,7 +651,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                       : "text-[var(--text-ghost)] hover:text-[var(--text-faint)]"
                   }`}
                 >
-                  Positions · {positions.length}
+                  {t("wallet.positions", { count: positions.length })}
                 </button>
                 <button
                   onClick={() => setPortfolioTab("orders")}
@@ -657,7 +661,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                       : "text-[var(--text-ghost)] hover:text-[var(--text-faint)]"
                   }`}
                 >
-                  Orders · {openOrders.length}
+                  {t("wallet.orders", { count: openOrders.length })}
                 </button>
               </div>
 
@@ -691,7 +695,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                           </span>
                         </div>
                         <div className="flex items-center justify-between mt-0.5 text-[10px] tabular-nums text-[var(--text-faint)]">
-                          <span>Avg: {(p.avgPrice * 100).toFixed(1)}¢ · Cur: {(p.currentPrice * 100).toFixed(1)}¢</span>
+                          <span>{t("wallet.avgCur", { avg: (p.avgPrice * 100).toFixed(1), cur: (p.currentPrice * 100).toFixed(1) })}</span>
                           <span className={`font-bold ${p.cashPnl >= 0 ? "text-[#22c55e]" : "text-[#ff4444]"}`}>
                             {p.cashPnl >= 0 ? "+" : ""}${p.cashPnl.toFixed(2)}
                           </span>
@@ -700,7 +704,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                     </div>
                   </button>
                 )) : (
-                  <div className="px-3 py-4 text-[11px] text-[var(--text-ghost)] text-center">No positions</div>
+                  <div className="px-3 py-4 text-[11px] text-[var(--text-ghost)] text-center">{t("wallet.noPositions")}</div>
                 )
               ) : (
                 <OpenOrdersTab
@@ -760,7 +764,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
           <div className="px-3 py-2 space-y-1.5 border-b border-[var(--border-subtle)]">
             {hasSeparateProxy && (
               <div className="flex items-center justify-between">
-                <span className="text-[9px] text-[var(--text-ghost)] uppercase tracking-[0.06em] w-10 shrink-0">Safe</span>
+                <span className="text-[9px] text-[var(--text-ghost)] uppercase tracking-[0.06em] w-10 shrink-0">{t("wallet.safe")}</span>
                 <span className="text-[var(--text-dim)] tabular-nums flex-1 text-right">
                   {px!.slice(0, 6)}…{px!.slice(-4)}
                 </span>
@@ -769,7 +773,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
             )}
             <div className="flex items-center justify-between">
               <span className="text-[9px] text-[var(--text-ghost)] uppercase tracking-[0.06em] w-10 shrink-0">
-                {hasSeparateProxy ? "Owner" : "EOA"}
+                {hasSeparateProxy ? t("wallet.owner") : t("wallet.eoa")}
               </span>
               <span className="text-[var(--text-dim)] tabular-nums flex-1 text-right">
                 {address!.slice(0, 6)}…{address!.slice(-4)}
@@ -788,9 +792,9 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
               <>
                 {proxyNotFound ? (
                   <div className="space-y-1.5">
-                    <div className="text-[10px] text-[#f59e0b]">No Polymarket account found</div>
+                    <div className="text-[10px] text-[#f59e0b]">{t("wallet.noAccountFound")}</div>
                     <div className="text-[9px] text-[var(--text-faint)] leading-snug">
-                      You need a Polymarket account to trade. Register and deploy your Safe wallet first.
+                      {t("wallet.needAccountToTrade")}
                     </div>
                     <a
                       href="https://polymarket.com"
@@ -798,7 +802,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                       rel="noopener noreferrer"
                       className="block w-full py-1.5 text-center text-[11px] font-bold bg-[#8b5cf6]/10 text-[#8b5cf6] border border-[#8b5cf6]/30 hover:bg-[#8b5cf6]/20 transition-colors"
                     >
-                      Register on Polymarket
+                      {t("wallet.registerOnPolymarket")}
                     </a>
                   </div>
                 ) : (
@@ -807,14 +811,14 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                     disabled={authorizing}
                     className="w-full py-1.5 text-center text-[11px] font-bold bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/30 hover:bg-[#22c55e]/15 transition-colors disabled:opacity-40"
                   >
-                    {authorizing ? "Authorizing…" : "Authorize Trading"}
+                    {authorizing ? t("trade.authorizingFull") : t("trade.authorizeTradingFull")}
                   </button>
                 )}
               </>
             ) : (
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-[var(--text-faint)]">Status</span>
-                <span className="text-[10px] text-[#22c55e]">● ready</span>
+                <span className="text-[10px] text-[var(--text-faint)]">{t("wallet.status")}</span>
+                <span className="text-[10px] text-[#22c55e]">● {t("wallet.ready")}</span>
               </div>
             )}
 
@@ -825,11 +829,11 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                 className="w-full py-1.5 text-center text-[11px] font-bold bg-[#a78bfa]/10 text-[#a78bfa] border border-[#a78bfa]/30 hover:bg-[#a78bfa]/15 transition-colors disabled:opacity-40"
                 title={approveError ?? "Approve USDC.e and outcome tokens (one-time, gasless)"}
               >
-                {approveStatus === "idle"       && "Approve Tokens"}
-                {approveStatus === "preparing"  && "Preparing…"}
-                {approveStatus === "signing"    && "Sign in wallet…"}
-                {approveStatus === "submitting" && "Submitting…"}
-                {approveStatus === "error"      && "Retry Approve"}
+                {approveStatus === "idle"       && t("wallet.approveTokens")}
+                {approveStatus === "preparing"  && t("wallet.preparing")}
+                {approveStatus === "signing"    && t("trade.signInWallet")}
+                {approveStatus === "submitting" && t("wallet.submitting")}
+                {approveStatus === "error"      && t("wallet.retryApprove")}
               </button>
             )}
           </div>
@@ -838,14 +842,14 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
           {onRefresh && (
             <div className="px-3 py-2 flex items-center justify-between border-b border-[var(--border-subtle)]">
               <span className="text-[10px] text-[var(--text-ghost)]">
-                {syncText ? `synced ${syncText}` : "—"}
+                {syncText ? t("wallet.syncedTime", { time: syncText }) : "—"}
               </span>
               <button
                 onClick={() => { onRefresh(); setOpen(false); }}
                 disabled={loading}
                 className="text-[10px] px-2 py-0.5 border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-ghost)] transition-colors disabled:opacity-40"
               >
-                {loading ? "refreshing…" : "refresh"}
+                {loading ? t("common.refreshing") : t("common.refresh")}
               </button>
             </div>
           )}
@@ -855,7 +859,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
             onClick={handleDisconnect}
             className="w-full px-3 py-2 text-left text-[11px] text-[#ff4444]/70 hover:text-[#ff4444] hover:bg-[#ff4444]/5 transition-colors"
           >
-            Disconnect
+            {t("wallet.disconnect")}
           </button>
         </div>
       )}

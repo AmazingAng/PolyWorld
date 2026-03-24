@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import AlertManager from "./AlertManager";
+import { useI18n } from "@/i18n";
 
 const WalletButton = dynamic(() => import("./WalletButton"), { ssr: false });
 import type { AlertConfig, AlertHistoryEntry } from "@/hooks/useAlerts";
@@ -96,6 +97,7 @@ export default function Header({
   onTradePosition,
 }: HeaderProps) {
   void _lastRefresh; void _dataMode; void _watchedCount; void _refreshError;
+  const { t } = useI18n();
   const _syncInfo = lastSyncTime ? getRelativeTime(lastSyncTime) : null;
   void _syncInfo;
   const bellRef = useRef<HTMLButtonElement>(null);
@@ -121,11 +123,11 @@ export default function Header({
 
         <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] ml-1">
           <span>
-            <strong className="text-[var(--text-secondary)]">{marketCount}</strong> mapped
+            <strong className="text-[var(--text-secondary)]">{marketCount}</strong> {t("header.mapped")}
           </span>
           <span className="text-[var(--border)]">|</span>
           <span>
-            <strong className="text-[var(--text-secondary)]">{globalCount}</strong> global
+            <strong className="text-[var(--text-secondary)]">{globalCount}</strong> {t("header.global")}
           </span>
         </div>
       </div>
@@ -157,7 +159,7 @@ export default function Header({
               ref={bellRef}
               onClick={onOpenAlertManager}
               className={`relative flex items-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors px-1 ${alertManagerOpen ? "text-[var(--text)]" : ""}`}
-              title="Alerts"
+              title={t("header.alerts")}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -177,8 +179,8 @@ export default function Header({
         <button
           onClick={onOpenSettings}
           className="settings-btn"
-          title="Settings"
-          aria-label="Settings"
+          title={t("header.settings")}
+          aria-label={t("header.settings")}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
             <circle cx="12" cy="12" r="3" />

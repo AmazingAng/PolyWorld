@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { ProcessedMarket, NewsItem } from "@/types";
 import { NEWS_SOURCES } from "@/lib/newsSources";
 import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
+import { useI18n } from "@/i18n";
 
 interface NewsPanelProps {
   selectedMarket: ProcessedMarket | null;
@@ -62,6 +63,7 @@ function NewsPopover({
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) {
+  const { t } = useI18n();
   const popoverRef = useRef<HTMLDivElement>(null);
   const pos = useMemo(() => {
     const vw = window.innerWidth;
@@ -134,7 +136,7 @@ function NewsPopover({
       {/* Relevance */}
       {selectedMarket && item.relevance_score != null && (
         <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-[var(--border-subtle)]">
-          <span className="text-[9px] text-[var(--text-faint)] uppercase">relevance</span>
+          <span className="text-[9px] text-[var(--text-faint)] uppercase">{t("news.relevance")}</span>
           <div className="flex-1 h-[3px] bg-[var(--border)] rounded-full overflow-hidden">
             <div
               className="h-full rounded-full"
@@ -164,7 +166,7 @@ function NewsPopover({
       {/* Read more link */}
       <div className="mt-2 pt-1.5 border-t border-[var(--border-subtle)]">
         <span className="text-[10px] text-[var(--text-faint)]">
-          hover to read &middot; click card to open source &rarr;
+          {t("news.hoverToRead")}
         </span>
       </div>
     </div>
@@ -172,6 +174,7 @@ function NewsPopover({
 }
 
 export default function NewsPanel({ selectedMarket, sourceFilter, onSourcesChange }: NewsPanelProps) {
+  const { t } = useI18n();
   const [items, setItems] = useState<ExtendedNewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -261,7 +264,7 @@ export default function NewsPanel({ selectedMarket, sourceFilter, onSourcesChang
       {/* Error state */}
       {error && !loading && (
         <div className="text-[11px] text-[var(--red)] font-mono py-2 text-center" aria-live="polite">
-          {error} <button onClick={() => { retryCount.current = 0; setLoading(true); fetchNews(); }} className="ml-2 underline">retry</button>
+          {t("common.loadFailed")} <button onClick={() => { retryCount.current = 0; setLoading(true); fetchNews(); }} className="ml-2 underline">{t("common.retry")}</button>
         </div>
       )}
 
@@ -269,8 +272,8 @@ export default function NewsPanel({ selectedMarket, sourceFilter, onSourcesChang
       {!loading && !error && filteredItems.length === 0 && (
         <div className="text-[12px] text-[var(--text-muted)] font-mono py-4 text-center">
           {selectedMarket
-            ? "no related news found for this market"
-            : "no news items available yet"}
+            ? t("news.noRelatedNews")
+            : t("news.noNewsYet")}
         </div>
       )}
 

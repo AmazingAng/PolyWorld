@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { STREAMS, StreamSource } from "@/lib/streams";
 import HLSPlayer from "./HLSPlayer";
+import { useI18n } from "@/i18n";
 
 type StreamMode = "hls" | "yt-hls" | "embed";
 type CategoryTab = "news" | "sports";
@@ -48,6 +49,7 @@ export function LiveChannelDropdown({
   activeStream: StreamSource | null;
   onSelect: (stream: StreamSource | null) => void;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<CategoryTab>("news");
   const ref = useRef<HTMLDivElement>(null);
@@ -83,7 +85,7 @@ export function LiveChannelDropdown({
             <span className="max-w-[90px] truncate">{activeStream.name}</span>
           </>
         ) : (
-          <>channel <span className="text-[8px]">▾</span></>
+          <>{t("livePanel.channelMenu")}</>
         )}
       </button>
 
@@ -91,17 +93,17 @@ export function LiveChannelDropdown({
         <div className="absolute right-0 top-full mt-0.5 z-[9999] bg-[var(--bg)] border border-[var(--border)] shadow-[0_8px_32px_rgba(0,0,0,0.4)] min-w-[180px]">
           {/* Category tabs */}
           <div className="flex border-b border-[var(--border-subtle)]">
-            {(["news", "sports"] as const).map((t) => (
+            {(["news", "sports"] as const).map((tabKey) => (
               <button
-                key={t}
-                onClick={() => setTab(t)}
+                key={tabKey}
+                onClick={() => setTab(tabKey)}
                 className={`flex-1 text-[9px] uppercase tracking-wide px-2 py-1.5 font-mono transition-colors ${
-                  tab === t
+                  tab === tabKey
                     ? "text-[var(--text-secondary)] bg-[var(--surface)]"
                     : "text-[var(--text-faint)] hover:text-[var(--text-secondary)]"
                 }`}
               >
-                {t}
+                {t(tabKey === "news" ? "livePanel.newsTab" : "livePanel.sportsTab")}
               </button>
             ))}
           </div>
@@ -113,7 +115,7 @@ export function LiveChannelDropdown({
                 onClick={() => { onSelect(null); setOpen(false); }}
                 className="w-full text-left px-2.5 py-1.5 text-[10px] text-[#ff6666] hover:bg-[var(--surface-hover)] font-mono border-b border-[var(--border-subtle)] mb-0.5"
               >
-                ✕ stop stream
+                {t("livePanel.stopStream")}
               </button>
             )}
             {filteredStreams.map((stream) => {
@@ -156,6 +158,7 @@ interface LivePanelProps {
 }
 
 export default function LivePanel({ activeStream = null }: LivePanelProps) {
+  const { t } = useI18n();
   if (!activeStream) {
     return (
       <div
@@ -163,7 +166,7 @@ export default function LivePanel({ activeStream = null }: LivePanelProps) {
         style={{ aspectRatio: "16/9" }}
       >
         <span className="text-[11px] text-[var(--text-faint)]">
-          select a channel ↗
+          {t("livePanel.selectChannel")}
         </span>
       </div>
     );
@@ -173,6 +176,7 @@ export default function LivePanel({ activeStream = null }: LivePanelProps) {
 }
 
 function LivePanelContent({ activeStream }: { activeStream: StreamSource }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<StreamMode>("hls");
   const [liveInfo, setLiveInfo] = useState<LiveInfo>({
     videoId: null,
@@ -229,7 +233,7 @@ function LivePanelContent({ activeStream }: { activeStream: StreamSource }) {
                 />
               </svg>
               <span className="text-[11px] text-[#8a8a8a] font-mono">
-                detecting live stream...
+                {t("chart.detectingStream")}
               </span>
             </div>
           </div>
@@ -259,7 +263,7 @@ function LivePanelContent({ activeStream }: { activeStream: StreamSource }) {
         ) : (
           <div className="w-full aspect-video bg-[var(--bg)] flex items-center justify-center">
             <span className="text-[11px] text-[var(--text-faint)]">
-              no stream available
+              {t("livePanel.noStream")}
             </span>
           </div>
         )}

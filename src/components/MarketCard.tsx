@@ -6,6 +6,7 @@ import { ProcessedMarket, PolymarketMarket } from "@/types";
 import { CATEGORY_COLORS } from "@/lib/categories";
 import { IMPACT_COLORS } from "@/lib/impact";
 import { formatVolume, formatPct, formatChange } from "@/lib/format";
+import { useI18n } from "@/i18n";
 
 const MarketPreview = lazy(() => import("./MarketPreview"));
 
@@ -93,6 +94,7 @@ function MarketCardInner({
     [market.markets]
   );
 
+  const { t } = useI18n();
   const topOption = useMemo(() => getTopOption(market.markets), [market.markets]);
 
   // Hover popup state
@@ -248,7 +250,7 @@ function MarketCardInner({
                 ? { color: "#22c55e", background: "rgba(34,197,94,0.12)" }
                 : { color: "#ff4444", background: "rgba(255,68,68,0.12)" }
               }
-              title={`${market.smartMoney.smartBuys} smart buys, ${market.smartMoney.whaleBuys + market.smartMoney.whaleSells} whale trades`}
+              title={`${market.smartMoney.smartBuys} ${t("detail.smartBuys")}, ${market.smartMoney.whaleBuys + market.smartMoney.whaleSells} ${t("panels.whaleTrades").toLowerCase()}`}
             >
               {market.smartMoney.netFlow === "bullish" ? "↑$" : "↓$"}
             </span>

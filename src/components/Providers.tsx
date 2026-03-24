@@ -4,6 +4,7 @@ import { WagmiProvider, createConfig, http, fallback } from "wagmi";
 import { polygon } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode, useState } from "react";
+import { I18nProvider } from "@/i18n";
 
 // Primary: publicnode (same as Betmoar). Fallbacks: other free RPCs.
 // NEXT_PUBLIC_POLYGON_RPC_URL overrides the primary if set.
@@ -29,10 +30,12 @@ const wagmiConfig = createConfig({
 export default function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
   return (
-    <WagmiProvider config={wagmiConfig}>
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
-    </WagmiProvider>
+    <I18nProvider>
+      <WagmiProvider config={wagmiConfig}>
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      </WagmiProvider>
+    </I18nProvider>
   );
 }

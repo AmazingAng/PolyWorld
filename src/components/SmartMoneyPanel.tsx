@@ -5,6 +5,7 @@ import type { WhaleTrade, ProcessedMarket } from "@/types";
 import type { CategoryFlow } from "@/lib/flowAnalysis";
 import { formatVolume } from "@/lib/format";
 import { detectSignals } from "@/lib/smartSignals";
+import { useI18n } from "@/i18n";
 
 interface SmartMoneyPanelProps {
   smartTrades: WhaleTrade[];
@@ -44,6 +45,7 @@ export default function SmartMoneyPanel({
   onSelectMarket,
   onSelectWallet,
 }: SmartMoneyPanelProps) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<SmartMoneyTab>("trades");
   const [flows, setFlows] = useState<CategoryFlow[]>([]);
   const [flowLoading, setFlowLoading] = useState(false);
@@ -78,7 +80,7 @@ export default function SmartMoneyPanel({
   const filteredTrades = useMemo(() => {
     if (!walletFilter) return smartTrades;
     return smartTrades.filter(
-      (t) => t.wallet.toLowerCase() === walletFilter.toLowerCase()
+      (tr) => tr.wallet.toLowerCase() === walletFilter.toLowerCase()
     );
   }, [smartTrades, walletFilter]);
 
@@ -86,17 +88,17 @@ export default function SmartMoneyPanel({
     <div className="font-mono">
       {/* Tab bar */}
       <div className="flex items-center gap-0.5 mb-2">
-        {(["trades", "flow", "signals"] as SmartMoneyTab[]).map((t) => (
+        {(["trades", "flow", "signals"] as SmartMoneyTab[]).map((tabId) => (
           <button
-            key={t}
-            onClick={() => handleTabChange(t)}
+            key={tabId}
+            onClick={() => handleTabChange(tabId)}
             className={`px-2 py-0.5 text-[10px] font-mono transition-colors ${
-              tab === t
+              tab === tabId
                 ? "text-[var(--text)] bg-[var(--surface-hover)]"
                 : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"
             }`}
           >
-            {t === "trades" ? "Trades" : t === "flow" ? "Flow" : "Signals"}
+            {tabId === "trades" ? t("smartMoney.tradesTab") : tabId === "flow" ? t("smartMoney.flowTab") : t("smartMoney.signalsTab")}
           </button>
         ))}
       </div>
@@ -113,26 +115,26 @@ export default function SmartMoneyPanel({
           {walletFilter && (
             <div className="flex items-center gap-2 mb-2 px-1">
               <span className="text-[10px] text-[var(--text-faint)]">
-                filtering: {truncAddr(walletFilter)}
+                {t("smartMoney.filteringWallet", { wallet: truncAddr(walletFilter) })}
               </span>
               <button
                 onClick={onClearFilter}
                 className="text-[10px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors"
               >
-                clear
+                {t("common.clear")}
               </button>
             </div>
           )}
 
           {filteredTrades.length === 0 ? (
             <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center">
-              {walletFilter ? "no smart trades for this wallet" : "syncing smart trades..."}
+              {walletFilter ? t("smartMoney.noSmartTrades") : t("smartMoney.syncingSmartTrades")}
             </div>
           ) : (
             <div className="space-y-0.5">
-              {filteredTrades.map((t, i) => {
-                const k = tradeKey(t);
-                const isFresh = new Date(t.timestamp).getTime() >= newTradeThreshold;
+              {filteredTrades.map((trade, i) => {
+                const k = tradeKey(trade);
+                const isFresh = new Date(trade.timestamp).getTime() >= newTradeThreshold;
                 return (
                   <div
                     key={`${k}-${i}`}
@@ -140,31 +142,31 @@ export default function SmartMoneyPanel({
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-[var(--text-faint)] shrink-0 tabular-nums w-5 text-right">
-                        {timeAgo(t.timestamp)}
+                        {timeAgo(trade.timestamp)}
                       </span>
                       <button
-                        onClick={() => onSelectWallet?.(t.wallet)}
+                        onClick={() => onSelectWallet?.(trade.wallet)}
                         className="text-[10px] text-[var(--text-muted)] truncate w-16 shrink-0 text-left hover:text-[var(--text)] transition-colors"
-                        title={t.wallet}
+                        title={trade.wallet}
                       >
-                        {t.username || truncAddr(t.wallet)}
+                        {trade.username || truncAddr(trade.wallet)}
                       </button>
                       <button
-                        onClick={() => onSelectMarket?.(t.slug)}
+                        onClick={() => onSelectMarket?.(trade.slug)}
                         className="text-[11px] text-[var(--text-secondary)] truncate flex-1 min-w-0 text-left hover:text-[var(--text)] transition-colors"
-                        title={t.title}
+                        title={trade.title}
                       >
-                        {t.title}
+                        {trade.title}
                       </button>
                       <span
                         className={`text-[11px] font-bold shrink-0 ${
-                          t.side === "BUY" ? "text-[#22c55e]" : "text-[#ff4444]"
+                          trade.side === "BUY" ? "text-[#22c55e]" : "text-[#ff4444]"
                         }`}
                       >
-                        {t.side}
+                        {trade.side}
                       </span>
                       <span className="text-[11px] text-[var(--text-dim)] tabular-nums shrink-0">
-                        {formatVolume(t.usdcSize || t.size)}
+                        {formatVolume(trade.usdcSize || trade.size)}
                       </span>
                     </div>
                   </div>
@@ -181,10 +183,11 @@ export default function SmartMoneyPanel({
 }
 
 function FlowView({ flows, loading }: { flows: CategoryFlow[]; loading: boolean }) {
+  const { t } = useI18n();
   if (loading && flows.length === 0) {
     return (
       <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center">
-        loading flow data...
+        {t("smartMoney.loadingFlowData")}
       </div>
     );
   }
@@ -192,7 +195,7 @@ function FlowView({ flows, loading }: { flows: CategoryFlow[]; loading: boolean 
   if (flows.length === 0) {
     return (
       <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center">
-        no flow data available
+        {t("smartMoney.noFlowData")}
       </div>
     );
   }
@@ -236,7 +239,7 @@ function FlowView({ flows, loading }: { flows: CategoryFlow[]; loading: boolean 
             </span>
 
             {/* Smart ratio */}
-            <span className="text-[9px] text-[var(--text-faint)] tabular-nums w-8 text-right shrink-0" title="Smart wallet ratio">
+            <span className="text-[9px] text-[var(--text-faint)] tabular-nums w-8 text-right shrink-0" title={t("smartMoney.smartWalletRatio")}>
               {(f.smartRatio * 100).toFixed(0)}%
             </span>
           </div>
@@ -253,11 +256,11 @@ const SIGNAL_ICONS: Record<string, string> = {
   momentum_shift: "\uD83D\uDD04",
 };
 
-const SIGNAL_LABELS: Record<string, string> = {
-  whale_accumulation: "Whale Accumulation",
-  smart_divergence: "Smart Divergence",
-  cluster_activity: "Cluster Activity",
-  momentum_shift: "Momentum Shift",
+const SIGNAL_LABEL_KEYS: Record<string, string> = {
+  whale_accumulation: "smartMoney.smartAccumulation",
+  smart_divergence: "smartMoney.smartDivergence",
+  cluster_activity: "smartMoney.clusterActivity",
+  momentum_shift: "smartMoney.momentumShift",
 };
 
 const STRENGTH_COLORS: Record<string, string> = {
@@ -287,6 +290,7 @@ function SignalsView({
   onSelectMarket?: (slug: string) => void;
   onSelectWallet?: (address: string) => void;
 }) {
+  const { t } = useI18n();
   const signals = useMemo(
     () => detectSignals(smartTrades, markets),
     [smartTrades, markets]
@@ -295,7 +299,7 @@ function SignalsView({
   if (signals.length === 0) {
     return (
       <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center">
-        No signals detected in the last 6 hours
+        {t("smartMoney.noSignals6h")}
       </div>
     );
   }
@@ -320,7 +324,7 @@ function SignalsView({
               {sig.strength}
             </span>
             <span className="text-[10px] text-[var(--text-faint)] shrink-0">
-              {SIGNAL_LABELS[sig.type]}
+              {t(SIGNAL_LABEL_KEYS[sig.type] || sig.type)}
             </span>
             <span className="text-[9px] text-[var(--text-ghost)] ml-auto shrink-0 tabular-nums">
               {signalTimeAgo(sig.timestamp)}
@@ -342,7 +346,7 @@ function SignalsView({
               {sig.direction === "bullish" ? "\u2191 BULLISH" : "\u2193 BEARISH"}
             </span>
             <span className="text-[9px] text-[var(--text-faint)]">
-              {sig.wallets.length} wallet{sig.wallets.length !== 1 ? "s" : ""}
+              {sig.wallets.length !== 1 ? t("smartMoney.walletsCount", { count: sig.wallets.length }) : t("smartMoney.walletCount", { count: sig.wallets.length })}
             </span>
             {sig.details.totalVolume && (
               <span className="text-[9px] text-[var(--text-dim)] tabular-nums">

@@ -1,13 +1,24 @@
 "use client";
 
-const LINKS = [
-  { label: "About", href: "/about", external: true },
-  { label: "Docs", href: "/docs", external: true },
-  { label: "GitHub", href: "https://github.com/AmazingAng/polyworld", external: true },
-  { label: "X", href: "https://x.com/0xAA_Science", external: true },
+import { useI18n } from "@/i18n";
+
+const LINK_KEYS = [
+  { key: "about", href: "/about", external: true },
+  { key: "docs", href: "/docs", external: true },
+  { key: "github", href: "https://github.com/AmazingAng/polyworld", external: true },
+  { key: "x", href: "https://x.com/0xAA_Science", external: true },
 ];
 
 export default function Footer() {
+  const { t } = useI18n();
+
+  const linkLabels: Record<string, string> = {
+    about: t("footer.about"),
+    docs: t("footer.docs"),
+    github: t("footer.github"),
+    x: "X",
+  };
+
   return (
     <footer className="flex items-center justify-between px-4 py-2.5 border-t border-[var(--border)] bg-[var(--surface)] font-mono text-[12px] text-[var(--text-dim)] shrink-0">
       <div className="flex items-center gap-1.5">
@@ -18,14 +29,14 @@ export default function Footer() {
         <span style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 800, letterSpacing: '-0.02em' }} className="text-[13px] text-[var(--text-secondary)]">PolyWorld</span>
       </div>
       <div className="flex items-center gap-5">
-        {LINKS.map(({ label, href, external }) => (
+        {LINK_KEYS.map(({ key, href, external }) => (
           <a
-            key={label}
+            key={key}
             href={href}
             {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
             className="hover:text-[var(--accent)] transition-colors"
           >
-            {label}
+            {linkLabels[key]}
           </a>
         ))}
       </div>

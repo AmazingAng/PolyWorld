@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useI18n } from "@/i18n";
 import { useAccount, useConnect, useSignTypedData, useReadContract, useWalletClient, useWriteContract } from "wagmi";
 import { polygon } from "wagmi/chains";
 import { useWalletStore } from "@/stores/walletStore";
@@ -69,18 +70,18 @@ function notifyHeaderBalanceRefresh() {
   }
 }
 
-function humanizeError(msg: string): string {
+function humanizeError(msg: string, t: (key: string, vars?: Record<string, string | number>) => string): string {
   const m = msg.toLowerCase();
-  if (m.includes("user rejected") || m.includes("user denied") || m.includes("rejected by user")) return "You cancelled the transaction";
-  if (m.includes("insufficient funds") || m.includes("insufficient balance")) return "Not enough USDC in your wallet";
-  if (m.includes("not enough balance") || m.includes("allowance")) return "Token approval missing — click \"Approve Tokens\" in the header";
-  if (m.includes("execution reverted")) return "Order rejected by exchange — price may have moved";
-  if (m.includes("nonce") || m.includes("already known")) return "Duplicate order — please try again";
-  if (m.includes("geo") || m.includes("restricted") || m.includes("unavailable in your region")) return "Trading restricted in your region — refer to https://docs.polymarket.com";
-  if (m.includes("network") || m.includes("fetch") || m.includes("failed to fetch")) return "Network error — check your connection";
-  if (m.includes("401") || m.includes("unauthorized") || m.includes("session")) return "Session expired — please authorize again";
-  if (m.includes("min order") || m.includes("minimum")) return "Order too small — increase amount";
-  if (m.includes("timeout")) return "Request timed out — please retry";
+  if (m.includes("user rejected") || m.includes("user denied") || m.includes("rejected by user")) return t("trade.userCancelled");
+  if (m.includes("insufficient funds") || m.includes("insufficient balance")) return t("trade.insufficientUsdc");
+  if (m.includes("not enough balance") || m.includes("allowance")) return t("trade.tokenApprovalMissing");
+  if (m.includes("execution reverted")) return t("trade.orderRejected");
+  if (m.includes("nonce") || m.includes("already known")) return t("trade.duplicateOrder");
+  if (m.includes("geo") || m.includes("restricted") || m.includes("unavailable in your region")) return t("trade.regionRestricted");
+  if (m.includes("network") || m.includes("fetch") || m.includes("failed to fetch")) return t("trade.networkError");
+  if (m.includes("401") || m.includes("unauthorized") || m.includes("session")) return t("trade.sessionExpired");
+  if (m.includes("min order") || m.includes("minimum")) return t("trade.orderTooSmall");
+  if (m.includes("timeout")) return t("trade.requestTimeout");
   // Keep message but strip long hex strings
   return msg.replace(/0x[0-9a-f]{20,}/gi, "…").slice(0, 80);
 }
@@ -124,6 +125,7 @@ export default function OrderForm({
   autoFocusAmount = false,
   onSuccess,
 }: OrderFormProps) {
+  const { t } = useI18n();
   const amountInputRef = useRef<HTMLInputElement>(null);
   const BUY_PRESETS = [5, 50, 100, 500] as const;
   const SELL_PRESETS = [10, 25, 50, 100] as const;
@@ -341,9 +343,9 @@ export default function OrderForm({
       setStatus("idle");
     } catch (e) {
       setStatus("error");
-      setErrorMsg(humanizeError(e instanceof Error ? e.message : "approval failed"));
+      setErrorMsg(humanizeError(e instanceof Error ? e.message : "approval failed", t));
     }
-  }, [address, negRisk, writeContractAsync]);
+  }, [address, negRisk, writeContractAsync, t]);
 
   const handleConnect = useCallback(() => {
     const injector = connectors.find((c) => c.id === "injected") ?? connectors[0];
@@ -366,9 +368,9 @@ export default function OrderForm({
       setStatus("idle");
     } catch (e) {
       setStatus("error");
-      setErrorMsg(humanizeError(e instanceof Error ? e.message : "authorization failed"));
+      setErrorMsg(humanizeError(e instanceof Error ? e.message : "authorization failed", t));
     }
-  }, [address, signTypedDataAsync, setTradeSession, setWallet, chainId]);
+  }, [address, signTypedDataAsync, setTradeSession, setWallet, chainId, t]);
 
   // Accept optional overrides so compact BUY/SELL buttons can bypass async setSide
   // marketOrder=true → FOK with extreme price (0.999 buy / 0.001 sell)
@@ -488,8 +490,8 @@ export default function OrderForm({
       if (finalStatus === "unmatched") {
         // FOK market order was accepted but not filled (no liquidity at this price).
         setStatus("error");
-        setErrorMsg("No liquidity — order not filled");
-        addTradeToast("error", "order not filled", `${effectiveSide} ${outcomeName}`, "no liquidity at market price", traceId);
+        setErrorMsg(t("trade.noLiquidity"));
+        addTradeToast("error", t("trade.orderNotFilled"), `${effectiveSide} ${outcomeName}`, t("trade.noLiquidityShort"), traceId);
         return;
       }
       setOrderId(oid);
@@ -510,7 +512,7 @@ export default function OrderForm({
       }
       addTradeToast(
         "success",
-        finalStatus === "matched" ? "order matched" : "order placed",
+        finalStatus === "matched" ? t("trade.orderMatched") : t("trade.orderPlaced"),
         `${effectiveSide} ${outcomeName}`,
         oid && oid !== "submitted" ? oid.slice(0, 18) + "…" : undefined,
         traceId,
@@ -523,7 +525,7 @@ export default function OrderForm({
           ? String((e as { message: unknown }).message)
           : typeof e === "string"
             ? e
-            : "order failed";
+            : t("trade.orderFailed");
       const isUserRejection = /user rejected|user denied|rejected by user|user cancelled/i.test(raw)
         || (e !== null && typeof e === "object" && "code" in e && (e as { code: unknown }).code === 4001);
       if (isUserRejection) {
@@ -545,7 +547,7 @@ export default function OrderForm({
       if (isBalanceAllowanceError) {
         setCtfApprovalFallback(true);
         setStatus("error");
-        setErrorMsg("Token approval required — click \"Approve & Sell\" below");
+        setErrorMsg(t("trade.tokenApprovalRequired"));
         return;
       }
       const isNetworkError = /network|fetch|failed to fetch/i.test(raw);
@@ -553,19 +555,19 @@ export default function OrderForm({
         // Probe Polymarket geoblock API to distinguish geo-block from real network failure
         const geo = await checkGeoBlock();
         if (geo.blocked) {
-          const geoMsg = `Trading restricted in your region${geo.country ? ` (${geo.country})` : ""} — see https://docs.polymarket.com`;
+          const geoMsg = t("trade.geoRestricted", { country: geo.country ? ` (${geo.country})` : "" });
           setStatus("error");
           setErrorMsg(geoMsg);
           addTradeToast("error", "geo-restricted", `${effectiveSide} ${outcomeName}`, geoMsg.slice(0, 60), traceId);
           return;
         }
       }
-      const msg = humanizeError(raw);
+      const msg = humanizeError(raw, t);
       setStatus("error");
       setErrorMsg(msg);
-      addTradeToast("error", "order failed", `${effectiveSide} ${outcomeName}`, msg.slice(0, 60), traceId);
+      addTradeToast("error", t("trade.orderFailed"), `${effectiveSide} ${outcomeName}`, msg.slice(0, 60), traceId);
     }
-  }, [tradeSession, address, proxyAddress, priceNum, side, amountNum, tokenId, negRisk, walletClient, refreshTradeState, outcomeName, addTradeToast, sharesHeld, onSuccess, priceDecimals]);
+  }, [tradeSession, address, proxyAddress, priceNum, side, amountNum, tokenId, negRisk, walletClient, refreshTradeState, outcomeName, addTradeToast, sharesHeld, onSuccess, priceDecimals, t]);
 
   // For SELL: approve CTF operator (proxy via Safe relayer, or EOA via writeContract) then place order
   const handleApproveCTFAndSell = useCallback(async () => {
@@ -614,9 +616,9 @@ export default function OrderForm({
       if (isRejection) { setStatus("idle"); setErrorMsg(null); return; }
       const raw = e instanceof Error ? e.message : "approval failed";
       setStatus("error");
-      setErrorMsg(humanizeError(raw));
+      setErrorMsg(humanizeError(raw, t));
     }
-  }, [tradeSession, address, proxyAddress, negRisk, isMarketOrder, writeContractAsync, signMessageAsync, handlePlaceOrder]);
+  }, [tradeSession, address, proxyAddress, negRisk, isMarketOrder, writeContractAsync, signMessageAsync, handlePlaceOrder, t]);
 
   const busy = ["authorizing", "approving", "signing", "submitting"].includes(status);
 
@@ -624,23 +626,23 @@ export default function OrderForm({
   if (compact) {
     if (!isConnected) return (
       <button onClick={handleConnect} className="text-[9px] px-1.5 py-px border border-[#22c55e]/30 text-[#22c55e] hover:border-[#22c55e]/60 transition-colors">
-        connect wallet
+        {t("trade.connectWallet")}
       </button>
     );
     if (!isPolygon) return (
-      <span className="text-[9px] text-[#f59e0b]">switch to Polygon</span>
+      <span className="text-[9px] text-[#f59e0b]">{t("trade.switchToPolygon")}</span>
     );
     if (!tradeSession) return (
       <button onClick={handleAuthorize} disabled={busy} className="text-[9px] px-1.5 py-px border border-[#f59e0b]/40 text-[#f59e0b] hover:border-[#f59e0b]/70 transition-colors disabled:opacity-40">
-        {status === "authorizing" ? "authorizing…" : "authorize to trade"}
+        {status === "authorizing" ? t("trade.authorizing") : t("trade.authorizeToTrade")}
       </button>
     );
     if (needsApproval) return isEOA ? (
       <button onClick={handleEOAApprove} disabled={busy} className="text-[9px] px-1.5 py-px border border-[#f59e0b]/40 text-[#f59e0b] hover:border-[#f59e0b]/70 transition-colors disabled:opacity-40">
-        {status === "approving" ? "approving…" : "approve USDC"}
+        {status === "approving" ? t("trade.approving") : t("trade.approveUsdc")}
       </button>
     ) : (
-      <span className="text-[9px] text-[#f59e0b]">approve tokens in header first</span>
+      <span className="text-[9px] text-[#f59e0b]">{t("trade.approveTokensFirst")}</span>
     );
 
     // Market order mode — use currentPrice directly, no price input
@@ -671,7 +673,7 @@ export default function OrderForm({
                   : "border-[var(--border)] text-[var(--text-faint)] hover:text-[var(--text-muted)]"
               }`}
             >
-              {option}
+              {option === "BUY" ? t("common.buy") : t("common.sell")}
             </button>
           ))}
         </div>
@@ -733,20 +735,20 @@ export default function OrderForm({
           </div>
           <div className="flex-1 min-w-0">
             {side === "BUY" && amountNum > 0 && !isBuyTooSmall && (
-              <span className="text-[10px] tabular-nums text-[#22c55e]/60" title="Potential payout if YES wins">
-                ~{potentialPayout.toFixed(2)} shares
+              <span className="text-[10px] tabular-nums text-[#22c55e]/60" title={t("trade.potentialPayout")}>
+                ~{potentialPayout.toFixed(2)} {t("common.shares")}
               </span>
             )}
             {side === "SELL" && amountNum > 0 && (
-              <span className="text-[10px] tabular-nums text-[#ff4444]/70" title="Estimated USDC returned">
+              <span className="text-[10px] tabular-nums text-[#ff4444]/70" title={t("trade.estimatedReturn")}>
                 ~${estUsdcOut.toFixed(2)}
               </span>
             )}
-            {side === "BUY" && isBuyTooSmall && <span className="text-[10px] text-[#f59e0b]">min $1</span>}
-            {side === "BUY" && exceedsBalance && <span className="text-[10px] text-[#ff4444]">exceeds balance</span>}
+            {side === "BUY" && isBuyTooSmall && <span className="text-[10px] text-[#f59e0b]">{t("trade.minBuy")}</span>}
+            {side === "BUY" && exceedsBalance && <span className="text-[10px] text-[#ff4444]">{t("trade.exceedsBalance")}</span>}
             {side === "SELL" && amountNum > 0 && amountNum < minSellShares && <span className="text-[10px] text-[#f59e0b]">min {minSellShares}sh</span>}
-            {side === "SELL" && exceedsShares && <span className="text-[10px] text-[#ff4444]">exceeds position</span>}
-            {side === "SELL" && !hasSharesToSell && <span className="text-[10px] text-[var(--text-ghost)]">no shares to sell</span>}
+            {side === "SELL" && exceedsShares && <span className="text-[10px] text-[#ff4444]">{t("trade.exceedsPosition")}</span>}
+            {side === "SELL" && !hasSharesToSell && <span className="text-[10px] text-[var(--text-ghost)]">{t("trade.noSharesToSell")}</span>}
           </div>
           <button
             onClick={() => handlePlaceOrder(side, undefined, true)}
@@ -765,7 +767,7 @@ export default function OrderForm({
           <div className={`text-[9px] flex items-center justify-between gap-1 ${
             compactSlippageCents >= 5 ? "text-[#ff4444]" : "text-[#f59e0b]"
           }`}>
-            <span>{compactSlippageCents >= 5 ? `⚠ ${compactSlippageCents.toFixed(0)}¢ slippage — market moving fast` : `⚠ ${compactSlippageCents.toFixed(0)}¢ slippage`}</span>
+            <span>{compactSlippageCents >= 5 ? `⚠ ${compactSlippageCents.toFixed(0)}¢ ${t("trade.slippage")} — market moving fast` : `⚠ ${compactSlippageCents.toFixed(0)}¢ ${t("trade.slippage")}`}</span>
             <button
               onClick={() => { quotedAtRef.current = null; setQuotedMarketPrice(null); setQuotedLimitPrice(null); setQuoteRefreshKey(k => k + 1); }}
               className={`border px-1 py-px transition-colors ${
@@ -774,12 +776,12 @@ export default function OrderForm({
                   : "border-[#f59e0b]/40 hover:bg-[rgba(245,158,11,0.15)]"
               }`}
             >
-              Refresh
+              {t("common.refresh")}
             </button>
           </div>
         )}
         {/* Status feedback */}
-        {status === "done" && <div className="text-[10px] text-[#22c55e]">✓ order matched</div>}
+        {status === "done" && <div className="text-[10px] text-[#22c55e]">✓ {t("trade.orderMatched")}</div>}
         {status === "error" && errorMsg && (
           <div className="text-[10px] text-[#ff4444]" title={errorMsg}>{errorMsg}</div>
         )}
@@ -829,7 +831,7 @@ export default function OrderForm({
           onClick={handleConnect}
           className="w-full py-2.5 bg-[#22c55e] text-black font-bold text-[12px] hover:bg-[#16a34a] active:bg-[#15803d] transition-colors"
         >
-          Connect Wallet
+          {t("trade.connectWalletFull")}
         </button>
       </div>
     );
@@ -838,7 +840,7 @@ export default function OrderForm({
   if (!isPolygon) {
     return (
       <div className="font-mono py-4 text-center text-[11px] text-[#f59e0b]">
-        Switch to Polygon network to trade
+        {t("trade.switchToPolygonFull")}
       </div>
     );
   }
@@ -860,13 +862,13 @@ export default function OrderForm({
                 : "border-b-transparent text-[var(--text-faint)] hover:text-[var(--text-muted)]"
             }`}
           >
-            {s === "BUY" ? "Buy" : "Sell"}
+            {s === "BUY" ? t("common.buy") : t("common.sell")}
           </button>
         ))}
         <div className="ml-auto pr-0.5">
           {availableUsdc !== null && (
             <span className="text-[10px] text-[var(--text-muted)] tabular-nums">
-              Balance{" "}
+              {t("trade.balance")}{" "}
               <button
                 onClick={() => side === "BUY" && setAmount(availableUsdc.toFixed(2))}
                 className={`text-[var(--text)] tabular-nums ${side === "BUY" ? "hover:text-[#22c55e] cursor-pointer" : "cursor-default"} transition-colors`}
@@ -881,7 +883,7 @@ export default function OrderForm({
 
       {/* ── Row 2: Price row ── */}
       <div>
-        <div className="text-[9px] text-[var(--text-faint)] uppercase tracking-[0.08em] mb-1">Price</div>
+        <div className="text-[9px] text-[var(--text-faint)] uppercase tracking-[0.08em] mb-1">{t("trade.price")}</div>
         {!isMarketOrder ? (
           <div className="flex items-center gap-1">
             {(tickSize <= 0.001 ? [-10, -1, -0.1] : [-10, -1]).map((d) => (
@@ -917,7 +919,7 @@ export default function OrderForm({
           </div>
         ) : (
           <div className="flex items-center justify-between px-2 py-1.5 border border-[var(--border)] text-[11px]">
-            <span className="text-[var(--text-faint)]">Market price</span>
+            <span className="text-[var(--text-faint)]">{t("trade.marketPrice")}</span>
             <span className="text-[var(--text)] tabular-nums">{(currentPrice * 100).toFixed(centsDecimals)}¢</span>
           </div>
         )}
@@ -927,7 +929,7 @@ export default function OrderForm({
       <div>
         <div className="flex items-center justify-between mb-1">
           <span className="text-[9px] text-[var(--text-faint)] uppercase tracking-[0.08em]">
-            {side === "BUY" ? "Amount (USDC)" : "Shares"}
+            {side === "BUY" ? t("trade.amountUsdc") : t("common.shares")}
           </span>
           <div className="flex items-center gap-1.5">
             {/* Limit Only toggle */}
@@ -938,12 +940,12 @@ export default function OrderForm({
                   ? "border-[#f59e0b]/60 text-[#f59e0b] bg-[#f59e0b]/8"
                   : "border-[var(--border)] text-[var(--text-ghost)] hover:text-[var(--text-faint)] hover:border-[var(--border-subtle)]"
               }`}
-              title={limitOnly ? "Limit Only: Only Limit Order Allowed" : "Limit Only Off — Market Order Allowed"}
+              title={limitOnly ? t("trade.limitOnly") : t("trade.limitOnlyOff")}
             >
               <svg width="9" height="9" viewBox="0 0 24 24" fill={limitOnly ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
               </svg>
-              Limit
+              {t("trade.limit")}
             </button>
             {/* Max button */}
             {side === "BUY" && availableUsdc !== null && availableUsdc > 0 && (
@@ -951,7 +953,7 @@ export default function OrderForm({
                 onClick={() => setAmount(availableUsdc.toFixed(2))}
                 className="text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors"
               >
-                Max
+                {t("trade.max")}
               </button>
             )}
             {side === "SELL" && displayedSharesHeld !== null && displayedSharesHeld > 0 && (
@@ -959,7 +961,7 @@ export default function OrderForm({
                 onClick={() => setAmount(displayedSharesHeld.toFixed(2))}
                 className="text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[#a78bfa] hover:text-[#c4b5fd] transition-colors"
               >
-                Max
+                {t("trade.max")}
               </button>
             )}
           </div>
@@ -1040,7 +1042,7 @@ export default function OrderForm({
               ? "text-[#ff4444] bg-[rgba(255,68,68,0.08)] border-[#ff4444]/30"
               : "text-[#f59e0b] bg-[rgba(245,158,11,0.08)] border-[#f59e0b]/30"
           }`}>
-            <span>{slippageCents >= 5 ? `⚠ Price moved ${slippageCents.toFixed(0)}¢ from mid — market is moving fast` : `⚠ ${slippageCents.toFixed(0)}¢ from mid`}</span>
+            <span>{slippageCents >= 5 ? t("trade.priceMoved", { cents: slippageCents.toFixed(0) }) : t("trade.priceMovedShort", { cents: slippageCents.toFixed(0) })}</span>
             <button
               onClick={refreshQuote}
               className={`text-[9px] border px-1.5 py-0.5 transition-colors shrink-0 ${
@@ -1049,7 +1051,7 @@ export default function OrderForm({
                   : "border-[#f59e0b]/40 hover:bg-[rgba(245,158,11,0.15)]"
               }`}
             >
-              Refresh
+              {t("common.refresh")}
             </button>
           </div>
         );
@@ -1060,16 +1062,16 @@ export default function OrderForm({
       <div className="flex items-center gap-2">
         {isMarketOrder && quotedMarketPrice && (
           <span className="text-[9px] text-[var(--text-faint)] tabular-nums">
-            ~{(quotedMarketPrice * 100).toFixed(1)}¢ est. fill
+            {t("trade.estFill", { price: (quotedMarketPrice * 100).toFixed(1) })}
           </span>
         )}
         {side === "BUY" && displayedSharesHeld !== null && displayedSharesHeld > 0 && (
           <button
             onClick={() => { setSide("SELL"); setAmount(displayedSharesHeld!.toFixed(2)); }}
             className="text-[9px] text-[#a78bfa] hover:text-[#c4b5fd] transition-colors tabular-nums ml-auto"
-            title="Click to sell all"
+            title={t("trade.clickToSellAll")}
           >
-            {displayedSharesHeld.toFixed(2)} shares held
+            {displayedSharesHeld.toFixed(2)} {t("common.shares")}
           </button>
         )}
       </div>
@@ -1078,20 +1080,20 @@ export default function OrderForm({
       <div className="space-y-1.5 py-2 border-t border-b border-[var(--border-subtle)] tabular-nums">
         {sizeTooSmall ? (
           <div className="text-[10px] text-[#f59e0b]">
-            {side === "BUY" ? `Min $${MIN_BUY_USDC} USDC` : `Min ${minSellShares} shares`}
+            {side === "BUY" ? t("trade.minUsdc", { amount: MIN_BUY_USDC }) : t("trade.minShares", { amount: minSellShares })}
           </div>
         ) : side === "BUY" ? (
           <>
             <div className="flex items-center justify-between">
-              <span className="text-[var(--text-faint)]">Shares</span>
+              <span className="text-[var(--text-faint)]">{t("common.shares")}</span>
               <span className="text-[var(--text)]">{amountNum > 0 ? `~${estSharesFull.toFixed(2)}` : "—"}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-[var(--text-faint)]">Total</span>
+              <span className="text-[var(--text-faint)]">{t("common.total")}</span>
               <span className="text-[var(--text)]">${amountNum > 0 ? amountNum.toFixed(2) : "0.00"}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-[var(--text-faint)]">Return</span>
+              <span className="text-[var(--text-faint)]">{t("trade.return")}</span>
               <span className={amountNum > 0 && profitIfWin > 0 ? "text-[#22c55e]" : "text-[var(--text-muted)]"}>
                 {amountNum > 0
                   ? `$${profitIfWin.toFixed(2)} (${returnPctFull.toFixed(0)}%)`
@@ -1101,7 +1103,7 @@ export default function OrderForm({
           </>
         ) : (
           <div className="flex items-center justify-between">
-            <span className="text-[var(--text-faint)]">Receive</span>
+            <span className="text-[var(--text-faint)]">{t("trade.receive")}</span>
             <span className="text-[var(--text)]">{amountNum > 0 ? `~$${receiveUsdcFull.toFixed(2)}` : "—"}</span>
           </div>
         )}
@@ -1117,7 +1119,7 @@ export default function OrderForm({
           disabled={busy}
           className="w-full py-2.5 bg-[#f59e0b] text-black font-bold text-[12px] hover:bg-[#d97706] transition-colors disabled:opacity-40"
         >
-          {status === "authorizing" ? "Authorizing…" : "Authorize Trading"}
+          {status === "authorizing" ? t("trade.authorizingFull") : t("trade.authorizeTradingFull")}
         </button>
       ) : (needsCTFApproval || ctfApprovalFallback) ? (
         <button
@@ -1125,7 +1127,7 @@ export default function OrderForm({
           disabled={busy || amountNum <= 0 || sizeTooSmall}
           className="w-full py-2.5 bg-[#f59e0b] text-black font-bold text-[12px] hover:bg-[#d97706] active:bg-[#b45309] transition-colors disabled:opacity-40"
         >
-          {status === "approving" ? "Approving…" : status === "signing" ? "Sign in wallet…" : "Approve & Sell"}
+          {status === "approving" ? t("trade.approving") : status === "signing" ? t("trade.signInWallet") : t("trade.approveSell")}
         </button>
       ) : needsApproval ? (
         isEOA ? (
@@ -1134,11 +1136,11 @@ export default function OrderForm({
             disabled={busy}
             className="w-full py-2.5 bg-[#f59e0b] text-black font-bold text-[12px] hover:bg-[#d97706] transition-colors disabled:opacity-40"
           >
-            {status === "approving" ? "Approving…" : "Approve USDC"}
+            {status === "approving" ? t("trade.approving") : t("trade.approveUsdcFull")}
           </button>
         ) : (
           <div className="w-full py-2 text-center text-[10px] text-[#f59e0b] border border-[#f59e0b]/30">
-            Click &quot;Approve Tokens&quot; in header first
+            {t("trade.approveTokensFirstFull")}
           </div>
         )
       ) : (
@@ -1151,23 +1153,23 @@ export default function OrderForm({
               : "bg-[#ff4444] text-white hover:bg-[#dc2626] active:bg-[#b91c1c]"
           }`}
         >
-          {status === "signing"    ? "Sign in wallet…" :
-           status === "submitting" ? "Submitting…"     :
-           `${side === "BUY" ? "Buy" : "Sell"} ${outcomeName}`}
+          {status === "signing"    ? t("trade.signInWallet") :
+           status === "submitting" ? t("trade.submittingOrder")     :
+           `${side === "BUY" ? t("common.buy") : t("common.sell")} ${outcomeName}`}
         </button>
       )}
 
       {/* Status line — fixed height so button doesn't shift */}
       <div className="h-4 text-center">
         {exceedsBalance && (
-          <span className="text-[10px] text-[#ff4444]">Insufficient USDC balance (available ${availableUsdc?.toFixed(2)})</span>
+          <span className="text-[10px] text-[#ff4444]">{t("trade.insufficientBalanceStatus", { available: availableUsdc?.toFixed(2) ?? "0" })}</span>
         )}
         {exceedsShares && (
-          <span className="text-[10px] text-[#ff4444]">Exceeds position ({displayedSharesHeld?.toFixed(2)} shares held)</span>
+          <span className="text-[10px] text-[#ff4444]">{t("trade.exceedsPositionStatus", { shares: displayedSharesHeld?.toFixed(2) ?? "0" })}</span>
         )}
         {status === "done" && (
           <span className="text-[11px] text-[#22c55e]">
-            ✓ Order placed{orderId && orderId !== "submitted" ? ` · ${orderId.slice(0, 16)}…` : ""}
+            ✓ {t("trade.orderPlaced")}{orderId && orderId !== "submitted" ? ` · ${orderId.slice(0, 16)}…` : ""}
           </span>
         )}
         {status === "error" && errorMsg && (

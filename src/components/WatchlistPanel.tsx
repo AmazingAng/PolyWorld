@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { ProcessedMarket } from "@/types";
 import MarketCard from "./MarketCard";
+import { useI18n } from "@/i18n";
 
 interface WatchlistPanelProps {
   watchedIds: Set<string>;
@@ -25,6 +26,7 @@ export default function WatchlistPanel({
   onToggleWatch,
   onTrade,
 }: WatchlistPanelProps) {
+  const { t } = useI18n();
   const watchedMarkets = useMemo(() => {
     if (watchedIds.size === 0) return [];
     const all = [...mapped, ...unmapped];
@@ -39,9 +41,9 @@ export default function WatchlistPanel({
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto mb-2 text-[var(--text-faint)]">
           <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
         </svg>
-        no watchlist items yet
+        {t("watchlistPanel.noItems")}
         <div className="text-[11px] text-[var(--text-faint)] mt-1">
-          click the star on any market to add it here
+          {t("watchlistPanel.clickStar")}
         </div>
       </div>
     );
@@ -65,7 +67,7 @@ export default function WatchlistPanel({
       {/* Markets not found (deleted/expired) */}
       {watchedIds.size > watchedMarkets.length && (
         <div className="text-[11px] text-[var(--text-faint)] mt-2 px-1">
-          {watchedIds.size - watchedMarkets.length} watched market(s) no longer available
+          {t("watchlistPanel.unavailable", { count: watchedIds.size - watchedMarkets.length })}
         </div>
       )}
     </div>

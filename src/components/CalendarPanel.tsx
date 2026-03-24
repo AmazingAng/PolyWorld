@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProcessedMarket, Category } from "@/types";
 import { CATEGORY_COLORS } from "@/lib/categories";
+import { useI18n } from "@/i18n";
 
 interface CalendarPanelProps {
   markets: ProcessedMarket[];
@@ -85,7 +86,28 @@ function buildCalendar(markets: ProcessedMarket[], categoryFilter: Category | "A
   return grouped;
 }
 
+const CATEGORY_LABEL_KEYS: Record<string, string> = {
+  All: "common.all",
+  Politics: "calendar.politics",
+  Crypto: "calendar.crypto",
+  Sports: "calendar.sports",
+  Finance: "calendar.finance",
+  Tech: "calendar.tech",
+  Culture: "calendar.culture",
+  Other: "calendar.other",
+};
+
+const GROUP_LABEL_KEYS: Record<string, string> = {
+  Today: "calendar.todayGroup",
+  Tomorrow: "calendar.tomorrowGroup",
+  "This Week": "calendar.thisWeek",
+  "Next Week": "calendar.nextWeek",
+  "This Month": "calendar.thisMonth",
+  Later: "calendar.later",
+};
+
 export default function CalendarPanel({ markets, onSelectMarket }: CalendarPanelProps) {
+  const { t } = useI18n();
   const [categoryFilter, setCategoryFilter] = useState<Category | "All">("All");
   const [collapsed, setCollapsed] = useState<Set<TimeGroup>>(new Set());
   const [now, setNow] = useState<Date>(() => new Date());
@@ -129,14 +151,14 @@ export default function CalendarPanel({ markets, onSelectMarket }: CalendarPanel
               border: `1px solid ${categoryFilter === cat ? "rgba(34,197,94,0.3)" : "transparent"}`,
             }}
           >
-            {cat}
+            {t(CATEGORY_LABEL_KEYS[cat] || cat)}
           </button>
         ))}
       </div>
 
       {totalEvents === 0 ? (
         <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center">
-          No upcoming events
+          {t("calendar.noUpcoming")}
         </div>
       ) : (
         <div>
@@ -153,7 +175,7 @@ export default function CalendarPanel({ markets, onSelectMarket }: CalendarPanel
                   className="w-full flex items-center gap-1 px-1.5 py-1 text-[10px] text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors"
                 >
                   <span className="text-[9px]">{isCollapsed ? "\u25B6" : "\u25BC"}</span>
-                  <span className="font-bold uppercase tracking-wide">{group}</span>
+                  <span className="font-bold uppercase tracking-wide">{t(GROUP_LABEL_KEYS[group] || group)}</span>
                   <span className="text-[var(--text-ghost)]">({events.length})</span>
                 </button>
 
@@ -207,7 +229,7 @@ export default function CalendarPanel({ markets, onSelectMarket }: CalendarPanel
                                 color: ev.market.impactLevel === "critical" ? "#ff4444" : "#f59e0b",
                               }}
                             >
-                              {ev.market.impactLevel}
+                              {t(ev.market.impactLevel === "critical" ? "calendar.critical" : "calendar.high")}
                             </span>
                           )}
                         </div>

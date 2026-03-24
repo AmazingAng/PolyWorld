@@ -11,6 +11,7 @@ import { formatVolume } from "@/lib/format";
 import { useColResize } from "@/hooks/useColResize";
 import { useRowResize } from "@/hooks/useRowResize";
 import type { PanelDragHandleProps } from "@/components/panelDragTypes";
+import { useI18n } from "@/i18n";
 
 interface MarketsPanelProps {
   mapped: ProcessedMarket[];
@@ -74,6 +75,7 @@ function MarketsPanelInner({
   dragStyle,
   dragClassName,
 }: MarketsPanelProps) {
+  const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [renderNow] = useState(() => Date.now());
   const [localCategoryFilter, setLocalCategoryFilter] = useState<Set<string>>(new Set());
@@ -269,7 +271,7 @@ function MarketsPanelInner({
           <span
             ref={setDragHandleRef}
             className={`drag-handle${dragHandleClassName ? ` ${dragHandleClassName}` : ""}`}
-            title="Drag to reorder"
+            title={t("common.dragToReorder")}
             {...dragHandleRest}
           >
             <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor">
@@ -278,7 +280,7 @@ function MarketsPanelInner({
               <circle cx="1" cy="9" r="1" /><circle cx="5" cy="9" r="1" />
             </svg>
           </span>
-          <span className="panel-title">Markets</span>
+          <span className="panel-title">{t("panels.markets")}</span>
           {/* Search input */}
           <div className="relative w-[110px] shrink-0">
             <svg
@@ -292,7 +294,7 @@ function MarketsPanelInner({
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="search..."
+              placeholder={t("common.search")}
               className="w-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[11px] text-[var(--text-secondary)] font-mono py-0.5 pl-6 pr-5 placeholder:text-[var(--text-ghost)] focus:outline-none focus:border-[var(--scrollbar-thumb)] transition-colors"
             />
             {search && (
@@ -306,23 +308,23 @@ function MarketsPanelInner({
           </div>
           <div className="ml-auto flex items-center gap-1.5">
             <FilterDropdown
-              label={sortOrder === "volume" ? "Volume" : sortOrder === "impact" ? "Impact" : sortOrder === "change" ? "Change" : sortOrder === "new" ? "Newest" : "Sections"}
+              label={sortOrder === "volume" ? t("marketsPanel.volume") : sortOrder === "impact" ? t("marketsPanel.impact") : sortOrder === "change" ? t("marketsPanel.change") : sortOrder === "new" ? t("marketsPanel.newest") : t("marketsPanel.sections")}
               groups={[
               {
-                label: "Category",
+                label: t("marketsPanel.category"),
                 options: CATEGORIES.map((cat) => ({ key: cat, label: cat, color: CATEGORY_COLORS[cat] })),
                 selected: localCategoryFilter,
                 onChange: setLocalCategoryFilter,
               },
               {
-                label: "Sort",
+                label: t("marketsPanel.sort"),
                 exclusive: true,
                 options: [
-                  { key: "impact", label: "Impact" },
-                  { key: "volume", label: "Volume" },
-                  { key: "change", label: "Change" },
-                  { key: "new", label: "Newest" },
-                  { key: "sections", label: "Sections" },
+                  { key: "impact", label: t("marketsPanel.impact") },
+                  { key: "volume", label: t("marketsPanel.volume") },
+                  { key: "change", label: t("marketsPanel.change") },
+                  { key: "new", label: t("marketsPanel.newest") },
+                  { key: "sections", label: t("marketsPanel.sections") },
                 ],
                 selected: localSortSet,
                 onChange: setLocalSortSet,
@@ -333,7 +335,7 @@ function MarketsPanelInner({
         <button
           onClick={() => setExpanded((v) => !v)}
           className="panel-expand-btn"
-          title={expanded ? "Exit fullscreen" : "Fullscreen"}
+          title={expanded ? t("common.exitFullscreen") : t("common.fullscreen")}
         >
           {expanded ? (
             <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -365,7 +367,7 @@ function MarketsPanelInner({
         {sortedAll ? (
           <>
             {sortedAll.length === 0 ? (
-              <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
+              <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">{t("common.noData")}</div>
             ) : (
               sortedAll.map((m) => (
                 <MarketCard key={m.id} market={m} showChange selected onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
@@ -377,9 +379,9 @@ function MarketsPanelInner({
             {/* Search results */}
             {searchFiltered ? (
               <>
-                <SectionLabel title={`Results (${searchFiltered.length})`} />
+                <SectionLabel title={t("marketsPanel.resultsCount", { count: searchFiltered.length })} />
                 {searchFiltered.length === 0 ? (
-                  <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no markets match</div>
+                  <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">{t("marketsPanel.noMarketsMatch")}</div>
                 ) : (
                   searchFiltered.slice(0, 30).map((m) => (
                     <MarketCard key={m.id} market={m} showChange selected onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
@@ -390,16 +392,16 @@ function MarketsPanelInner({
               <>
                 {newMarkets.length > 0 && (
                   <>
-                    <SectionLabel title="New Markets" />
+                    <SectionLabel title={t("marketsPanel.newMarkets")} />
                     {newMarkets.map((m) => (
                       <MarketCard key={m.id} market={m} showChange selected onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
                     ))}
                   </>
                 )}
 
-                <SectionLabel title="24h Movers" />
+                <SectionLabel title={t("marketsPanel.movers24h")} />
                 {movers.length === 0 ? (
-                  <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
+                  <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">{t("common.noData")}</div>
                 ) : (
                   movers.map((m) => (
                     <div key={m.id} className="relative">
@@ -436,9 +438,9 @@ function MarketsPanelInner({
                   ))
                 )}
 
-                <SectionLabel title="Trending by Volume" />
+                <SectionLabel title={t("marketsPanel.trendingByVolume")} />
                 {trending.length === 0 ? (
-                  <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">no data</div>
+                  <div className="text-[12px] text-[var(--text-ghost)] py-2 font-mono">{t("common.noData")}</div>
                 ) : (
                   trending.map((m) => (
                     <MarketCard key={m.id} market={m} showChange selected onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
@@ -447,7 +449,7 @@ function MarketsPanelInner({
 
                 {global.length > 0 && (
                   <>
-                    <SectionLabel title="Global Markets" />
+                    <SectionLabel title={t("marketsPanel.globalMarkets")} />
                     {global.map((m) => (
                       <MarketCard key={m.id} market={m} showChange selected onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
                     ))}
@@ -478,18 +480,18 @@ function MarketsPanelInner({
             <span className="text-[11px] text-[var(--text)] capitalize">{countryPopup.name}</span>
           </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
-            <span className="text-[var(--text-faint)]">markets</span>
+            <span className="text-[var(--text-faint)]">{t("common.markets")}</span>
             <span className="text-[var(--text-secondary)] tabular-nums">{countryStats.count}</span>
-            <span className="text-[var(--text-faint)]">active</span>
+            <span className="text-[var(--text-faint)]">{t("common.active")}</span>
             <span className="text-[var(--text-secondary)] tabular-nums">{countryStats.activeCount}</span>
-            <span className="text-[var(--text-faint)]">volume</span>
+            <span className="text-[var(--text-faint)]">{t("marketsPanel.volume").toLowerCase()}</span>
             <span className="text-[var(--text-secondary)] tabular-nums">{formatVolume(countryStats.volume)}</span>
-            <span className="text-[var(--text-faint)]">24h vol</span>
+            <span className="text-[var(--text-faint)]">{t("marketsPanel.vol24hLabel")}</span>
             <span className="text-[var(--text-secondary)] tabular-nums">{formatVolume(countryStats.volume24h)}</span>
           </div>
           {countryStats.topMarket && (
             <div className="mt-2 pt-2 border-t border-[var(--border-subtle)]">
-              <div className="text-[9px] text-[var(--text-faint)] uppercase tracking-wider mb-0.5">top market</div>
+              <div className="text-[9px] text-[var(--text-faint)] uppercase tracking-wider mb-0.5">{t("marketsPanel.topMarket")}</div>
               <div className="text-[10px] text-[var(--text-dim)] line-clamp-2 leading-snug">{countryStats.topMarket.title}</div>
             </div>
           )}
@@ -503,7 +505,7 @@ function MarketsPanelInner({
           className="panel-col-resize-handle"
           onMouseDown={handleResizeStart}
           onDoubleClick={onColSpanReset}
-          title="Drag to resize · Double-click to reset"
+          title={t("common.dragToResize")}
         >
           <div className="panel-col-resize-bar" />
         </div>
@@ -515,7 +517,7 @@ function MarketsPanelInner({
           className="panel-row-resize-handle"
           onMouseDown={handleRowResizeStart}
           onDoubleClick={onRowSpanReset}
-          title="Drag to resize height · Double-click to reset"
+          title={t("common.dragToResizeHeight")}
         >
           <div className="panel-row-resize-bar" />
         </div>

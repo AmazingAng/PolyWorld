@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { SentimentIndex } from "@/types";
 import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
+import { useI18n } from "@/i18n";
 
 function scoreColor(v: number): string {
   if (v < 20) return "#ef4444";
@@ -87,13 +88,13 @@ function Gauge({ score }: { score: number }) {
       })}
 
       {/* Tick marks */}
-      {ticks.map((t) => {
-        const a = valToAngle(t);
+      {ticks.map((tick) => {
+        const a = valToAngle(tick);
         const p1 = polar(a, r + 4);
         const p2 = polar(a, r + 8);
         return (
           <line
-            key={t}
+            key={tick}
             x1={p1.x} y1={p1.y}
             x2={p2.x} y2={p2.y}
             stroke="var(--text-ghost)"
@@ -159,6 +160,7 @@ function SubScoreBar({ name, value }: { name: string; value: number }) {
 }
 
 export default function SentimentPanel() {
+  const { t } = useI18n();
   const [data, setData] = useState<SentimentIndex | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -194,7 +196,7 @@ export default function SentimentPanel() {
   if (loading && !data) {
     return (
       <div style={{ padding: 12, fontFamily: "monospace", fontSize: 11, color: "var(--text-muted)" }}>
-        loading sentiment…
+        {t("sentiment.loadingSentiment")}
       </div>
     );
   }
@@ -202,7 +204,7 @@ export default function SentimentPanel() {
   if (error && !data) {
     return (
       <div className="text-[11px] text-[var(--red)] font-mono py-2 text-center" aria-live="polite">
-        {error} <button onClick={() => { retryCount.current = 0; setLoading(true); fetchSentiment(); }} className="ml-2 underline">retry</button>
+        {t("common.loadFailed")} <button onClick={() => { retryCount.current = 0; setLoading(true); fetchSentiment(); }} className="ml-2 underline">{t("common.retry")}</button>
       </div>
     );
   }
@@ -230,7 +232,7 @@ export default function SentimentPanel() {
 
       {/* Footer */}
       <div data-testid="sentiment-footer" style={{ fontSize: 9, color: "var(--text-ghost)", textAlign: "center" }}>
-        {data.activeMarkets} active markets
+        {data.activeMarkets} {t("sentiment.activeMarkets")}
       </div>
     </div>
   );

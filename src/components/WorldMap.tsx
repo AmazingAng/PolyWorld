@@ -1672,6 +1672,12 @@ function WorldMapInner({
   useEffect(() => {
     if (!flyToTarget || !mapRef.current) return;
     const map = mapRef.current;
+    let cancelled = false;
+
+    // Cancel any in-progress animation to prevent re-entrant render
+    if (map.isMoving()) {
+      map.stop();
+    }
 
     // Use offset-colocated coords (actual bubble position) when available
     const looked = marketsLookup.current.get(flyToTarget.marketId);
@@ -1699,7 +1705,8 @@ function WorldMapInner({
     }
 
     // After flyTo completes, ensure the bubble is visible and centered
-    map.once("moveend", () => {
+    const onMoveEnd = () => {
+      if (cancelled) return;
       const point = map.project(rawCenter);
       const unclustered = map.queryRenderedFeatures(point, { layers: ["unclustered-point"] });
       const visible = unclustered.some((f) => f.properties?.marketId === flyToTarget.marketId);
@@ -1716,7 +1723,13 @@ function WorldMapInner({
       const postAnimZoom = map.getZoom();
       const minUncluster = ZOOM_TIER_THRESHOLDS[0] + 0.5;
       map.easeTo({ center: bubbleCoords, zoom: Math.max(minUncluster, postAnimZoom), duration: 800 });
-    });
+    };
+    map.once("moveend", onMoveEnd);
+
+    return () => {
+      cancelled = true;
+      map.off("moveend", onMoveEnd);
+    };
   }, [flyToTarget]);
 
   // Feature 2: Track new market appearance animations

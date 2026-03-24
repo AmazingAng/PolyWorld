@@ -6,6 +6,7 @@ import { getCountryFlag, marketMatchesCountry } from "@/lib/countries";
 import { getParentCountry } from "@/lib/geo";
 import { formatVolume } from "@/lib/format";
 import MarketCard from "./MarketCard";
+import { useI18n } from "@/i18n";
 
 interface CountryPanelProps {
   countryName: string;
@@ -24,6 +25,7 @@ export default function CountryPanel({
   isWatched,
   onToggleWatch,
 }: CountryPanelProps) {
+  const { t } = useI18n();
   const parentCountry = getParentCountry(countryName);
   const displayName = parentCountry ? `${countryName}, ${parentCountry}` : countryName;
   const flagSource = parentCountry || countryName;
@@ -90,7 +92,7 @@ export default function CountryPanel({
       const data = await res.json();
       if (data.summary) setAiSummary(data.summary);
     } catch {
-      setAiSummary("Failed to generate summary");
+      setAiSummary(t("country.summaryFailed"));
     }
     setAiLoading(false);
   }, [countryName, displayName, countryMarkets, aiLoading]);
@@ -105,7 +107,7 @@ export default function CountryPanel({
           onClick={fetchCountrySummary}
           disabled={aiLoading || countryMarkets.length === 0}
           className="shrink-0 text-[var(--text-faint)] hover:text-[#f59e0b] transition-colors disabled:opacity-50 ml-auto"
-          title="AI Summary"
+          title={t("country.aiSummary")}
         >
           {aiLoading ? (
             <span className="inline-block w-3 h-3 border border-[#f59e0b] border-t-transparent rounded-full animate-spin" />
@@ -127,15 +129,15 @@ export default function CountryPanel({
       {countryMarkets.length > 0 && (
         <div className="grid grid-cols-3 gap-1.5 mb-2 text-[11px]">
           <div className="border border-[var(--border-subtle)] rounded-sm px-2 py-1.5">
-            <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">total vol</div>
+            <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">{t("country.totalVol")}</div>
             <div className="text-[var(--text-secondary)]">{formatVolume(totalVol)}</div>
           </div>
           <div className="border border-[var(--border-subtle)] rounded-sm px-2 py-1.5">
-            <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">active</div>
+            <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">{t("common.active")}</div>
             <div className="text-[var(--text-secondary)]">{activeCount}</div>
           </div>
           <div className="border border-[var(--border-subtle)] rounded-sm px-2 py-1.5">
-            <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">closed</div>
+            <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">{t("common.closed")}</div>
             <div className="text-[var(--text-secondary)]">{closedCount}</div>
           </div>
         </div>
@@ -143,13 +145,13 @@ export default function CountryPanel({
 
       {/* Market count */}
       <div className="text-[10px] uppercase tracking-[0.15em] text-[var(--text-faint)] mb-1.5">
-        {countryMarkets.length} market{countryMarkets.length !== 1 ? "s" : ""}
+        {t("country.marketsCount", { count: countryMarkets.length })}
       </div>
 
       {/* Markets list */}
       {countryMarkets.length === 0 ? (
         <div className="text-[12px] text-[var(--text-ghost)] py-4">
-          no markets found for this region
+          {t("country.noMarkets")}
         </div>
       ) : (
         <div>

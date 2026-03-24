@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { ProcessedMarket } from "@/types";
 import { detectArbitrage, type ArbitrageOpportunity } from "@/lib/arbitrage";
 import { CATEGORY_COLORS } from "@/lib/categories";
+import { useI18n } from "@/i18n";
 
 interface ArbitragePanelProps {
   markets: ProcessedMarket[];
@@ -11,6 +12,7 @@ interface ArbitragePanelProps {
 }
 
 export default function ArbitragePanel({ markets, onSelectMarket }: ArbitragePanelProps) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const opportunities = useMemo(() => detectArbitrage(markets), [markets]);
@@ -20,7 +22,7 @@ export default function ArbitragePanel({ markets, onSelectMarket }: ArbitragePan
   if (opportunities.length === 0) {
     return (
       <div className="text-[12px] text-[var(--text-ghost)] py-4 text-center font-mono">
-        No arbitrage opportunities detected
+        {t("arbitrage.noOpportunities")}
       </div>
     );
   }
@@ -29,8 +31,7 @@ export default function ArbitragePanel({ markets, onSelectMarket }: ArbitragePan
     <div className="font-mono">
       {/* Summary */}
       <div className="px-1.5 py-1 mb-1 text-[10px] text-[var(--text-dim)] border-b border-[var(--border-subtle)]">
-        {opportunities.length} opportunities found, best edge:{" "}
-        <span className="text-[#22c55e] font-bold">{(bestEdge * 100).toFixed(2)}%</span>
+        {t("arbitrage.opportunitiesFound", { count: opportunities.length, percent: (bestEdge * 100).toFixed(2) })}
       </div>
 
       {/* List */}
@@ -60,6 +61,7 @@ function ArbitrageRow({
   onToggle: () => void;
   onSelect: () => void;
 }) {
+  const { t } = useI18n();
   const catColor = CATEGORY_COLORS[opp.category as keyof typeof CATEGORY_COLORS] || "var(--text-faint)";
   const deviationColor = opp.direction === "over" ? "#ff4444" : "#22c55e";
 
@@ -113,7 +115,7 @@ function ArbitrageRow({
             </div>
           ))}
           <div className="flex items-center gap-2 text-[10px] pt-0.5 border-t border-[var(--border-subtle)]">
-            <span className="text-[var(--text-faint)]">Sum</span>
+            <span className="text-[var(--text-faint)]">{t("arbitrage.sum")}</span>
             <span className="tabular-nums font-bold" style={{ color: deviationColor }}>
               {(opp.sumProb * 100).toFixed(1)}%
             </span>

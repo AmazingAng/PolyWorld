@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useColResize } from "@/hooks/useColResize";
 import { useRowResize } from "@/hooks/useRowResize";
+import { useI18n } from "@/i18n";
 import type { PanelDragHandleProps } from "@/components/panelDragTypes";
 
 interface PanelProps {
@@ -57,6 +58,7 @@ export default function Panel({
   dragStyle,
   dragClassName,
 }: PanelProps) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const { onMouseDown: onColMouseDown } = useColResize(colSpan ?? 1, onColSpanChange, maxColSpan);
@@ -102,7 +104,7 @@ export default function Panel({
           <span
             ref={setDragHandleRef}
             className={`drag-handle${dragHandleClassName ? ` ${dragHandleClassName}` : ""}`}
-            title="Drag to reorder"
+            title={t("common.dragToReorder")}
             {...dragHandleRest}
           >
             <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor">
@@ -122,7 +124,7 @@ export default function Panel({
           <button
             onClick={() => setExpanded((v) => !v)}
             className="panel-expand-btn shrink-0"
-            title={expanded ? "Exit fullscreen" : "Fullscreen"}
+            title={expanded ? t("common.exitFullscreen") : t("common.fullscreen")}
           >
             {expanded ? (
               <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -150,7 +152,7 @@ export default function Panel({
           className="panel-col-resize-handle"
           onMouseDown={onColMouseDown}
           onDoubleClick={onColSpanReset}
-          title="Drag to resize · Double-click to reset"
+          title={t("common.dragToResize")}
         >
           <div className="panel-col-resize-bar" />
         </div>
@@ -162,7 +164,7 @@ export default function Panel({
           className="panel-row-resize-handle"
           onMouseDown={onRowMouseDown}
           onDoubleClick={onRowSpanReset}
-          title="Drag to resize height · Double-click to reset"
+          title={t("common.dragToResizeHeight")}
         >
           <div className="panel-row-resize-bar" />
         </div>
