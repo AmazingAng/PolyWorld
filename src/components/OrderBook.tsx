@@ -143,6 +143,8 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
     setYesData(null);
     setNoData(null);
     setBookSide("YES");
+    activeYesTokenRef.current = null;
+    activeNoTokenRef.current = null;
     needsScrollCenter.current = true;
   }, [selectedMarket?.id]);
 
