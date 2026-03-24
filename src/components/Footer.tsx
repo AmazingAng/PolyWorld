@@ -3,7 +3,7 @@
 const LINKS = [
   { label: "About", href: "/about", external: true },
   { label: "Docs", href: "/docs", external: true },
-  { label: "GitHub", href: "https://github.com/polyworld", external: true },
+  { label: "GitHub", href: "https://github.com/AmazingAng/polyworld", external: true },
   { label: "X", href: "https://x.com/0xAA_Science", external: true },
 ];
 
