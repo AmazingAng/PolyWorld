@@ -92,7 +92,6 @@ const COUNTRIES: Record<string, CountryInfo> = {
   "Sweden": { iso: "SE", flag: "🇸🇪" },
   "Switzerland": { iso: "CH", flag: "🇨🇭" },
   "Syria": { iso: "SY", flag: "🇸🇾" },
-  "Taiwan": { iso: "TW", flag: "🇹🇼" },
   "Thailand": { iso: "TH", flag: "🇹🇭" },
   "Tunisia": { iso: "TN", flag: "🇹🇳" },
   "Turkey": { iso: "TR", flag: "🇹🇷" },
@@ -141,6 +140,8 @@ const LOCATION_ALIASES: Record<string, string> = {
   "European Union": "Belgium",
   "Emirates": "United Arab Emirates",
   "UAE": "United Arab Emirates",
+  "Taiwan": "China",
+  "Taiwanese": "China",
 };
 
 export function getCountryInfo(name: string): CountryInfo | null {
@@ -163,6 +164,55 @@ export function getCountryInfo(name: string): CountryInfo | null {
 export function getCountryFlag(name: string): string {
   const info = getCountryInfo(name);
   return info?.flag || "🌍";
+}
+
+/**
+ * Resolve a location string (city, adjective, alias, or country) to the
+ * canonical COUNTRIES key that matches TopoJSON feature names.
+ * Returns null if no match is found.
+ */
+export function resolveCountryName(location: string): string | null {
+  const result = _resolveExact(location);
+  if (result) return result;
+
+  // Handle "City, Country" format — try the last comma-separated part
+  if (location.includes(",")) {
+    const parts = location.split(",").map((s) => s.trim());
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const r = _resolveExact(parts[i]);
+      if (r) return r;
+    }
+  }
+
+  return null;
+}
+
+function _resolveExact(location: string): string | null {
+  // Direct COUNTRIES key
+  if (COUNTRIES[location]) return location;
+
+  // Alias → canonical country
+  const aliased = LOCATION_ALIASES[location];
+  if (aliased) {
+    const resolved = LOCATION_ALIASES[aliased] || aliased;
+    if (COUNTRIES[resolved]) return resolved;
+    if (COUNTRIES[aliased]) return aliased;
+  }
+
+  // Case-insensitive fallback
+  const lower = location.toLowerCase();
+  for (const key of Object.keys(COUNTRIES)) {
+    if (key.toLowerCase() === lower) return key;
+  }
+  for (const [alias, canonical] of Object.entries(LOCATION_ALIASES)) {
+    if (alias.toLowerCase() === lower) {
+      const resolved = LOCATION_ALIASES[canonical] || canonical;
+      if (COUNTRIES[resolved]) return resolved;
+      if (COUNTRIES[canonical]) return canonical;
+    }
+  }
+
+  return null;
 }
 
 export function marketMatchesCountry(

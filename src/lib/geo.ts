@@ -243,7 +243,8 @@ const GEO: Record<string, [number, number]> = {
 const PARENT_COUNTRY: Record<string, string> = {
   washington: "United States", "new york": "United States",
   london: "United Kingdom", beijing: "China", shanghai: "China", "hong kong": "China",
-  moscow: "Russia", kyiv: "Ukraine", taipei: "Taiwan",
+  moscow: "Russia", kyiv: "Ukraine", taipei: "China",
+  taiwan: "China", taiwanese: "China",
   jerusalem: "Israel", tehran: "Iran", tokyo: "Japan",
   berlin: "Germany", paris: "France", brussels: "Belgium",
   mumbai: "India", delhi: "India", seoul: "South Korea",

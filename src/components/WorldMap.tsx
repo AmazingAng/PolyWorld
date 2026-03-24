@@ -85,7 +85,7 @@ const CONTINENT_MAP: Record<string, string> = {
   Moldova: "Europe", Belarus: "Europe", Georgia: "Europe",
   Armenia: "Europe", Azerbaijan: "Europe",
   China: "East Asia", Japan: "East Asia", "South Korea": "East Asia",
-  Taiwan: "East Asia", "Hong Kong": "East Asia", Mongolia: "East Asia",
+  "Hong Kong": "East Asia", Mongolia: "East Asia",
   India: "South Asia", Pakistan: "South Asia", Bangladesh: "South Asia",
   "Sri Lanka": "South Asia", Nepal: "South Asia", Afghanistan: "South Asia",
   Thailand: "SE Asia", Vietnam: "SE Asia", Indonesia: "SE Asia",
@@ -316,6 +316,25 @@ function WorldMapInner({
     setHoverMarket(null);
     setHoverPos(null);
   }, []);
+
+  const applySelectedCountryHighlight = useCallback((map: maplibregl.Map) => {
+    const TOPO_NAME: Record<string, string> = {
+      "United States": "United States of America",
+      "Bosnia": "Bosnia and Herz.",
+      "Bosnia and Herzegovina": "Bosnia and Herz.",
+      "Czech Republic": "Czechia",
+    };
+    const topoName = selectedCountry
+      ? (TOPO_NAME[selectedCountry] || selectedCountry)
+      : "";
+    const filter = ["==", ["get", "name"], topoName] as maplibregl.FilterSpecification;
+    if (map.getLayer("country-selected")) {
+      map.setFilter("country-selected", filter);
+    }
+    if (map.getLayer("country-selected-border")) {
+      map.setFilter("country-selected-border", filter);
+    }
+  }, [selectedCountry]);
 
   // Initialize map with CARTO vector tiles
   useEffect(() => {
@@ -1397,6 +1416,8 @@ function WorldMapInner({
           );
         }
 
+        applySelectedCountryHighlight(map);
+
         // Mouse interaction
         let hoveredName: string | null = null;
 
@@ -1610,17 +1631,8 @@ function WorldMapInner({
   // Update selected country highlight
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
-    const map = mapRef.current;
-    const filter = selectedCountry
-      ? ["==", ["get", "name"], selectedCountry]
-      : ["==", ["get", "name"], ""];
-    if (map.getLayer("country-selected")) {
-      map.setFilter("country-selected", filter as maplibregl.FilterSpecification);
-    }
-    if (map.getLayer("country-selected-border")) {
-      map.setFilter("country-selected-border", filter as maplibregl.FilterSpecification);
-    }
-  }, [selectedCountry, mapReady]);
+    applySelectedCountryHighlight(mapRef.current);
+  }, [selectedCountry, mapReady, currentTier, applySelectedCountryHighlight]);
 
   // Region flyTo
   useEffect(() => {

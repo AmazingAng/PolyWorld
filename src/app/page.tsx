@@ -15,6 +15,8 @@ import dynamic from "next/dynamic";
 import { ProcessedMarket } from "@/types";
 import type { OverlayLayer } from "@/components/MapToolbar";
 import { processEvents, getSampleData } from "@/lib/polymarket";
+import { resolveCountryName } from "@/lib/countries";
+import { getParentCountry } from "@/lib/geo";
 import { findSimilarMarkets } from "@/lib/correlation";
 import Header from "@/components/Header";
 import Panel from "@/components/Panel";
@@ -581,7 +583,14 @@ export default function Home() {
   );
 
   const handleMarketClick = useCallback((market: ProcessedMarket) => {
-    useMarketStore.getState().selectMarket(market);
+    const mkt = useMarketStore.getState();
+    mkt.selectMarket(market);
+    if (market.location) {
+      const country = resolveCountryName(market.location)
+        || getParentCountry(market.location)
+        || market.location;
+      mkt.selectCountry(country);
+    }
   }, []);
 
   const handleCountryClick = useCallback((countryName: string) => {
@@ -708,7 +717,10 @@ export default function Home() {
       const mkt = useMarketStore.getState();
       mkt.selectMarket(market);
       if (market.location) {
-        mkt.selectCountry(market.location);
+        const country = resolveCountryName(market.location)
+          || getParentCountry(market.location)
+          || market.location;
+        mkt.selectCountry(country);
       }
       if (market.coords) handleFlyTo(market.coords, market.id);
     },
