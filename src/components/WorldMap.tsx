@@ -324,10 +324,17 @@ function WorldMapInner({
       "Bosnia and Herzegovina": "Bosnia and Herz.",
       "Czech Republic": "Czechia",
     };
-    const topoName = selectedCountry
-      ? (TOPO_NAME[selectedCountry] || selectedCountry)
-      : "";
-    const filter = ["==", ["get", "name"], topoName] as maplibregl.FilterSpecification;
+    // Countries that should highlight multiple regions together
+    const TOPO_GROUP: Record<string, string[]> = {
+      "China": ["China", "Taiwan"],
+      "Taiwan": ["China", "Taiwan"],
+    };
+    const topoNames = selectedCountry
+      ? (TOPO_GROUP[selectedCountry] || [TOPO_NAME[selectedCountry] || selectedCountry])
+      : [];
+    const filter = topoNames.length > 0
+      ? ["in", ["get", "name"], ["literal", topoNames]] as maplibregl.FilterSpecification
+      : ["==", ["get", "name"], ""] as maplibregl.FilterSpecification;
     if (map.getLayer("country-selected")) {
       map.setFilter("country-selected", filter);
     }
@@ -1328,11 +1335,7 @@ function WorldMapInner({
       .then((topology) => {
         // Convert TopoJSON to GeoJSON (with antimeridian fix)
         const countries = topojsonFeature(topology, topology.objects.countries);
-        // Remove Taiwan as separate entity to avoid territorial disputes
-        countries.features = countries.features.filter(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (f: any) => f.properties?.name !== "Taiwan"
-        );
+        // Keep Taiwan in geo features but treat as part of China for selection
         if (!map.getSource("country-boundaries")) {
           map.addSource("country-boundaries", {
             type: "geojson",
