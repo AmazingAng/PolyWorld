@@ -85,7 +85,7 @@ async function loadOrderBook(
   return res.json() as Promise<BookData>;
 }
 
-function MiniOrderBook({ tokenId, currentPrice }: { tokenId: string; currentPrice: number }) {
+function MiniOrderBook({ tokenId, currentPrice, compact }: { tokenId: string; currentPrice: number; compact?: boolean }) {
   const { t } = useI18n();
   const [book, setBook] = useState<BookData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,22 +141,22 @@ function MiniOrderBook({ tokenId, currentPrice }: { tokenId: string; currentPric
   const spread = asks[0] && bids[0] ? ((asks[0].price - bids[0].price) * 100).toFixed(1) : null;
 
   if (loading) return (
-    <div className="flex items-center justify-center h-full text-[var(--text-ghost)] text-[10px]">{t("common.loading")}</div>
+    <div className="flex items-center justify-center h-full text-[var(--text-dim)] text-[10px]">{t("common.loading")}</div>
   );
   if (!book || (!asks.length && !bids.length)) return (
-    <div className="flex items-center justify-center h-full text-[var(--text-ghost)] text-[10px]">{t("common.noData")}</div>
+    <div className="flex items-center justify-center h-full text-[var(--text-dim)] text-[10px]">{t("common.noData")}</div>
   );
 
   return (
     <div className="flex flex-col h-full select-none">
       {/* Column headers */}
-      <div className="flex items-center justify-between text-[8px] uppercase tracking-wider text-[var(--text-ghost)] px-2 pb-1 shrink-0">
+      <div className="flex items-center justify-between text-[8px] uppercase tracking-wider text-[var(--text-dim)] px-2 pb-1 shrink-0">
         <span>{t("trade.price")}</span>
         <span>{t("common.shares")}</span>
       </div>
 
       {/* Asks (lowest ask at bottom of asks section) */}
-      <div className="flex-1 flex flex-col justify-end overflow-hidden">
+      <div className={compact ? "flex flex-col overflow-hidden" : "flex-1 flex flex-col justify-end overflow-hidden"}>
         {asks.slice().reverse().map((l, i) => (
           <div key={i} className="relative flex items-center justify-between px-2 py-[2px] text-[10px] tabular-nums">
             <div
@@ -171,13 +171,13 @@ function MiniOrderBook({ tokenId, currentPrice }: { tokenId: string; currentPric
 
       {/* Spread / mid */}
       <div className="flex items-center justify-between px-2 py-1 border-y border-[var(--border-subtle)] shrink-0">
-        <span className="text-[9px] text-[var(--text-ghost)]">{t("trade.mid")}</span>
+        <span className="text-[9px] text-[var(--text-dim)]">{t("trade.mid")}</span>
         <span className="text-[10px] font-bold text-[var(--text)] tabular-nums">{(currentPrice * 100).toFixed(1)}¢</span>
-        {spread && <span className="text-[9px] text-[var(--text-ghost)]">{t("trade.spread")} {spread}¢</span>}
+        {spread && <span className="text-[9px] text-[var(--text-dim)]">{t("trade.spread")} {spread}¢</span>}
       </div>
 
       {/* Bids */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className={compact ? "flex flex-col overflow-hidden" : "flex-1 flex flex-col overflow-hidden"}>
         {bids.map((l, i) => (
           <div key={i} className="relative flex items-center justify-between px-2 py-[2px] text-[10px] tabular-nums">
             <div
@@ -237,6 +237,9 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
   }, [handleKey]);
+
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => { setIsMobile(window.innerWidth <= 768); }, []);
 
   // On mobile, scroll focused inputs into view when virtual keyboard opens
   const modalRef = useRef<HTMLDivElement>(null);
@@ -424,7 +427,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 text-[var(--text-faint)] hover:text-[var(--text)] transition-colors mt-0.5 text-[16px] leading-none"
+            className="shrink-0 text-[var(--text-dim)] hover:text-[var(--text)] transition-colors mt-0.5 text-[16px] leading-none"
             aria-label="Close"
           >
             ✕
@@ -433,7 +436,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
 
         {/* ── Market stats bar ── */}
         {(state.volume != null || state.volume24h != null || state.liquidity != null || state.recentChange != null) && (
-          <div className="flex items-center gap-3 px-4 py-1.5 border-b border-[var(--border-subtle)] text-[10px] tabular-nums text-[var(--text-faint)] shrink-0 flex-wrap">
+          <div className="flex items-center gap-3 px-4 py-1.5 border-b border-[var(--border-subtle)] text-[10px] tabular-nums text-[var(--text-dim)] shrink-0 flex-wrap">
             {state.recentChange != null && state.recentChange !== 0 && (
               <span className={state.recentChange > 0 ? "text-[#22c55e]" : "text-[#ff4444]"}>
                 {t("trade.change24h", { change: `${state.recentChange > 0 ? "+" : ""}${(state.recentChange * 100).toFixed(1)}` })}
@@ -456,11 +459,11 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
 
           {/* Left: Order Book */}
           <div className="w-[220px] shrink-0 border-r border-[var(--border-subtle)] flex flex-col py-2">
-            <div className="text-[8px] uppercase tracking-[0.12em] text-[var(--text-ghost)] px-2 pb-1 shrink-0">
+            <div className="text-[8px] uppercase tracking-[0.12em] text-[var(--text-dim)] px-2 pb-1 shrink-0">
               {t("trade.orderBook")}
             </div>
             <div className="flex-1 min-h-0">
-              <MiniOrderBook key={activeTokenId} tokenId={activeTokenId} currentPrice={activePrice} />
+              <MiniOrderBook key={activeTokenId} tokenId={activeTokenId} currentPrice={activePrice} compact={isMobile} />
             </div>
           </div>
 
@@ -487,7 +490,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
 
               {activeOpenOrders.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]">
-                  <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-ghost)] mb-1.5">{t("trade.openOrdersCount", { count: activeOpenOrders.length })}</div>
+                  <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-dim)] mb-1.5">{t("trade.openOrdersCount", { count: activeOpenOrders.length })}</div>
                   <div className="space-y-1">
                     {activeOpenOrders.map((o) => {
                       const price = parseFloat(o.price) || 0;
@@ -498,14 +501,14 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                         <div key={o.id} className="flex items-center justify-between gap-1.5 text-[9px] tabular-nums">
                           <div className="flex items-center gap-1.5">
                             <span className={isBuy ? "text-[#22c55e]" : "text-[#ff4444]"}>{o.side}</span>
-                            <span className="text-[var(--text-faint)]">{(price * 100).toFixed(1)}¢</span>
-                            <span className="text-[var(--text-ghost)]">{matched.toFixed(0)}/{total.toFixed(0)}</span>
-                            <span className="text-[var(--text-faint)]">${(total * price).toFixed(2)}</span>
+                            <span className="text-[var(--text-dim)]">{(price * 100).toFixed(1)}¢</span>
+                            <span className="text-[var(--text-dim)]">{matched.toFixed(0)}/{total.toFixed(0)}</span>
+                            <span className="text-[var(--text-dim)]">${(total * price).toFixed(2)}</span>
                           </div>
                           <button
                             onClick={() => handleCancelOrder(o.id)}
                             disabled={cancellingOrderId === o.id}
-                            className="text-[9px] px-1 py-0 border border-[var(--border)] text-[var(--text-ghost)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
+                            className="text-[9px] px-1 py-0 border border-[var(--border)] text-[var(--text-dim)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
                           >
                             {cancellingOrderId === o.id ? "…" : t("common.cancel")}
                           </button>
@@ -518,14 +521,14 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
 
               {displayedRecentOrders.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]">
-                  <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-ghost)] mb-1.5">{t("trade.recentOrders")}</div>
+                  <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-dim)] mb-1.5">{t("trade.recentOrders")}</div>
                   <div className="space-y-1">
                     {displayedRecentOrders.map((o) => (
-                      <div key={o.id} className="text-[9px] text-[var(--text-faint)] tabular-nums flex items-center gap-1.5">
+                      <div key={o.id} className="text-[9px] text-[var(--text-dim)] tabular-nums flex items-center gap-1.5">
                         <span className={o.side === "BUY" ? "text-[#22c55e]" : "text-[#ff4444]"}>{o.side}</span>
                         <span className="text-[var(--text-dim)]">{o.outcome}</span>
-                        <span className="text-[var(--text-ghost)]">${o.amount.toFixed(0)} @{(o.price * 100).toFixed(0)}¢</span>
-                        <span className="text-[var(--text-ghost)]">·</span>
+                        <span className="text-[var(--text-dim)]">${o.amount.toFixed(0)} @{(o.price * 100).toFixed(0)}¢</span>
+                        <span className="text-[var(--text-dim)]">·</span>
                         <span>{timeAgo(o.ts, t)}</span>
                       </div>
                     ))}

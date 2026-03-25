@@ -127,7 +127,7 @@ export default function OrderForm({
 }: OrderFormProps) {
   const { t } = useI18n();
   const amountInputRef = useRef<HTMLInputElement>(null);
-  const BUY_PRESETS = [5, 50, 100, 500] as const;
+  const BUY_PRESETS = [-100, 100, 1000] as const;
   const SELL_PRESETS = [10, 25, 50, 100] as const;
   const { address, isConnected, chainId } = useAccount();
   const { connect, connectors } = useConnect();
@@ -678,7 +678,7 @@ export default function OrderForm({
                   ? option === "BUY"
                     ? "border-[#22c55e]/60 text-[#22c55e] bg-[#22c55e]/6"
                     : "border-[#ff4444]/60 text-[#ff4444] bg-[#ff4444]/8"
-                  : "border-[var(--border)] text-[var(--text-faint)] hover:text-[var(--text-muted)]"
+                  : "border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text-dim)]"
               }`}
             >
               {option === "BUY" ? t("common.buy") : t("common.sell")}
@@ -687,12 +687,26 @@ export default function OrderForm({
         </div>
 
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => setAmount("0")}
+            className={`text-[9px] px-2 py-0.5 border transition-colors ${
+              amountNum === 0
+                ? side === "BUY"
+                  ? "border-[#22c55e]/60 text-[#22c55e] bg-[#22c55e]/5"
+                  : "border-[#ff4444]/60 text-[#ff4444] bg-[#ff4444]/8"
+                : side === "BUY"
+                  ? "border-[var(--border)] text-[var(--text-dim)] hover:border-[#22c55e]/30 hover:text-[var(--text-dim)]"
+                  : "border-[var(--border)] text-[var(--text-dim)] hover:border-[#ff4444]/30 hover:text-[var(--text-dim)]"
+            }`}
+          >
+            0
+          </button>
           {(side === "BUY" ? BUY_PRESETS : SELL_PRESETS).map((preset) => (
             <button
               key={preset}
               onClick={() => {
                 if (side === "BUY") {
-                  setAmount(String(preset));
+                  setAmount((prev) => String(Math.max(0, (parseFloat(prev) || 0) + preset)));
                   return;
                 }
                 if (!displayedSharesHeld) return;
@@ -701,22 +715,20 @@ export default function OrderForm({
               disabled={side === "SELL" && !hasSharesToSell}
               className={`text-[9px] px-2 py-0.5 border transition-colors ${
                 side === "BUY"
-                  ? amountNum === preset
-                    ? "border-[#22c55e]/60 text-[#22c55e] bg-[#22c55e]/5"
-                    : "border-[var(--border)] text-[var(--text-faint)] hover:border-[#22c55e]/30 hover:text-[var(--text-muted)]"
+                  ? "border-[var(--border)] text-[var(--text-dim)] hover:border-[#22c55e]/30 hover:text-[var(--text-dim)]"
                   : activeSellPercent === preset
                     ? "border-[#ff4444]/60 text-[#ff4444] bg-[#ff4444]/8"
-                    : "border-[var(--border)] text-[var(--text-faint)] hover:border-[#ff4444]/30 hover:text-[var(--text-muted)]"
+                    : "border-[var(--border)] text-[var(--text-dim)] hover:border-[#ff4444]/30 hover:text-[var(--text-dim)]"
               } disabled:opacity-30`}
             >
-              {side === "BUY" ? `$${preset}` : `${preset}%`}
+              {side === "BUY" ? (preset > 0 ? `+${preset}` : `${preset}`) : `${preset}%`}
             </button>
           ))}
         </div>
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 min-w-0">
-            <span className="text-[10px] text-[var(--text-faint)] shrink-0">
+            <span className="text-[10px] text-[var(--text-dim)] shrink-0">
               {side === "BUY" ? "$" : "sh"}
             </span>
             <input
@@ -731,12 +743,12 @@ export default function OrderForm({
               }`}
             />
             {side === "BUY" && availableUsdc !== null && (
-              <span className={`text-[9px] shrink-0 ${exceedsBalance ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
+              <span className={`text-[9px] shrink-0 ${exceedsBalance ? "text-[#ff4444]" : "text-[var(--text-dim)]"}`}>
                 / ${availableUsdc.toFixed(2)}
               </span>
             )}
             {side === "SELL" && hasSharesToSell && (
-              <span className={`text-[9px] shrink-0 ${exceedsShares ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
+              <span className={`text-[9px] shrink-0 ${exceedsShares ? "text-[#ff4444]" : "text-[var(--text-dim)]"}`}>
                 / {displayedSharesHeld!.toFixed(2)}
               </span>
             )}
@@ -756,7 +768,7 @@ export default function OrderForm({
             {side === "BUY" && exceedsBalance && <span className="text-[10px] text-[#ff4444]">{t("trade.exceedsBalance")}</span>}
             {side === "SELL" && amountNum > 0 && amountNum < minSellShares && <span className="text-[10px] text-[#f59e0b]">min {minSellShares}sh</span>}
             {side === "SELL" && exceedsShares && <span className="text-[10px] text-[#ff4444]">{t("trade.exceedsPosition")}</span>}
-            {side === "SELL" && !hasSharesToSell && <span className="text-[10px] text-[var(--text-ghost)]">{t("trade.noSharesToSell")}</span>}
+            {side === "SELL" && !hasSharesToSell && <span className="text-[10px] text-[var(--text-dim)]">{t("trade.noSharesToSell")}</span>}
           </div>
           <button
             onClick={() => handlePlaceOrder(side, undefined, true)}
@@ -834,7 +846,7 @@ export default function OrderForm({
 
   if (!isConnected) {
     return (
-      <div className="font-mono space-y-3">
+      <div className="font-mono space-y-3 pt-36">
         <button
           onClick={handleConnect}
           className="w-full py-2.5 bg-[#22c55e] text-black font-bold text-[12px] hover:bg-[#16a34a] active:bg-[#15803d] transition-colors"
@@ -867,7 +879,7 @@ export default function OrderForm({
                 ? s === "BUY"
                   ? "border-b-[#22c55e] text-[#22c55e]"
                   : "border-b-[#ff4444] text-[#ff4444]"
-                : "border-b-transparent text-[var(--text-faint)] hover:text-[var(--text-muted)]"
+                : "border-b-transparent text-[var(--text-dim)] hover:text-[var(--text-dim)]"
             }`}
           >
             {s === "BUY" ? t("common.buy") : t("common.sell")}
@@ -875,7 +887,7 @@ export default function OrderForm({
         ))}
         <div className="ml-auto pr-0.5">
           {availableUsdc !== null && (
-            <span className="text-[10px] text-[var(--text-muted)] tabular-nums">
+            <span className="text-[10px] text-[var(--text-dim)] tabular-nums">
               {t("trade.balance")}{" "}
               <button
                 onClick={() => side === "BUY" && setAmount(availableUsdc.toFixed(2))}
@@ -891,14 +903,14 @@ export default function OrderForm({
 
       {/* ── Row 2: Price row ── */}
       <div>
-        <div className="text-[9px] text-[var(--text-faint)] uppercase tracking-[0.08em] mb-1">{t("trade.price")}</div>
+        <div className="text-[9px] text-[var(--text-dim)] uppercase tracking-[0.08em] mb-1">{t("trade.price")}</div>
         {!isMarketOrder ? (
           <div className="flex items-center gap-1">
             {(tickSize <= 0.001 ? [-10, -1, -0.1] : [-10, -1]).map((d) => (
               <button
                 key={d}
                 onClick={() => adjustPrice(d)}
-                className="text-[9px] px-2 py-1.5 border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors tabular-nums shrink-0"
+                className="text-[9px] px-2 py-1.5 border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors tabular-nums shrink-0"
               >
                 {d < -1 || Number.isInteger(d) ? `${d}¢` : `${d.toFixed(1)}¢`}
               </button>
@@ -919,7 +931,7 @@ export default function OrderForm({
               <button
                 key={d}
                 onClick={() => adjustPrice(d)}
-                className="text-[9px] px-2 py-1.5 border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors tabular-nums shrink-0"
+                className="text-[9px] px-2 py-1.5 border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors tabular-nums shrink-0"
               >
                 +{Number.isInteger(d) ? d : d.toFixed(1)}¢
               </button>
@@ -927,7 +939,7 @@ export default function OrderForm({
           </div>
         ) : (
           <div className="flex items-center justify-between px-2 py-1.5 border border-[var(--border)] text-[11px]">
-            <span className="text-[var(--text-faint)]">{t("trade.marketPrice")}</span>
+            <span className="text-[var(--text-dim)]">{t("trade.marketPrice")}</span>
             <span className="text-[var(--text)] tabular-nums">{(currentPrice * 100).toFixed(centsDecimals)}¢</span>
           </div>
         )}
@@ -936,7 +948,7 @@ export default function OrderForm({
       {/* ── Row 3: Amount ── */}
       <div>
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[9px] text-[var(--text-faint)] uppercase tracking-[0.08em]">
+          <span className="text-[9px] text-[var(--text-dim)] uppercase tracking-[0.08em]">
             {side === "BUY" ? t("trade.amountUsdc") : t("common.shares")}
           </span>
           <div className="flex items-center gap-1.5">
@@ -946,7 +958,7 @@ export default function OrderForm({
               className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 border transition-colors ${
                 limitOnly
                   ? "border-[#f59e0b]/60 text-[#f59e0b] bg-[#f59e0b]/8"
-                  : "border-[var(--border)] text-[var(--text-ghost)] hover:text-[var(--text-faint)] hover:border-[var(--border-subtle)]"
+                  : "border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text-dim)] hover:border-[var(--border-subtle)]"
               }`}
               title={limitOnly ? t("trade.limitOnly") : t("trade.limitOnlyOff")}
             >
@@ -959,7 +971,7 @@ export default function OrderForm({
             {side === "BUY" && availableUsdc !== null && availableUsdc > 0 && (
               <button
                 onClick={() => setAmount(availableUsdc.toFixed(2))}
-                className="text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors"
+                className="text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text-dim)] transition-colors"
               >
                 {t("trade.max")}
               </button>
@@ -976,7 +988,7 @@ export default function OrderForm({
         </div>
         <div className="flex items-center gap-1">
           <div className="flex-1 relative">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-[var(--text-faint)] pointer-events-none select-none">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-[var(--text-dim)] pointer-events-none select-none">
               {side === "BUY" ? "$" : "sh"}
             </span>
             <input
@@ -994,21 +1006,30 @@ export default function OrderForm({
 
         {/* Presets */}
         <div className="grid grid-cols-4 gap-1 mt-1.5">
+          <button
+            onClick={() => setAmount("0")}
+            className={`text-[9px] py-1 border transition-colors tabular-nums ${
+              amountNum === 0
+                ? side === "BUY"
+                  ? "border-[#22c55e]/60 text-[#22c55e] bg-[#22c55e]/5"
+                  : "border-[#ff4444]/60 text-[#ff4444] bg-[#ff4444]/8"
+                : side === "BUY"
+                  ? "border-[var(--border)] text-[var(--text-dim)] hover:border-[#22c55e]/40 hover:text-[#22c55e]"
+                  : "border-[var(--border)] text-[var(--text-dim)] hover:border-[#ff4444]/40 hover:text-[#ff4444]"
+            }`}
+          >
+            0
+          </button>
           {side === "BUY" ? (
-            [50, 100, 500, 1000].map((v) => (
+            ([-100, 100, 1000] as const).map((v) => (
               <button
                 key={v}
-                onClick={() => setAmount((prev) => {
-                  const cur = parseFloat(prev) || 0;
-                  return cur === v ? "" : String(cur + v);
-                })}
+                onClick={() => setAmount((prev) => String(Math.max(0, (parseFloat(prev) || 0) + v)))}
                 className={`text-[9px] py-1 border transition-colors tabular-nums ${
-                  amountNum === v
-                    ? "border-[#ff4444]/60 text-[#ff4444] bg-[#ff4444]/8"
-                    : "border-[var(--border)] text-[#ff4444]/60 hover:border-[#ff4444]/40 hover:text-[#ff4444]"
+                  "border-[var(--border)] text-[#22c55e]/60 hover:border-[#22c55e]/40 hover:text-[#22c55e]"
                 }`}
               >
-                ${v}
+                {v > 0 ? `+${v}` : `${v}`}
               </button>
             ))
           ) : (
@@ -1022,7 +1043,7 @@ export default function OrderForm({
                   className={`text-[9px] py-1 border transition-colors disabled:opacity-30 ${
                     shareAmt !== null && Math.abs(amountNum - shareAmt) < 0.01
                       ? "border-[#ff4444]/60 text-[#ff4444] bg-[#ff4444]/8"
-                      : "border-[var(--border)] text-[var(--text-faint)] hover:border-[var(--border-subtle)] hover:text-[var(--text-muted)]"
+                      : "border-[var(--border)] text-[var(--text-dim)] hover:border-[var(--border-subtle)] hover:text-[var(--text-dim)]"
                   }`}
                 >
                   {pct}%
@@ -1069,7 +1090,7 @@ export default function OrderForm({
       {/* ── Row 4: Position info + market order indicator ── */}
       <div className="flex items-center gap-2">
         {isMarketOrder && quotedMarketPrice && (
-          <span className="text-[9px] text-[var(--text-faint)] tabular-nums">
+          <span className="text-[9px] text-[var(--text-dim)] tabular-nums">
             {t("trade.estFill", { price: (quotedMarketPrice * 100).toFixed(1) })}
           </span>
         )}
@@ -1093,16 +1114,16 @@ export default function OrderForm({
         ) : side === "BUY" ? (
           <>
             <div className="flex items-center justify-between">
-              <span className="text-[var(--text-faint)]">{t("common.shares")}</span>
+              <span className="text-[var(--text-dim)]">{t("common.shares")}</span>
               <span className="text-[var(--text)]">{amountNum > 0 ? `~${estSharesFull.toFixed(2)}` : "—"}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-[var(--text-faint)]">{t("common.total")}</span>
+              <span className="text-[var(--text-dim)]">{t("common.total")}</span>
               <span className="text-[var(--text)]">${amountNum > 0 ? amountNum.toFixed(2) : "0.00"}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-[var(--text-faint)]">{t("trade.return")}</span>
-              <span className={amountNum > 0 && profitIfWin > 0 ? "text-[#22c55e]" : "text-[var(--text-muted)]"}>
+              <span className="text-[var(--text-dim)]">{t("trade.return")}</span>
+              <span className={amountNum > 0 && profitIfWin > 0 ? "text-[#22c55e]" : "text-[var(--text-dim)]"}>
                 {amountNum > 0
                   ? `$${profitIfWin.toFixed(2)} (${returnPctFull.toFixed(0)}%)`
                   : "$0.00 (0%)"}
@@ -1111,7 +1132,7 @@ export default function OrderForm({
           </>
         ) : (
           <div className="flex items-center justify-between">
-            <span className="text-[var(--text-faint)]">{t("trade.receive")}</span>
+            <span className="text-[var(--text-dim)]">{t("trade.receive")}</span>
             <span className="text-[var(--text)]">{amountNum > 0 ? `~$${receiveUsdcFull.toFixed(2)}` : "—"}</span>
           </div>
         )}
