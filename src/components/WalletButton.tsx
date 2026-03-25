@@ -336,10 +336,14 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
     fetchBal();
     fetchPortfolio();
     const iv = setInterval(() => { void fetchBal(); void fetchPortfolio(); }, 30_000);
-    // Force bypass server cache when triggered by trade completion
-    const onRefreshEv = () => { void fetchBal(true); void fetchPortfolio(); };
+    // Force bypass server cache when triggered by trade completion (debounced 200ms)
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const onRefreshEv = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => { void fetchBal(true); void fetchPortfolio(); }, 200);
+    };
     window.addEventListener("polyworld:refresh-header-balance", onRefreshEv);
-    return () => { cancelled = true; clearInterval(iv); window.removeEventListener("polyworld:refresh-header-balance", onRefreshEv); };
+    return () => { cancelled = true; clearInterval(iv); if (refreshTimer) clearTimeout(refreshTimer); window.removeEventListener("polyworld:refresh-header-balance", onRefreshEv); };
   }, [effectiveProxy]);
 
   // Fetch positions for portfolio hover dropdown
@@ -387,9 +391,13 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
     };
     fetchPositions();
     const iv = setInterval(fetchPositions, 30_000);
-    const onRefreshPositions = () => { void fetchPositions(); };
+    let posTimer: ReturnType<typeof setTimeout> | null = null;
+    const onRefreshPositions = () => {
+      if (posTimer) clearTimeout(posTimer);
+      posTimer = setTimeout(() => { void fetchPositions(); }, 200);
+    };
     window.addEventListener("polyworld:refresh-header-balance", onRefreshPositions);
-    return () => { cancelled = true; clearInterval(iv); window.removeEventListener("polyworld:refresh-header-balance", onRefreshPositions); };
+    return () => { cancelled = true; clearInterval(iv); if (posTimer) clearTimeout(posTimer); window.removeEventListener("polyworld:refresh-header-balance", onRefreshPositions); };
   }, [effectiveProxy]);
 
   // Fetch open orders for portfolio hover dropdown
@@ -404,9 +412,13 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
     };
     fetchOrders();
     const iv = setInterval(fetchOrders, 15_000);
-    const onOrderPlaced = () => { void fetchOrders(); };
+    let orderTimer: ReturnType<typeof setTimeout> | null = null;
+    const onOrderPlaced = () => {
+      if (orderTimer) clearTimeout(orderTimer);
+      orderTimer = setTimeout(() => { void fetchOrders(); }, 200);
+    };
     window.addEventListener("polyworld:order-placed", onOrderPlaced);
-    return () => { cancelled = true; clearInterval(iv); window.removeEventListener("polyworld:order-placed", onOrderPlaced); };
+    return () => { cancelled = true; clearInterval(iv); if (orderTimer) clearTimeout(orderTimer); window.removeEventListener("polyworld:order-placed", onOrderPlaced); };
   }, [effectiveProxy, tradeSession?.sessionToken]);
 
   const handleCancelOrder = useCallback(async (orderId: string) => {

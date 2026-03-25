@@ -203,7 +203,6 @@ interface TradeModalProps {
 export default function TradeModal({ state, onClose }: TradeModalProps) {
   const modalKey = [
     state.tokenId,
-    state.currentPrice,
     state.outcomeName,
     state.defaultSide,
     state.marketTitle,

@@ -317,16 +317,22 @@ export default function OrderForm({
     }
   }, [optimisticSharesHeld, sharesHeld]);
 
+  const refreshAbortRef = useRef<AbortController | null>(null);
   const refreshTradeState = useCallback(async () => {
-    const delays = [500, 2000, 5000];
+    refreshAbortRef.current?.abort();
+    const ac = new AbortController();
+    refreshAbortRef.current = ac;
     notifyHeaderBalanceRefresh();
     await Promise.allSettled([refetchShares(), refetchUsdcBalance()]);
-    for (const delay of delays) {
-      await sleep(delay);
-      notifyHeaderBalanceRefresh();
-      await Promise.allSettled([refetchShares(), refetchUsdcBalance()]);
-    }
+    await sleep(3000);
+    if (ac.signal.aborted) return;
+    notifyHeaderBalanceRefresh();
+    await Promise.allSettled([refetchShares(), refetchUsdcBalance()]);
   }, [refetchShares, refetchUsdcBalance]);
+
+  useEffect(() => {
+    return () => { refreshAbortRef.current?.abort(); };
+  }, []);
 
   const handleEOAApprove = useCallback(async () => {
     if (!address) return;
@@ -508,7 +514,9 @@ export default function OrderForm({
       }
       void refreshTradeState();
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("polyworld:order-placed"));
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("polyworld:order-placed"));
+        }, 1000);
       }
       addTradeToast(
         "success",
