@@ -167,6 +167,7 @@ html, body {
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
   background: var(--bg);
 }
 
@@ -350,10 +351,19 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
     gap: 1px;
     padding: 0;
   }
+  #app-root {
+    /* Use svh (small viewport height) — the MINIMUM viewport when all browser
+       toolbars are visible. Unlike dvh which can be too large on iOS with
+       viewport-fit:cover, svh is always ≤ visible area. Since overflow:hidden
+       prevents scrolling, toolbars won't auto-hide, so svh == actual height. */
+    height: 100svh;
+    overflow: hidden;
+  }
   .map-section {
-    /* 40px header + 52px tab bar base + safe-area/browser-bottom-bar padding */
-    height: calc(100dvh - 40px - 52px - max(env(safe-area-inset-bottom), var(--browser-bottom-bar, 0px))) !important;
-    min-height: 50vh !important;
+    /* Fill all remaining space via flex — no explicit height, no gap possible */
+    flex: 1 1 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
   }
   /* Mobile: single-column cards */
   .panel-wide {
@@ -405,16 +415,16 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
   }
 }
 
-/* Mobile tab bar */
+/* Mobile tab bar — in document flow (not fixed), flex layout handles positioning */
 .mobile-tab-bar {
   display: flex;
   align-items: stretch;
   height: 52px;
+  flex-shrink: 0;
   background: var(--panel-bg);
   border-top: 1px solid var(--border);
-  flex-shrink: 0;
   z-index: 50;
-  padding-bottom: max(env(safe-area-inset-bottom), var(--browser-bottom-bar, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .mobile-tab {
@@ -464,7 +474,7 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
   padding: 4px;
   max-height: 260px;
   overflow-y: auto;
-  padding-bottom: calc(4px + env(safe-area-inset-bottom));
+  padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
 }
 
 .mobile-more-item {

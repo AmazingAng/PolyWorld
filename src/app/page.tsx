@@ -1761,29 +1761,6 @@ function MobileTabBar({ activePanel, onSelect }: { activePanel: string | null; o
   const { t } = useI18n();
   const [showMore, setShowMore] = useState(false);
 
-  // Detect browser bottom toolbar (Chrome Android etc.) via visualViewport
-  useEffect(() => {
-    let rafId = 0;
-    const update = () => {
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        const vv = window.visualViewport;
-        if (!vv) return;
-        const bottomBar = window.innerHeight - vv.height - vv.offsetTop;
-        document.documentElement.style.setProperty(
-          "--browser-bottom-bar",
-          bottomBar > 0 ? `${bottomBar}px` : "0px"
-        );
-      });
-    };
-    update();
-    window.visualViewport?.addEventListener("resize", update);
-    return () => {
-      cancelAnimationFrame(rafId);
-      window.visualViewport?.removeEventListener("resize", update);
-    };
-  }, []);
-
   return (
     <>
       {/* "More" dropdown */}
