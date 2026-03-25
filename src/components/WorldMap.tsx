@@ -371,7 +371,7 @@ function WorldMapInner({
     // Browsers report pinch as wheel events with ctrlKey=true
     map.scrollZoom.disable();
     const canvas = map.getCanvasContainer();
-    canvas.addEventListener("wheel", (e) => {
+    const wheelHandler = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         // Pinch gesture → zoom
         e.preventDefault();
@@ -384,7 +384,8 @@ function WorldMapInner({
         e.preventDefault();
         map.panBy([e.deltaX, e.deltaY], { duration: 0 });
       }
-    }, { passive: false });
+    };
+    canvas.addEventListener("wheel", wheelHandler, { passive: false });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
@@ -640,6 +641,7 @@ function WorldMapInner({
     });
 
     return () => {
+      canvas.removeEventListener("wheel", wheelHandler);
       cancelAnimationFrame(pulseRef.current);
       reducedMotionCleanup.current?.();
       map.remove();

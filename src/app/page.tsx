@@ -382,6 +382,16 @@ export default function Home() {
   const isFirstLoad = useRef(true);
   const lbCacheRef = useRef<Record<string, import("@/types").SmartWallet[]>>({});
 
+  // Quick fingerprint to detect if market data actually changed
+  const dataFingerprintRef = useRef("");
+  const marketFingerprint = (arr: ProcessedMarket[]) => {
+    // count + first/last ID + sum of probs (fast, no allocation)
+    if (arr.length === 0) return "0";
+    let probSum = 0;
+    for (let i = 0; i < arr.length; i++) probSum += (arr[i].prob ?? 0);
+    return `${arr.length}:${arr[0].id}:${arr[arr.length - 1].id}:${probSum.toFixed(2)}`;
+  };
+
   const fetchData = useCallback(async (signal?: AbortSignal) => {
     const { setMapped, setUnmapped, setLoading, setDataMode, setLastSyncTime, setSignals, setNewMarkets, setLastRefresh } = useMarketStore.getState();
     setLoading(true);
@@ -394,8 +404,14 @@ export default function Home() {
       const u: ProcessedMarket[] = data.unmapped || [];
 
       if (m.length > 0 || u.length > 0) {
-        setMapped(m);
-        setUnmapped(u);
+        // Skip store update if data hasn't changed — avoids re-render + GeoJSON rebuild
+        const fp = marketFingerprint(m) + "|" + marketFingerprint(u);
+        const changed = fp !== dataFingerprintRef.current;
+        dataFingerprintRef.current = fp;
+        if (changed) {
+          setMapped(m);
+          setUnmapped(u);
+        }
         setDataMode("live");
         setRefreshError(false);
         if (data.lastSync) setLastSyncTime(data.lastSync);
@@ -833,7 +849,7 @@ export default function Home() {
             headerRight={selectedMarket ? (
               <div className="flex items-center gap-1">
                 <a
-                  href={`https://polymarket.com/event/${encodeURIComponent(selectedMarket.slug)}?via=pw`}
+                  href={`https://polymarket.com/event/${encodeURIComponent(selectedMarket.slug)}?r=0xaa`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-1 rounded-sm opacity-40 hover:opacity-90 transition-opacity"
@@ -1600,8 +1616,8 @@ export default function Home() {
               onMapTap={() => setMobilePreview(null)}
             />
           </div>
-          {/* Horizontal resize handle + bottom panels (hidden in map fullscreen) */}
-          {!isFullscreen && (
+          {/* Horizontal resize handle + bottom panels (skip on mobile — not used) */}
+          {!isFullscreen && !isMobile && (
             <>
               <ResizeHandle direction="horizontal" onResize={handleHorizontalResize} />
               {!bottomPanelCollapsed && (
@@ -1747,18 +1763,25 @@ function MobileTabBar({ activePanel, onSelect }: { activePanel: string | null; o
 
   // Detect browser bottom toolbar (Chrome Android etc.) via visualViewport
   useEffect(() => {
+    let rafId = 0;
     const update = () => {
-      const vv = window.visualViewport;
-      if (!vv) return;
-      const bottomBar = window.innerHeight - vv.height - vv.offsetTop;
-      document.documentElement.style.setProperty(
-        "--browser-bottom-bar",
-        bottomBar > 0 ? `${bottomBar}px` : "0px"
-      );
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const vv = window.visualViewport;
+        if (!vv) return;
+        const bottomBar = window.innerHeight - vv.height - vv.offsetTop;
+        document.documentElement.style.setProperty(
+          "--browser-bottom-bar",
+          bottomBar > 0 ? `${bottomBar}px` : "0px"
+        );
+      });
     };
     update();
     window.visualViewport?.addEventListener("resize", update);
-    return () => window.visualViewport?.removeEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.visualViewport?.removeEventListener("resize", update);
+    };
   }, []);
 
   return (

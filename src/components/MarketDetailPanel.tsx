@@ -438,7 +438,7 @@ function MarketDetailPanelInner({
           {/* No-token fallback: external trade link */}
           {prices.length > 0 && !market.closed && cardAllIds.length === 0 && (
             <div className="mt-1 pt-1 border-t border-[var(--border-subtle)] flex justify-end">
-              <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors">
+              <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?r=0xaa`} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors">
                 {t("detail.tradeArrow")}
               </a>
             </div>
@@ -640,11 +640,11 @@ function MarketDetailPanelInner({
 
           <div className="flex items-center gap-4 mt-4">
             {market.commentCount > 0 && (
-              <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--text-faint)] hover:text-[var(--text-dim)] transition-colors">
+              <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?r=0xaa`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--text-faint)] hover:text-[var(--text-dim)] transition-colors">
                 {t("detail.commentsLink", { count: market.commentCount })}
               </a>
             )}
-            <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?via=pw`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--text-faint)] hover:text-[var(--text-dim)] transition-colors">
+            <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?r=0xaa`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-[var(--text-faint)] hover:text-[var(--text-dim)] transition-colors">
               {t("detail.polymarketLink")}
             </a>
             <CopyLinkButton marketId={market.id} />

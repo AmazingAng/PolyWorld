@@ -806,7 +806,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                       {t("wallet.needAccountToTrade")}
                     </div>
                     <a
-                      href="https://polymarket.com"
+                      href="https://polymarket.com?r=0xaa"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="block w-full py-1.5 text-center text-[11px] font-bold bg-[#8b5cf6]/10 text-[#8b5cf6] border border-[#8b5cf6]/30 hover:bg-[#8b5cf6]/20 transition-colors"
