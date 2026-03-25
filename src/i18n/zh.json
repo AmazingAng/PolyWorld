@@ -97,6 +97,7 @@
     "resolution": "结算监控",
     "portfolio": "持仓",
     "openOrders": "挂单",
+    "alertHistory": "提醒",
     "worldMap": "世界地图",
     "newsFeed": "新闻源"
   },
@@ -111,6 +112,7 @@
     "timeRange": "时间范围",
     "autoRefresh": "自动刷新",
     "autoRefreshOn": "开启 (45秒)",
+    "showToasts": "弹窗通知",
     "theme": "主题",
     "themeDark": "深色 (默认)",
     "panelVisibility": "面板显示",
@@ -306,6 +308,7 @@
   "alerts": {
     "title": "提醒",
     "alertsTab": "提醒",
+    "settingsTab": "设置",
     "historyTab": "历史",
     "browserNotifs": "浏览器通知{status}",
     "enable": "启用",

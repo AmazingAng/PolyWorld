@@ -84,7 +84,7 @@ const WorldMap = dynamic(() => import("@/components/WorldMap"), {
 const REFRESH_INTERVAL = 45000;
 
 const DEFAULT_COL_SPANS: Record<string, number> = {
-  markets: 1, country: 1, news: 1, tweets: 1, live: 1, watchlist: 1, detail: 2, leaderboard: 1, trader: 1, smartMoney: 1, whaleTrades: 1, orderbook: 1, sentiment: 1, chart: 1, arbitrage: 1, calendar: 1, signals: 1, resolution: 1, portfolio: 1, openOrders: 1,
+  markets: 1, country: 1, news: 1, tweets: 1, live: 1, watchlist: 1, detail: 2, leaderboard: 1, trader: 1, smartMoney: 1, whaleTrades: 1, orderbook: 1, sentiment: 1, chart: 1, arbitrage: 1, calendar: 1, signals: 1, resolution: 1, portfolio: 1, openOrders: 1, alertHistory: 1,
 };
 
 // Panel titles are derived from i18n — computed inside renderPanel via t()
@@ -161,21 +161,15 @@ export default function Home() {
 
   // ─── Toast Store ───
   const enqueueSignalToasts = useToastStore((s) => s.enqueueSignalToasts);
-  const enqueueNewMarketToasts = useToastStore((s) => s.enqueueNewMarketToasts);
 
   const prevSignalsRef = useRef<typeof signals>(signals);
   useEffect(() => {
     if (signals === prevSignalsRef.current) return;
     prevSignalsRef.current = signals;
-    enqueueSignalToasts(signals);
-  }, [signals, enqueueSignalToasts]);
+    if (prefs.showToasts) enqueueSignalToasts(signals);
+  }, [signals, enqueueSignalToasts, prefs.showToasts]);
 
-  const prevNewMarketsRef = useRef<typeof newMarkets>(newMarkets);
-  useEffect(() => {
-    if (newMarkets === prevNewMarketsRef.current) return;
-    prevNewMarketsRef.current = newMarkets;
-    enqueueNewMarketToasts(newMarkets);
-  }, [newMarkets, enqueueNewMarketToasts]);
+
 
   const selectedMarket = useMarketStore((s) => s.selectedMarket);
   const selectedOutcomeTokenId = useMarketStore((s) => s.selectedOutcomeTokenId);
@@ -309,7 +303,7 @@ export default function Home() {
 
   // Pre-generate stable handler objects for all panels (avoids inline arrow functions in renderPanel)
   const panelHandlers = useMemo(() => {
-    const ids = ["detail", "markets", "country", "news", "tweets", "live", "watchlist", "leaderboard", "smartMoney", "whaleTrades", "orderbook", "trader", "sentiment", "chart", "arbitrage", "calendar", "signals", "resolution", "portfolio", "openOrders"];
+    const ids = ["detail", "markets", "country", "news", "tweets", "live", "watchlist", "leaderboard", "smartMoney", "whaleTrades", "orderbook", "trader", "sentiment", "chart", "arbitrage", "calendar", "signals", "resolution", "portfolio", "openOrders", "alertHistory"];
     const h: Record<string, { onColSpanChange: (s: number) => void; onColSpanReset: () => void; onRowSpanChange: (s: number) => void; onRowSpanReset: () => void }> = {};
     for (const id of ids) {
       h[id] = {
@@ -323,8 +317,26 @@ export default function Home() {
   }, [setColSpan, resetColSpan, setRowSpan, resetRowSpan]);
 
   // Alerts
-  const { alerts, history: alertHistory, unreadCount, addAlert, removeAlert, toggleAlert, evaluateAlerts, markRead, markAllRead, clearHistory } = useAlerts();
+  const { alerts, history: alertHistory, unreadCount, addAlert, removeAlert, toggleAlert, evaluateAlerts, markRead, markAllRead, clearHistory, pushHistory } = useAlerts();
   const { sendNotification, requestPermission, permission: notifPermission } = useBrowserNotifications();
+
+  // Route new markets to alert history (only if new_market alert is enabled)
+  const prevNewMarketsRef = useRef<typeof newMarkets>(newMarkets);
+  useEffect(() => {
+    if (newMarkets === prevNewMarketsRef.current || newMarkets.length === 0) return;
+    prevNewMarketsRef.current = newMarkets;
+    const newMarketAlert = alerts.find((a) => a.type === "new_market");
+    if (!newMarketAlert?.enabled) return;
+    pushHistory(
+      newMarkets.map((m) => ({
+        alertId: newMarketAlert.id,
+        type: "new_market" as const,
+        message: `New market: ${m.title}`,
+        marketId: m.id,
+        marketTitle: m.title,
+      }))
+    );
+  }, [newMarkets, pushHistory, alerts]);
 
   // Hydrate stores from prefs once localStorage has loaded
   const prefsHydrated = useRef(false);
@@ -1425,6 +1437,63 @@ export default function Home() {
             />
           </Panel>
         );
+      case "alertHistory":
+        return (
+          <Panel
+            key="alertHistory"
+            panelId="alertHistory"
+            title={t("panels.alertHistory")}
+            badge={unreadCount > 0 ? (
+              <span className="panel-data-badge live">{unreadCount}</span>
+            ) : undefined}
+            colSpan={colSpanFor("alertHistory")}
+            {...panelHandlers["alertHistory"]}
+            rowSpan={rowSpanFor("alertHistory")}
+            maxColSpan={maxColSpan}
+            headerRight={
+              alertHistory.some((h) => !h.read) ? (
+                <button
+                  onClick={markAllRead}
+                  className="text-[9px] text-[var(--text-faint)] hover:text-[var(--text-secondary)] transition-colors font-mono uppercase tracking-wider"
+                >
+                  {t("alerts.markAllRead")}
+                </button>
+              ) : undefined
+            }
+          >
+            <div className="panel-content" style={{ fontSize: 11, fontFamily: "var(--font-mono)" }}>
+              {alertHistory.length === 0 ? (
+                <div className="text-[var(--text-faint)] text-center py-6 text-[11px]">
+                  No alerts yet
+                </div>
+              ) : (
+                alertHistory.map((entry) => (
+                  <button
+                    key={entry.id}
+                    onClick={() => {
+                      markRead(entry.id);
+                      if (entry.marketId) {
+                        const m = [...mapped, ...unmapped].find((mk) => mk.id === entry.marketId);
+                        if (m) handleSelectMarketFromPanel(m);
+                      }
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 border-b border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors flex items-start gap-2"
+                  >
+                    {!entry.read && <span className="w-1.5 h-1.5 rounded-full bg-[var(--green)] shrink-0 mt-1" />}
+                    <div className="min-w-0 flex-1">
+                      <div className={`text-[11px] leading-snug ${entry.read ? "text-[var(--text-faint)]" : "text-[var(--text-secondary)]"}`}>
+                        {entry.message}
+                      </div>
+                      <div className="text-[9px] text-[var(--text-ghost)] mt-0.5">
+                        {new Date(entry.timestamp).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </Panel>
+        );
       default:
         return null;
     }
@@ -1728,6 +1797,8 @@ export default function Home() {
           onTimeRangeChange={setTimeRange}
           autoRefresh={autoRefresh}
           onToggleAutoRefresh={() => useUIStore.getState().setAutoRefresh((prev) => !prev)}
+          showToasts={prefs.showToasts}
+          onToggleShowToasts={() => updatePref("showToasts", !prefs.showToasts)}
           panelVisibility={panelVisibility}
           onTogglePanelVisibility={togglePanelVisibility}
           dataMode={dataMode}

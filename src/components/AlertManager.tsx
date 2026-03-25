@@ -40,7 +40,7 @@ interface AlertManagerProps {
   onHoverLeave?: () => void;
 }
 
-type Tab = "alerts" | "history";
+type Tab = "alerts" | "settings";
 
 export default function AlertManager({
   prefill,
@@ -210,19 +210,19 @@ function AlertManagerContent({
             className={`alert-dropdown-tab${activeTab === "alerts" ? " active" : ""}`}
           >
             {t("alerts.alertsTab")}
-            {alerts.length > 0 && (
-              <span className="alert-tab-badge">{alerts.length}</span>
+            {unreadCount > 0 && (
+              <span className="alert-tab-badge alert-tab-badge-unread">{unreadCount}</span>
             )}
           </button>
           <button
             role="tab"
-            aria-selected={activeTab === "history"}
-            onClick={() => setActiveTab("history")}
-            className={`alert-dropdown-tab${activeTab === "history" ? " active" : ""}`}
+            aria-selected={activeTab === "settings"}
+            onClick={() => setActiveTab("settings")}
+            className={`alert-dropdown-tab${activeTab === "settings" ? " active" : ""}`}
           >
-            {t("alerts.historyTab")}
-            {unreadCount > 0 && (
-              <span className="alert-tab-badge alert-tab-badge-unread">{unreadCount}</span>
+            {t("alerts.settingsTab")}
+            {alerts.length > 0 && (
+              <span className="alert-tab-badge">{alerts.length}</span>
             )}
           </button>
         </div>
@@ -248,7 +248,7 @@ function AlertManagerContent({
             </div>
           )}
 
-          {activeTab === "alerts" && (
+          {activeTab === "settings" && (
             <div>
               {/* Alert list */}
               <div className="alert-section">
@@ -850,7 +850,7 @@ function AlertManagerContent({
             </div>
           )}
 
-          {activeTab === "history" && (
+          {activeTab === "alerts" && (
             <div>
               <div className="alert-section">
                 <div className="alert-history-header">

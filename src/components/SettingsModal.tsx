@@ -28,6 +28,7 @@ export interface PanelVisibility {
   resolution: boolean;
   portfolio: boolean;
   openOrders: boolean;
+  alertHistory: boolean;
 }
 
 interface SettingsModalProps {
@@ -39,6 +40,8 @@ interface SettingsModalProps {
   onTimeRangeChange: (range: TimeRange) => void;
   autoRefresh: boolean;
   onToggleAutoRefresh: () => void;
+  showToasts: boolean;
+  onToggleShowToasts: () => void;
   panelVisibility: PanelVisibility;
   onTogglePanelVisibility: (panel: string) => void;
   dataMode: "live" | "sample";
@@ -96,6 +99,8 @@ export default function SettingsModal({
   onTimeRangeChange,
   autoRefresh,
   onToggleAutoRefresh,
+  showToasts,
+  onToggleShowToasts,
   panelVisibility,
   onTogglePanelVisibility,
   dataMode,
@@ -168,6 +173,8 @@ export default function SettingsModal({
               onTimeRangeChange={onTimeRangeChange}
               autoRefresh={autoRefresh}
               onToggleAutoRefresh={onToggleAutoRefresh}
+              showToasts={showToasts}
+              onToggleShowToasts={onToggleShowToasts}
             />
           )}
           {activeTab === "panels" && (
@@ -204,6 +211,8 @@ function GeneralTab({
   onTimeRangeChange,
   autoRefresh,
   onToggleAutoRefresh,
+  showToasts,
+  onToggleShowToasts,
 }: {
   activeCategories: Set<Category>;
   onToggleCategory: (cat: Category) => void;
@@ -211,6 +220,8 @@ function GeneralTab({
   onTimeRangeChange: (range: TimeRange) => void;
   autoRefresh: boolean;
   onToggleAutoRefresh: () => void;
+  showToasts: boolean;
+  onToggleShowToasts: () => void;
 }) {
   const { t, locale, setLocale } = useI18n();
   return (
@@ -282,6 +293,31 @@ function GeneralTab({
           </span>
           <span className="panel-toggle-label">
             {autoRefresh ? t("settings.autoRefreshOn") : t("common.off")}
+          </span>
+        </button>
+      </div>
+
+      {/* Show Toasts */}
+      <div className="settings-section">
+        <span className="section-label">{t("settings.showToasts")}</span>
+        <button
+          type="button"
+          className={`panel-toggle-item${showToasts ? " active" : ""}`}
+          onClick={onToggleShowToasts}
+          style={{ width: "fit-content" }}
+        >
+          <span
+            className="panel-toggle-checkbox"
+            style={{
+              background: showToasts ? "var(--green)" : "transparent",
+              borderColor: showToasts ? "var(--green)" : "var(--border)",
+              color: showToasts ? "var(--bg)" : "transparent",
+            }}
+          >
+            {showToasts && "\u2713"}
+          </span>
+          <span className="panel-toggle-label">
+            {showToasts ? t("common.on") : t("common.off")}
           </span>
         </button>
       </div>

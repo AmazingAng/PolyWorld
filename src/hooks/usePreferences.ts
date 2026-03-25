@@ -13,6 +13,7 @@ export interface UserPreferences {
   colorMode: "category" | "impact";
   region: string;
   autoRefresh: boolean;
+  showToasts: boolean;
   mapWidthPct: number;
   bottomPanelOrder: string[];
 }
@@ -40,8 +41,9 @@ const DEFAULT_PREFERENCES: UserPreferences = {
     resolution: true,
     portfolio: true,
     openOrders: true,
+    alertHistory: true,
   },
-  panelOrder: ["markets", "watchlist", "signals", "smartMoney", "whaleTrades", "news", "tweets", "sentiment", "leaderboard", "chart", "portfolio", "openOrders", "trader", "arbitrage", "resolution", "calendar", "live", "country"],
+  panelOrder: ["markets", "watchlist", "signals", "smartMoney", "whaleTrades", "news", "tweets", "sentiment", "leaderboard", "chart", "portfolio", "openOrders", "alertHistory", "trader", "arbitrage", "resolution", "calendar", "live", "country"],
   activeCategories: [
     "Politics", "Crypto", "Sports",
     "Finance", "Tech", "Culture", "Other",
@@ -50,6 +52,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   colorMode: "category",
   region: "global",
   autoRefresh: true,
+  showToasts: false,
   mapWidthPct: 58,
   bottomPanelOrder: ["detail", "orderbook"],
 };

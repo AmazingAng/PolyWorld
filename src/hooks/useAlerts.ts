@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useMemo } from "react";
+import { useCallback, useRef, useMemo, useEffect } from "react";
 import { useLocalStorage } from "./useLocalStorage";
 import type { ProcessedMarket, Category, WhaleTrade, NewsItem } from "@/types";
 import type { SignalType, SmartSignal } from "@/lib/smartSignals";
@@ -58,7 +58,14 @@ interface AlertsData {
 
 const DEFAULT: AlertsData = {
   version: 1,
-  alerts: [],
+  alerts: [
+    {
+      id: "default_new_market",
+      type: "new_market",
+      enabled: true,
+      createdAt: Date.now(),
+    },
+  ],
   history: [],
 };
 
@@ -67,6 +74,23 @@ const MAX_HISTORY = 100;
 
 export function useAlerts() {
   const [data, setData] = useLocalStorage<AlertsData>("pw:alerts", DEFAULT);
+
+  // Migrate: ensure default new_market alert exists for existing users
+  const migrated = useRef(false);
+  useEffect(() => {
+    if (migrated.current) return;
+    if (!data.alerts.some((a) => a.id === "default_new_market")) {
+      migrated.current = true;
+      setData((prev) => ({
+        ...prev,
+        alerts: [
+          { id: "default_new_market", type: "new_market", enabled: true, createdAt: Date.now() },
+          ...prev.alerts,
+        ],
+      }));
+    }
+  }, [data.alerts, setData]);
+
   const prevProbs = useRef<Map<string, number>>(new Map());
 
   const unreadCount = useMemo(
@@ -358,6 +382,27 @@ export function useAlerts() {
     setData((prev) => ({ ...prev, history: [] }));
   }, [setData]);
 
+  /** Push entries directly into alert history (e.g. new market notifications). */
+  const pushHistory = useCallback(
+    (entries: Omit<AlertHistoryEntry, "id" | "timestamp" | "read">[]) => {
+      if (entries.length === 0) return;
+      const now = Date.now();
+      setData((prev) => ({
+        ...prev,
+        history: [
+          ...entries.map((e, i) => ({
+            ...e,
+            id: `hist_${now}_${i}_${Math.random().toString(36).slice(2, 7)}`,
+            timestamp: now,
+            read: false,
+          })),
+          ...prev.history,
+        ].slice(0, MAX_HISTORY),
+      }));
+    },
+    [setData]
+  );
+
   return {
     alerts: data.alerts,
     history: data.history,
@@ -369,5 +414,6 @@ export function useAlerts() {
     markRead,
     markAllRead,
     clearHistory,
+    pushHistory,
   };
 }

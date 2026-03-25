@@ -9,12 +9,13 @@ const DEFAULT_PANEL_VISIBILITY: PanelVisibility = {
   orderbook: true, sentiment: true, tweets: true, trader: true, chart: true,
   arbitrage: true, calendar: true, signals: true, resolution: true, portfolio: true,
   openOrders: true,
+  alertHistory: true,
 };
 
 const DEFAULT_PANEL_ORDER = [
   "markets", "watchlist", "signals", "smartMoney", "whaleTrades",
   "news", "tweets", "sentiment", "leaderboard", "chart",
-  "portfolio", "openOrders", "trader", "arbitrage", "resolution", "calendar", "live", "country",
+  "portfolio", "openOrders", "alertHistory", "trader", "arbitrage", "resolution", "calendar", "live", "country",
 ];
 
 interface UIState {
@@ -168,6 +169,7 @@ export const useUIStore = create<UIState & UIActions>((set) => ({
     if (!po.includes("resolution")) po = [...po, "resolution"];
     if (!po.includes("portfolio")) po = [...po, "portfolio"];
     if (!po.includes("openOrders")) po = [...po, "openOrders"];
+    if (!po.includes("alertHistory")) po = [...po, "alertHistory"];
 
     let bpo = prefs.bottomPanelOrder;
     if (!bpo || !Array.isArray(bpo)) bpo = ["detail", "orderbook"];

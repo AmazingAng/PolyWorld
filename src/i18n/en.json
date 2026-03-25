@@ -97,6 +97,7 @@
     "resolution": "Resolution",
     "portfolio": "Portfolio",
     "openOrders": "Open Orders",
+    "alertHistory": "Alerts",
     "worldMap": "World Map",
     "newsFeed": "News Feed"
   },
@@ -111,6 +112,7 @@
     "timeRange": "TIME RANGE",
     "autoRefresh": "AUTO-REFRESH",
     "autoRefreshOn": "ON (45s)",
+    "showToasts": "TOAST NOTIFICATIONS",
     "theme": "THEME",
     "themeDark": "dark (default)",
     "panelVisibility": "PANEL VISIBILITY",
@@ -306,6 +308,7 @@
   "alerts": {
     "title": "Alerts",
     "alertsTab": "ALERTS",
+    "settingsTab": "SETTINGS",
     "historyTab": "HISTORY",
     "browserNotifs": "Browser notifications {status}",
     "enable": "Enable",
