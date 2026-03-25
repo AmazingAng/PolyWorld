@@ -239,6 +239,28 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
     return () => document.removeEventListener("keydown", handleKey);
   }, [handleKey]);
 
+  // On mobile, scroll focused inputs into view when virtual keyboard opens
+  const modalRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = modalRef.current;
+    if (!el) return;
+    const handleFocusIn = (e: FocusEvent) => {
+      if (window.innerWidth > 500) return; // desktop — no virtual keyboard
+      const target = e.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+        setTimeout(() => {
+          // Only scroll if keyboard actually shrunk the viewport
+          const vv = window.visualViewport;
+          if (vv && vv.height < window.innerHeight * 0.85) {
+            target.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, 300); // wait for keyboard animation
+      }
+    };
+    el.addEventListener("focusin", handleFocusIn);
+    return () => el.removeEventListener("focusin", handleFocusIn);
+  }, []);
+
   const handleSuccess = useCallback((info: { side: string; amount: number; price: number }) => {
     setOrderPlaced(true);
     const newOrder: RecentOrder = {
@@ -311,10 +333,11 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="relative w-full mx-4 bg-[var(--bg)] border border-[var(--border)] font-mono outline-none flex flex-col"
+        ref={modalRef}
+        className="trade-modal-inner relative w-full bg-[var(--bg)] border border-[var(--border)] font-mono outline-none flex flex-col"
         style={{
           maxWidth: 560,
-          height: "min(520px, calc(100vh - 48px))",
+          height: "min(520px, calc(100dvh - 48px))",
           boxShadow: "0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)",
         }}
         onMouseDown={(e) => e.stopPropagation()}

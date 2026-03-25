@@ -1838,6 +1838,9 @@ function MobileTabBar({ activePanel, onSelect }: { activePanel: string | null; o
     const update = () => {
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
+        // Skip updates when virtual keyboard is open to avoid layout thrashing
+        const active = document.activeElement;
+        if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT")) return;
         const vv = window.visualViewport;
         if (!vv) return;
         const bottomBar = window.innerHeight - vv.height - vv.offsetTop;

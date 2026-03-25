@@ -428,6 +428,7 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
   background: var(--panel-bg);
   border-top: 1px solid var(--border);
   z-index: 50;
+  padding-bottom: constant(safe-area-inset-bottom); /* iOS 11.0-11.2 / old WebView fallback */
   padding-bottom: var(--mobile-tab-offset);
 }
 
@@ -1176,6 +1177,16 @@ body.panel-drag-active iframe {
   }
 }
 
+/* === Trade Modal mobile === */
+@media (max-width: 500px) {
+  .trade-modal-inner {
+    margin: 0 !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    border: none !important;
+  }
+}
+
 /* === Focus visible — accessible keyboard navigation === */
 .settings-tab:focus-visible,
 .settings-pill:focus-visible,
@@ -1443,7 +1454,7 @@ body.panel-drag-active iframe {
   z-index: 200;
   width: 400px;
   max-width: calc(100vw - 24px);
-  max-height: min(520px, calc(100vh - 48px));
+  max-height: min(520px, calc(100dvh - 48px));
   background: var(--panel-bg);
   border: 1px solid var(--border);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -2119,7 +2130,7 @@ body.panel-drag-active iframe {
   .alert-dropdown {
     width: calc(100vw - 16px);
     right: 8px;
-    max-height: calc(100vh - 48px);
+    max-height: calc(100dvh - 48px);
   }
   .alert-type-selector { flex-direction: column; }
   .alert-field-row { flex-direction: column; }
