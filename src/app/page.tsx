@@ -282,8 +282,8 @@ export default function Home() {
   const { setNodeRef: setRightDroppableRef } = useDroppable({ id: "panel-grid-right" });
   const { setNodeRef: setBottomDroppableRef } = useDroppable({ id: "panel-grid-bottom" });
 
-  // Mobile detection
-  const [isMobile, setIsMobile] = useState(false);
+  // Mobile detection — null until hydrated to avoid flash of desktop panels
+  const [isMobile, setIsMobile] = useState<boolean | null>(null);
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 768px)");
     setIsMobile(mql.matches);
@@ -1686,7 +1686,7 @@ export default function Home() {
             />
           </div>
           {/* Horizontal resize handle + bottom panels (skip on mobile — not used) */}
-          {!isFullscreen && !isMobile && (
+          {!isFullscreen && isMobile === false && (
             <>
               <ResizeHandle direction="horizontal" onResize={handleHorizontalResize} />
               {!bottomPanelCollapsed && (
@@ -1709,7 +1709,7 @@ export default function Home() {
         </div>
 
         {/* Vertical resize handle + right panels (hidden in map fullscreen) */}
-        {!isFullscreen && !isMobile && (
+        {!isFullscreen && isMobile === false && (
           <>
             <ResizeHandle direction="vertical" onResize={handleVerticalResize} />
             <div className="panels-grid" ref={setRightPanelsNode}>
@@ -1785,7 +1785,7 @@ export default function Home() {
         />
       )}
 
-      {!isMobile && <Footer />}
+      {isMobile === false && <Footer />}
 
       {settingsOpen && (
         <SettingsModal

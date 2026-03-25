@@ -357,8 +357,14 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
     padding: 0;
   }
   .map-section {
-    height: calc(100dvh - 40px - var(--mobile-tab-total)) !important;
-    min-height: 50vh !important;
+    /* top/bottom constraints — avoids dvh/visualViewport timing mismatch */
+    position: fixed !important;
+    top: 40px;
+    left: 0;
+    right: 0;
+    bottom: var(--mobile-tab-total);
+    height: auto !important;
+    min-height: 0 !important;
   }
   /* Mobile: single-column cards */
   .panel-wide {
