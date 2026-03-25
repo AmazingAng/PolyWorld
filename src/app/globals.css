@@ -341,6 +341,12 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
 
 /* Mobile */
 @media (max-width: 768px) {
+  :root {
+    --mobile-tab-h: 52px;
+    --mobile-tab-offset: max(env(safe-area-inset-bottom), var(--browser-bottom-bar, 0px));
+    --mobile-tab-total: calc(var(--mobile-tab-h) + var(--mobile-tab-offset));
+  }
+
   /* Header 压缩为 40px */
   header { height: 40px !important; }
 
@@ -351,8 +357,7 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
     padding: 0;
   }
   .map-section {
-    /* 40px header + 52px tab bar base + safe-area/browser-bottom-bar padding */
-    height: calc(100dvh - 40px - 52px - max(env(safe-area-inset-bottom), var(--browser-bottom-bar, 0px))) !important;
+    height: calc(100dvh - 40px - var(--mobile-tab-total)) !important;
     min-height: 50vh !important;
   }
   /* Mobile: single-column cards */
@@ -368,7 +373,7 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 52px; /* above tab bar */
+    bottom: var(--mobile-tab-total); /* above tab bar */
     height: 40dvh;
     z-index: 40;
     background: var(--bg);
@@ -407,14 +412,17 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
 
 /* Mobile tab bar */
 .mobile-tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: stretch;
-  height: 52px;
+  height: var(--mobile-tab-h);
   background: var(--panel-bg);
   border-top: 1px solid var(--border);
-  flex-shrink: 0;
   z-index: 50;
-  padding-bottom: max(env(safe-area-inset-bottom), var(--browser-bottom-bar, 0px));
+  padding-bottom: var(--mobile-tab-offset);
 }
 
 .mobile-tab {
@@ -452,7 +460,7 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
 /* More menu */
 .mobile-more-menu {
   position: fixed;
-  bottom: 52px;
+  bottom: var(--mobile-tab-total);
   left: 0;
   right: 0;
   z-index: 55;

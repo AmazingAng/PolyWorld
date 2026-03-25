@@ -1849,9 +1849,11 @@ function MobileTabBar({ activePanel, onSelect }: { activePanel: string | null; o
     };
     update();
     window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
     return () => {
       cancelAnimationFrame(rafId);
       window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
     };
   }, []);
 
