@@ -54,7 +54,6 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bookSide, setBookSide] = useState<BookSide>("YES");
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const retryCount = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const midRef = useRef<HTMLDivElement>(null);

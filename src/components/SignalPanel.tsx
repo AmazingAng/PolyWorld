@@ -160,7 +160,6 @@ function SignalCard({
   signal,
   markets,
   onSelectMarket,
-  onSelectWallet: _onSelectWallet,
   onOpenTrade,
   onTrade,
 }: {

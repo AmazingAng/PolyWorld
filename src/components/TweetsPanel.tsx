@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { ProcessedMarket, TweetItem } from "@/types";
-import { TWEET_SOURCES, HANDLE_ABBREVS } from "@/lib/tweetSources";
+import { TWEET_SOURCES } from "@/lib/tweetSources";
 import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import { useI18n } from "@/i18n";
 

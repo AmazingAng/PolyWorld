@@ -28,7 +28,7 @@ export async function GET() {
     }
 
     return NextResponse.json({ status: "ok", timestamp: new Date().toISOString() });
-  } catch (err) {
+  } catch {
     return NextResponse.json(
       { status: "error", reason: "internal" },
       { status: 503 }
