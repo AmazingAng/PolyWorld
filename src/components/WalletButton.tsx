@@ -27,6 +27,15 @@ import {
 } from "@/lib/openOrders";
 import { useMarketStore } from "@/stores/marketStore";
 
+/** Format dollar amount: 3 significant digits with k/m suffix on mobile, full on desktop */
+function fmtBal(v: number): string {
+  if (window.innerWidth > 768) return `$${v.toFixed(2)}`;
+  const abs = Math.abs(v);
+  if (abs >= 1e6) return `$${+(v / 1e6).toPrecision(3)}m`;
+  if (abs >= 1e3) return `$${+(v / 1e3).toPrecision(3)}k`;
+  return `$${Math.round(v)}`;
+}
+
 interface WalletButtonProps {
   onRefresh?: () => void;
   loading?: boolean;
@@ -618,7 +627,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                   <line x1="12" y1="12" x2="12" y2="16"/>
                   <line x1="10" y1="14" x2="14" y2="14"/>
                 </svg>
-                <span className="text-[var(--text-secondary)] font-bold">${portfolioValue.toFixed(2)}</span>
+                <span className="text-[var(--text-secondary)] font-bold">{fmtBal(portfolioValue)}</span>
               </span>
             )}
             {portfolioValue !== null && polyBalance !== null && (
@@ -630,7 +639,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                   <circle cx="12" cy="12" r="10"/>
                   <path d="M12 6v2M12 16v2M9 9.5c0-1 1.5-1.5 3-1.5s3 .5 3 2-1.5 2-3 2-3 1-3 2 1.5 2 3 2 3-.5 3-1.5"/>
                 </svg>
-                <span className="text-[var(--text-secondary)] font-bold">${polyBalance.toFixed(2)}</span>
+                <span className="text-[var(--text-secondary)] font-bold">{fmtBal(polyBalance)}</span>
               </span>
             )}
           </div>

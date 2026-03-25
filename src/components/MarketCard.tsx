@@ -132,7 +132,7 @@ function MarketCardInner({
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleMouseEnter = () => {
-    if (selected) return;
+    if (selected || window.innerWidth <= 768) return;
     if (dismissTimer.current) clearTimeout(dismissTimer.current);
     hoverTimer.current = setTimeout(() => {
       const pos = computePosition();

@@ -362,10 +362,13 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
     grid-column: span 1 !important;
   }
 
-  /* Mobile panel fullscreen view */
+  /* Mobile panel half-screen overlay (map stays visible above) */
   .mobile-panel-view {
     position: fixed;
-    inset: 40px 0 52px 0; /* match 40px header, above tab bar */
+    left: 0;
+    right: 0;
+    bottom: 52px; /* above tab bar */
+    height: 40dvh;
     z-index: 40;
     background: var(--bg);
     overflow-y: auto;
@@ -373,6 +376,7 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
     flex-direction: column;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+    border-top: 1px solid var(--border);
   }
   .mobile-panel-view .panel {
     flex: 1;
@@ -409,7 +413,7 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   z-index: 50;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: max(env(safe-area-inset-bottom), var(--browser-bottom-bar, 0px));
 }
 
 .mobile-tab {

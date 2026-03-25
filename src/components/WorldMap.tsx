@@ -51,6 +51,7 @@ interface WorldMapProps {
   activeLayers?: Set<OverlayLayer>;
   onToggleLayer?: (layer: OverlayLayer) => void;
   onTrade?: (state: import("./TradeModal").TradeModalState) => void;
+  onMapTap?: () => void;
 }
 
 // ─── 3-Tier Geographic Hierarchy ─────────────────────────────────
@@ -244,6 +245,7 @@ function WorldMapInner({
   activeLayers,
   onToggleLayer,
   onTrade,
+  onMapTap,
 }: WorldMapProps) {
   const { locale, t } = useI18n();
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -289,7 +291,7 @@ function WorldMapInner({
 
   // Hover preview popup state
   const [hoverMarket, setHoverMarket] = useState<ProcessedMarket | null>(null);
-  const [hoverPos, setHoverPos] = useState<{ top: number; left: number } | null>(null);
+  const [hoverPos, setHoverPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverMarketRef = useRef<ProcessedMarket | null>(null);
   hoverMarketRef.current = hoverMarket;
@@ -310,8 +312,9 @@ function WorldMapInner({
     y: number;
   } | null>(null);
 
-  const PREVIEW_W = 480;
-  const PREVIEW_MAX_H = 520;
+  const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
+  const PREVIEW_W = isMobile ? Math.min(300, window.innerWidth - 16) : 480;
+  const PREVIEW_MAX_H = isMobile ? 360 : 520;
 
   const clearHoverPopup = useCallback(() => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
@@ -1246,7 +1249,7 @@ function WorldMapInner({
       }
     });
 
-    // Click individual → callback only (no popup)
+    // Click individual → desktop: select market; mobile: show preview popup above icon
     map.on("click", "unclustered-point", (e) => {
       if (!e.features?.length) return;
       const props = e.features[0].properties;
@@ -1254,11 +1257,50 @@ function WorldMapInner({
       if (!props || geom.type !== "Point") return;
       const market = marketsLookup.current.get(props.marketId);
       if (!market) return;
-      // Dismiss hover popup on click — the detail panel will show instead
-      if (hoverTimer.current) clearTimeout(hoverTimer.current);
+
+      const mobile = window.innerWidth <= 768;
+      // Always select the market so detail panel tracks it
+      if (onMarketClick) onMarketClick(market);
+      if (mobile) {
+        // Show popup above the tapped icon
+        if (hoverTimer.current) clearTimeout(hoverTimer.current);
+        const pw = Math.min(300, window.innerWidth - 16);
+        const maxH = 360;
+        const gap = 20;
+        const point = e.point;
+        const canvas = map.getCanvas().getBoundingClientRect();
+        const screenX = canvas.left + point.x;
+        const screenY = canvas.top + point.y;
+        let left = screenX - pw / 2;
+        left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+        // Prefer above icon (bottom-anchored so it hugs the icon); fall back to below
+        const spaceAbove = screenY - canvas.top;
+        if (spaceAbove > 120) {
+          // Bottom of popup = 6px above icon
+          const bottom = window.innerHeight - screenY + gap;
+          setHoverMarket(market);
+          setHoverPos({ bottom, left });
+        } else {
+          const top = screenY + gap + 16; // 16 ≈ icon size
+          setHoverMarket(market);
+          setHoverPos({ top, left });
+        }
+      } else {
+        // Desktop: dismiss hover popup, detail panel will show
+        if (hoverTimer.current) clearTimeout(hoverTimer.current);
+        setHoverMarket(null);
+        setHoverPos(null);
+      }
+    });
+
+    // Tap elsewhere on map → dismiss mobile popups
+    map.on("click", (e) => {
+      if (window.innerWidth > 768) return;
+      const features = map.queryRenderedFeatures(e.point, { layers: ["unclustered-point"] });
+      if (features.length > 0) return; // tapped a marker, handled above
       setHoverMarket(null);
       setHoverPos(null);
-      if (onMarketClick) onMarketClick(market);
+      if (onMapTap) onMapTap();
     });
 
     // Hover: feature-state highlight + cursor + preview popup
@@ -1469,7 +1511,7 @@ function WorldMapInner({
             if (countryHoverTimer.current) clearTimeout(countryHoverTimer.current);
             const { x, y } = e.point;
             countryHoverTimer.current = setTimeout(() => {
-              setHoverCountry({ name, x, y });
+              if (window.innerWidth > 768) setHoverCountry({ name, x, y });
             }, 800);
           }
         });
@@ -1482,10 +1524,12 @@ function WorldMapInner({
           setHoverCountry(null);
         });
 
-        // Country click → callback (skip if a market icon was clicked)
+        // Country click → callback (skip if a market icon was clicked, or mobile popup is active)
         map.on("click", "country-fills", (e) => {
           const marketHit = map.queryRenderedFeatures(e.point, { layers: ["unclustered-point"] });
           if (marketHit.length > 0) return;
+          // Mobile: if a market popup is showing, just dismiss it — don't trigger country navigation
+          if (window.innerWidth <= 768 && hoverMarketRef.current) return;
 
           const feat = e.features?.[0];
           const name = feat?.properties?.name as string | undefined;
@@ -1693,6 +1737,11 @@ function WorldMapInner({
     // Only zoom in if viewing from far away; otherwise just pan
     const targetZoom = currentZoom >= 4 ? currentZoom : 5;
 
+    // On mobile with bottom panel, offset center upward so icon stays in visible map area
+    const mobile = window.innerWidth <= 768;
+    const padBottom = mobile ? window.innerHeight * 0.4 : 0; // 40dvh panel
+    const padding = padBottom > 0 ? { top: 0, left: 0, right: 0, bottom: padBottom } : undefined;
+
     // If the target is already near screen center, skip the fly animation
     const screenPt = map.project(rawCenter);
     const canvas = map.getCanvas();
@@ -1702,9 +1751,9 @@ function WorldMapInner({
     const nearCenter = dist < 120 && Math.abs(targetZoom - currentZoom) < 0.5;
 
     if (nearCenter) {
-      map.jumpTo({ center: rawCenter, zoom: targetZoom });
+      map.jumpTo({ center: rawCenter, zoom: targetZoom, ...(padding && { padding }) });
     } else {
-      map.flyTo({ center: rawCenter, zoom: targetZoom, duration: 1500 });
+      map.flyTo({ center: rawCenter, zoom: targetZoom, duration: 1500, ...(padding && { padding }) });
     }
 
     // After flyTo completes, ensure the bubble is visible and centered
@@ -1716,7 +1765,7 @@ function WorldMapInner({
       if (visible) {
         // Bubble visible but may be off-center due to offset — recenter
         if (bubbleCoords[0] !== rawCenter[0] || bubbleCoords[1] !== rawCenter[1]) {
-          map.easeTo({ center: bubbleCoords, duration: 400 });
+          map.easeTo({ center: bubbleCoords, duration: 400, ...(padding && { padding }) });
         }
         return;
       }
@@ -1725,7 +1774,7 @@ function WorldMapInner({
       // but never zoom OUT from where the animation landed
       const postAnimZoom = map.getZoom();
       const minUncluster = ZOOM_TIER_THRESHOLDS[0] + 0.5;
-      map.easeTo({ center: bubbleCoords, zoom: Math.max(minUncluster, postAnimZoom), duration: 800 });
+      map.easeTo({ center: bubbleCoords, zoom: Math.max(minUncluster, postAnimZoom), duration: 800, ...(padding && { padding }) });
     };
     map.once("moveend", onMoveEnd);
 
@@ -1984,7 +2033,8 @@ function WorldMapInner({
         <div
           className="fixed z-[9999] bg-[var(--bg)] border border-[var(--border)] rounded-md overflow-y-auto"
           style={{
-            top: hoverPos.top,
+            ...(hoverPos.top !== undefined ? { top: hoverPos.top } : {}),
+            ...(hoverPos.bottom !== undefined ? { bottom: hoverPos.bottom } : {}),
             left: hoverPos.left,
             width: PREVIEW_W,
             maxHeight: PREVIEW_MAX_H,

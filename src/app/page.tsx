@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo, useId } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, useId, lazy, Suspense } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -19,6 +19,7 @@ import { resolveCountryName } from "@/lib/countries";
 import { getParentCountry } from "@/lib/geo";
 import { findSimilarMarkets } from "@/lib/correlation";
 import Header from "@/components/Header";
+const MarketPreview = lazy(() => import("@/components/MarketPreview"));
 import Panel from "@/components/Panel";
 import MarketsPanel from "@/components/MarketsPanel";
 import MarketDetailPanel from "@/components/MarketDetailPanel";
@@ -297,6 +298,9 @@ export default function Home() {
     return () => mql.removeEventListener("change", handler);
   }, []);
 
+  // Mobile market preview popup
+  const [mobilePreview, setMobilePreview] = useState<ProcessedMarket | null>(null);
+
   // Watchlist
   const { watchedIds, isWatched, toggleWatch, count: watchedCount, addedAt } = useWatchlist();
   const { getColSpan, setColSpan, resetColSpan } = usePanelColSpans();
@@ -567,6 +571,7 @@ export default function Home() {
   );
 
   const handleMarketClick = useCallback((market: ProcessedMarket) => {
+    setMobilePreview(null); // dismiss card-triggered popup when map icon is tapped
     const mkt = useMarketStore.getState();
     mkt.selectMarket(market);
     if (market.location) {
@@ -705,6 +710,12 @@ export default function Home() {
           || getParentCountry(market.location)
           || market.location;
         mkt.selectCountry(country);
+      }
+      // Mobile: show preview popup + flyTo, detail panel tracks selection in background
+      if (window.innerWidth <= 768) {
+        setMobilePreview(market);
+        if (market.coords) handleFlyTo(market.coords, market.id);
+        return;
       }
       if (market.coords) handleFlyTo(market.coords, market.id);
     },
@@ -1586,6 +1597,7 @@ export default function Home() {
               activeLayers={activeLayers}
               onToggleLayer={toggleOverlayLayer}
               onTrade={setQuickTrade}
+              onMapTap={() => setMobilePreview(null)}
             />
           </div>
           {/* Horizontal resize handle + bottom panels (hidden in map fullscreen) */}
@@ -1659,6 +1671,25 @@ export default function Home() {
       </DragOverlay>
       </DndContext>
 
+      {/* Mobile market preview popup — shown over the map area, pointer-events pass through to map */}
+      {isMobile && mobilePreview && (
+        <div
+          className="fixed max-h-[50dvh] overflow-y-auto bg-[var(--bg)] border border-[var(--border)] rounded-md z-[9998]"
+          style={{
+            width: Math.min(300, window.innerWidth - 16),
+            left: "50%",
+            transform: "translateX(-50%)",
+            top: 48,
+            padding: "12px 14px",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)",
+          }}
+        >
+          <Suspense fallback={<div className="text-[12px] text-[var(--text-faint)] font-mono py-4">loading...</div>}>
+            <MarketPreview market={mobilePreview} onTrade={setQuickTrade} hideChart />
+          </Suspense>
+        </div>
+      )}
+
       {/* Mobile bottom tab bar */}
       {isMobile && (
         <MobileTabBar
@@ -1703,16 +1734,32 @@ export default function Home() {
 const MOBILE_TABS: Array<{ id: string; labelKey: string; icon: string }> = [
   { id: "map", labelKey: "mobile.map", icon: "\uD83C\uDF0D" },
   { id: "markets", labelKey: "mobile.markets", icon: "\uD83D\uDCC8" },
-  { id: "news", labelKey: "mobile.news", icon: "\uD83D\uDCF0" },
-  { id: "smartMoney", labelKey: "mobile.smartMoney", icon: "\uD83D\uDCB0" },
+  { id: "watchlist", labelKey: "mobile.watch", icon: "\u2B50" },
+  { id: "detail", labelKey: "mobile.detail", icon: "\uD83D\uDCCA" },
   { id: "more", labelKey: "mobile.more", icon: "\u2026" },
 ];
 
-const MORE_PANELS = ["detail", "country", "tweets", "live", "watchlist", "leaderboard", "whaleTrades", "orderbook", "trader", "sentiment", "chart", "signals", "resolution", "portfolio", "arbitrage", "calendar"];
+const MORE_PANELS = ["news", "smartMoney", "country", "tweets", "live", "leaderboard", "whaleTrades", "orderbook", "trader", "sentiment", "chart", "signals", "resolution", "portfolio", "arbitrage", "calendar"];
 
 function MobileTabBar({ activePanel, onSelect }: { activePanel: string | null; onSelect: (id: string) => void }) {
   const { t } = useI18n();
   const [showMore, setShowMore] = useState(false);
+
+  // Detect browser bottom toolbar (Chrome Android etc.) via visualViewport
+  useEffect(() => {
+    const update = () => {
+      const vv = window.visualViewport;
+      if (!vv) return;
+      const bottomBar = window.innerHeight - vv.height - vv.offsetTop;
+      document.documentElement.style.setProperty(
+        "--browser-bottom-bar",
+        bottomBar > 0 ? `${bottomBar}px` : "0px"
+      );
+    };
+    update();
+    window.visualViewport?.addEventListener("resize", update);
+    return () => window.visualViewport?.removeEventListener("resize", update);
+  }, []);
 
   return (
     <>
