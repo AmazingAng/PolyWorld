@@ -6,7 +6,7 @@ const LINK_KEYS = [
   { key: "about", href: "/about", external: true },
   { key: "docs", href: "/docs", external: true },
   { key: "github", href: "https://github.com/AmazingAng/polyworld", external: true },
-  { key: "x", href: "https://x.com/0xAA_Science", external: true },
+  { key: "x", href: "https://x.com/polyworld_bet", external: true },
 ];
 
 export default function Footer() {
