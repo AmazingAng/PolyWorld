@@ -423,13 +423,11 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
   left: 0;
   right: 0;
   display: flex;
-  align-items: stretch;
-  height: var(--mobile-tab-h);
+  align-items: flex-start;
+  height: var(--mobile-tab-total);
   background: var(--panel-bg);
   border-top: 1px solid var(--border);
   z-index: 50;
-  padding-bottom: constant(safe-area-inset-bottom); /* iOS 11.0-11.2 / old WebView fallback */
-  padding-bottom: var(--mobile-tab-offset);
 }
 
 .mobile-tab {
@@ -438,6 +436,7 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  height: var(--mobile-tab-h);
   gap: 2px;
   border: none;
   background: none;
