@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { fetchMarketTrades } from "@/lib/smartMoney";
 import type { SmartWallet, WhaleTrade } from "@/types";
 import { SingleCache } from "@/lib/apiCache";
 import { apiError } from "@/lib/apiError";
 import { aggregateFlowByCategory, type CategoryFlow } from "@/lib/flowAnalysis";
+import { createHash } from "crypto";
 
 interface LeaderboardRow {
   address: string;
@@ -35,6 +36,31 @@ export const dynamic = "force-dynamic";
 const tradeCache = new SingleCache<{ whaleTrades: WhaleTrade[]; smartTrades: WhaleTrade[] }>(30_000);
 const flowCache = new SingleCache<CategoryFlow[]>(120_000); // 2 min cache
 let bgFetchInProgress = false;
+
+// ETag cache per response key
+const etagCache = new Map<string, { body: string; etag: string; ts: number }>();
+const ETAG_TTL = 10_000;
+
+function cachedJsonResponse(key: string, data: unknown, request: NextRequest): NextResponse {
+  const now = Date.now();
+  let entry = etagCache.get(key);
+  if (!entry || now - entry.ts > ETAG_TTL) {
+    const body = JSON.stringify(data);
+    const etag = `"${createHash("md5").update(body).digest("hex").slice(0, 16)}"`;
+    entry = { body, etag, ts: now };
+    etagCache.set(key, entry);
+  }
+
+  const ifNoneMatch = request.headers.get("if-none-match");
+  if (ifNoneMatch && ifNoneMatch === entry.etag) {
+    return new NextResponse(null, { status: 304, headers: { ETag: entry.etag } });
+  }
+
+  return new NextResponse(entry.body, {
+    status: 200,
+    headers: { "Content-Type": "application/json", ETag: entry.etag },
+  });
+}
 
 function mapApiTrade(
   t: Awaited<ReturnType<typeof fetchMarketTrades>>[number],
@@ -153,7 +179,7 @@ function readTradesFromDb(
   };
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const db = getDb();
     const { searchParams } = new URL(request.url);
@@ -165,7 +191,7 @@ export async function GET(request: Request) {
         flows = aggregateFlowByCategory(db, 24);
         flowCache.set(flows);
       }
-      return NextResponse.json({ flows });
+      return cachedJsonResponse("flow", { flows }, request);
     }
 
     const period = searchParams.get("period") || "all";
@@ -210,7 +236,7 @@ export async function GET(request: Request) {
     // Fast path: only leaderboard data needed (period toggle)
     const leaderboardOnly = searchParams.get("leaderboardOnly") === "1";
     if (leaderboardOnly) {
-      return NextResponse.json({ leaderboard });
+      return cachedJsonResponse(`lb-${timePeriod}`, { leaderboard }, request);
     }
 
     // Build smart wallet address set from ALL tracked wallets (PnL >= $100k)
@@ -272,12 +298,14 @@ export async function GET(request: Request) {
       .prepare(`SELECT MAX(updated_at) as last_sync FROM smart_wallets`)
       .get() as { last_sync: string | null } | undefined;
 
-    return NextResponse.json({
+    const responseData = {
       leaderboard,
       recentTrades: whaleTrades,
       smartTrades,
       lastSync: walletMeta?.last_sync || null,
-    });
+    };
+
+    return cachedJsonResponse(`sm-${timePeriod}`, responseData, request);
   } catch (err) {
     return apiError("smart-money", "Failed to fetch smart money data", 500, err);
   }

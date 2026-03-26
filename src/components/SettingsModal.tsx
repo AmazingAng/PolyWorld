@@ -272,6 +272,22 @@ function GeneralTab({
         </div>
       </div>
 
+      {/* Language */}
+      <div className="settings-section">
+        <span className="section-label">{t("settings.language")}</span>
+        <div className="settings-pill-bar">
+          {(["en", "zh"] as Locale[]).map((l) => (
+            <button
+              key={l}
+              onClick={() => setLocale(l)}
+              className={`settings-pill${locale === l ? " active" : ""}`}
+            >
+              {l === "en" ? "English" : "中文"}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Auto-refresh */}
       <div className="settings-section">
         <span className="section-label">{t("settings.autoRefresh")}</span>
@@ -326,22 +342,6 @@ function GeneralTab({
       <div className="settings-section">
         <span className="section-label">{t("settings.theme")}</span>
         <div className="settings-info-value">{t("settings.themeDark")}</div>
-      </div>
-
-      {/* Language */}
-      <div className="settings-section">
-        <span className="section-label">{t("settings.language")}</span>
-        <div className="settings-pill-bar">
-          {(["en", "zh"] as Locale[]).map((l) => (
-            <button
-              key={l}
-              onClick={() => setLocale(l)}
-              className={`settings-pill${locale === l ? " active" : ""}`}
-            >
-              {l === "en" ? "English" : "中文"}
-            </button>
-          ))}
-        </div>
       </div>
     </div>
   );

@@ -392,38 +392,38 @@ export default function Home() {
   const seenSignalIds = useRef<Set<string>>(new Set());
   const seenMarketIds = useRef<Set<string>>(new Set());
   const isFirstLoad = useRef(true);
+  const sessionStartTime = useRef(Date.now());
   const lbCacheRef = useRef<Record<string, import("@/types").SmartWallet[]>>({});
 
-  // Quick fingerprint to detect if market data actually changed
-  const dataFingerprintRef = useRef("");
-  const marketFingerprint = (arr: ProcessedMarket[]) => {
-    // count + first/last ID + sum of probs (fast, no allocation)
-    if (arr.length === 0) return "0";
-    let probSum = 0;
-    for (let i = 0; i < arr.length; i++) probSum += (arr[i].prob ?? 0);
-    return `${arr.length}:${arr[0].id}:${arr[arr.length - 1].id}:${probSum.toFixed(2)}`;
-  };
+  // ETag for /api/markets — skip JSON parse when data unchanged (saves ~1-3MB per poll on mobile)
+  const marketsEtagRef = useRef<string | null>(null);
 
   const fetchData = useCallback(async (signal?: AbortSignal) => {
     const { setMapped, setUnmapped, setLoading, setDataMode, setLastSyncTime, setSignals, setNewMarkets, setLastRefresh } = useMarketStore.getState();
     setLoading(true);
     setNewMarkets([]);
     try {
-      const res = await fetch("/api/markets", { signal });
+      const headers: HeadersInit = {};
+      if (marketsEtagRef.current) headers["If-None-Match"] = marketsEtagRef.current;
+      const res = await fetch("/api/markets", { signal, headers });
+
+      // 304 Not Modified — data unchanged, skip parse entirely
+      if (res.status === 304) {
+        setLoading(false);
+        setLastRefresh(new Date().toLocaleTimeString());
+        return;
+      }
+
       if (!res.ok) throw new Error("API error");
+      const etag = res.headers.get("etag");
+      if (etag) marketsEtagRef.current = etag;
       const data = await res.json();
       const m: ProcessedMarket[] = data.mapped || [];
       const u: ProcessedMarket[] = data.unmapped || [];
 
       if (m.length > 0 || u.length > 0) {
-        // Skip store update if data hasn't changed — avoids re-render + GeoJSON rebuild
-        const fp = marketFingerprint(m) + "|" + marketFingerprint(u);
-        const changed = fp !== dataFingerprintRef.current;
-        dataFingerprintRef.current = fp;
-        if (changed) {
-          setMapped(m);
-          setUnmapped(u);
-        }
+        setMapped(m);
+        setUnmapped(u);
         setDataMode("live");
         setRefreshError(false);
         if (data.lastSync) setLastSyncTime(data.lastSync);
@@ -444,11 +444,16 @@ export default function Home() {
           for (const item of all) seenMarketIds.current.add(item.id);
           isFirstLoad.current = false;
         } else {
-          const fresh = all.filter(
-            (item) => !seenMarketIds.current.has(item.id)
-          );
+          // Only treat as "new" if: 1) not seen before AND 2) created after session start
+          // This prevents old markets that re-enter the active set from triggering alerts
+          const fresh = all.filter((item) => {
+            if (seenMarketIds.current.has(item.id)) return false;
+            seenMarketIds.current.add(item.id);
+            if (!item.createdAt) return false;
+            const created = new Date(item.createdAt).getTime();
+            return created > sessionStartTime.current;
+          });
           if (fresh.length > 0) {
-            for (const item of fresh) seenMarketIds.current.add(item.id);
             setNewMarkets(fresh);
           }
         }
@@ -469,6 +474,7 @@ export default function Home() {
     setLoading(false);
   }, []);
 
+  const smartMoneyEtagRef = useRef<string | null>(null);
   const fetchSmartMoney = useCallback(async (periodOrSignal?: LeaderboardPeriod | AbortSignal, leaderboardOnly?: boolean) => {
     // Support being called from useVisibilityPolling (signal) or directly (period)
     let period: LeaderboardPeriod | undefined;
@@ -482,8 +488,13 @@ export default function Home() {
       const sm = useSmartMoneyStore.getState();
       const p = period ?? sm.leaderboardPeriod;
       const params = `period=${p}${leaderboardOnly ? "&leaderboardOnly=1" : ""}`;
-      const res = await fetch(`/api/smart-money?${params}`, { signal });
+      const headers: HeadersInit = {};
+      if (!leaderboardOnly && smartMoneyEtagRef.current) headers["If-None-Match"] = smartMoneyEtagRef.current;
+      const res = await fetch(`/api/smart-money?${params}`, { signal, headers });
+      if (res.status === 304) return; // data unchanged
       if (!res.ok) return;
+      const etag = res.headers.get("etag");
+      if (etag && !leaderboardOnly) smartMoneyEtagRef.current = etag;
       const data = await res.json();
       const lb = data.leaderboard || [];
       lbCacheRef.current[p] = lb;
