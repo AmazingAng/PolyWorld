@@ -82,7 +82,7 @@ export default function OnboardingModal({ onConnectWallet }: OnboardingModalProp
           </button>
         </div>
 
-        <p className="text-[9px] text-[var(--text-ghost)] mt-3 text-center">
+        <p className="text-[10px] text-[var(--text-ghost)] mt-3 text-center">
           {t("onboarding.noWalletNeeded")}
         </p>
       </div>

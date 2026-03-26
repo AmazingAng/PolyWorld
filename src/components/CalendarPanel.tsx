@@ -144,7 +144,7 @@ export default function CalendarPanel({ markets, onSelectMarket }: CalendarPanel
           <button
             key={cat}
             onClick={() => setCategoryFilter(cat)}
-            className="px-1.5 py-0 text-[9px] rounded transition-colors leading-[18px]"
+            className="px-1.5 py-0 text-[10px] rounded transition-colors leading-[18px]"
             style={{
               background: categoryFilter === cat ? "rgba(34,197,94,0.15)" : "transparent",
               color: categoryFilter === cat ? "#22c55e" : "var(--text-faint)",
@@ -174,7 +174,7 @@ export default function CalendarPanel({ markets, onSelectMarket }: CalendarPanel
                   onClick={() => toggleCollapse(group)}
                   className="w-full flex items-center gap-1 px-1.5 py-1 text-[10px] text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors"
                 >
-                  <span className="text-[9px]">{isCollapsed ? "\u25B6" : "\u25BC"}</span>
+                  <span className="text-[10px]">{isCollapsed ? "\u25B6" : "\u25BC"}</span>
                   <span className="font-bold uppercase tracking-wide">{t(GROUP_LABEL_KEYS[group] || group)}</span>
                   <span className="text-[var(--text-ghost)]">({events.length})</span>
                 </button>
@@ -194,7 +194,7 @@ export default function CalendarPanel({ markets, onSelectMarket }: CalendarPanel
                         >
                           {/* Date + countdown */}
                           <div className="flex flex-col items-center shrink-0 w-10">
-                            <span className="text-[9px] text-[var(--text-faint)] tabular-nums">
+                            <span className="text-[10px] text-[var(--text-faint)] tabular-nums">
                               {formatDate(ev.endDate)}
                             </span>
                             <span className="text-[10px] font-bold tabular-nums" style={{ color: uColor }}>

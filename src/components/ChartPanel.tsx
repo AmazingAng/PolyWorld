@@ -503,7 +503,7 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
           {selectedMarket?.indicators && (
             <>
               <div className="w-px h-3 bg-[#2a2a2a]" />
-              <div className="flex items-center gap-2 text-[9px] tabular-nums">
+              <div className="flex items-center gap-2 text-[10px] tabular-nums">
                 {selectedMarket.indicators.momentum !== null && (
                   <span title={t("chart.momentumDesc")}>
                     <span className="text-[#555]">{t("chart.momentumIndicator")} </span>
@@ -543,7 +543,7 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
           )}
           <div className="w-px h-3 bg-[#2a2a2a]" />
           <button onClick={() => setUseUTC(v => !v)}
-            className="px-1.5 py-0.5 text-[9px] transition-all"
+            className="px-1.5 py-0.5 text-[10px] transition-all"
             style={{ color: "#888", background: useUTC ? "#2a2a2a" : "transparent", border: "1px solid #222", borderRadius: 2 }}
             title={useUTC ? t("chart.showingUtc") : t("chart.showingLocal")}>
             {useUTC ? "UTC" : "Local"}
@@ -551,11 +551,11 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
         </div>
         {!isMulti && !lineOnly && (
           <div className="flex items-center gap-1">
-            <button onClick={() => setShowMA(v => !v)} className="px-1.5 py-0.5 text-[9px] transition-all"
+            <button onClick={() => setShowMA(v => !v)} className="px-1.5 py-0.5 text-[10px] transition-all"
               style={{ color: showMA ? "#f5d94e" : "#444", background: showMA ? "#f5d94e15" : "transparent", border: `1px solid ${showMA ? "#f5d94e33" : "#222"}`, borderRadius: 2 }}>
               MA
             </button>
-            <button onClick={() => setShowMACD(v => !v)} className="px-1.5 py-0.5 text-[9px] transition-all"
+            <button onClick={() => setShowMACD(v => !v)} className="px-1.5 py-0.5 text-[10px] transition-all"
               style={{ color: showMACD ? "#4fc3f7" : "#444", background: showMACD ? "#4fc3f715" : "transparent", border: `1px solid ${showMACD ? "#4fc3f733" : "#222"}`, borderRadius: 2 }}>
               MACD
             </button>
@@ -565,7 +565,7 @@ function ChartPanelInner({ selectedMarket, lineOnly = false }: ChartPanelProps) 
 
       {/* ─── OHLC data bar ─── */}
       {!isMulti && !lineOnly && (
-        <div className="flex items-center gap-3 px-2 py-0.5 text-[9px] tabular-nums shrink-0 border-b border-[#1a1a1a] min-h-[18px]" style={{ background: "#0f0f0f" }}>
+        <div className="flex items-center gap-3 px-2 py-0.5 text-[10px] tabular-nums shrink-0 border-b border-[#1a1a1a] min-h-[18px]" style={{ background: "#0f0f0f" }}>
           {crosshairData ? (
             <>
               <span className="text-[#888]">O <span style={{ color: crosshairData.close >= crosshairData.open ? "#22c55e" : "#ff4444" }}>{fmtPct(crosshairData.open)}</span></span>

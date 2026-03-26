@@ -633,24 +633,24 @@ export default function OrderForm({
   // ─── COMPACT MODE ────────────────────────────────────────────────────────────
   if (compact) {
     if (!isConnected) return (
-      <button onClick={handleConnect} className="text-[9px] px-1.5 py-px border border-[#22c55e]/30 text-[#22c55e] hover:border-[#22c55e]/60 transition-colors">
+      <button onClick={handleConnect} className="text-[10px] px-1.5 py-px border border-[#22c55e]/30 text-[#22c55e] hover:border-[#22c55e]/60 transition-colors">
         {t("trade.connectWallet")}
       </button>
     );
     if (!isPolygon) return (
-      <span className="text-[9px] text-[#f59e0b]">{t("trade.switchToPolygon")}</span>
+      <span className="text-[10px] text-[#f59e0b]">{t("trade.switchToPolygon")}</span>
     );
     if (!tradeSession) return (
-      <button onClick={handleAuthorize} disabled={busy} className="text-[9px] px-1.5 py-px border border-[#f59e0b]/40 text-[#f59e0b] hover:border-[#f59e0b]/70 transition-colors disabled:opacity-40">
+      <button onClick={handleAuthorize} disabled={busy} className="text-[10px] px-1.5 py-px border border-[#f59e0b]/40 text-[#f59e0b] hover:border-[#f59e0b]/70 transition-colors disabled:opacity-40">
         {status === "authorizing" ? t("trade.authorizing") : t("trade.authorizeToTrade")}
       </button>
     );
     if (needsApproval) return isEOA ? (
-      <button onClick={handleEOAApprove} disabled={busy} className="text-[9px] px-1.5 py-px border border-[#f59e0b]/40 text-[#f59e0b] hover:border-[#f59e0b]/70 transition-colors disabled:opacity-40">
+      <button onClick={handleEOAApprove} disabled={busy} className="text-[10px] px-1.5 py-px border border-[#f59e0b]/40 text-[#f59e0b] hover:border-[#f59e0b]/70 transition-colors disabled:opacity-40">
         {status === "approving" ? t("trade.approving") : t("trade.approveUsdc")}
       </button>
     ) : (
-      <span className="text-[9px] text-[#f59e0b]">{t("trade.approveTokensFirst")}</span>
+      <span className="text-[10px] text-[#f59e0b]">{t("trade.approveTokensFirst")}</span>
     );
 
     // Market order mode — use currentPrice directly, no price input
@@ -689,7 +689,7 @@ export default function OrderForm({
         <div className="flex items-center gap-1">
           <button
             onClick={() => setAmount("0")}
-            className={`text-[9px] px-2 py-0.5 border transition-colors ${
+            className={`text-[10px] px-2 py-0.5 border transition-colors ${
               amountNum === 0
                 ? side === "BUY"
                   ? "border-[#22c55e]/60 text-[#22c55e] bg-[#22c55e]/5"
@@ -713,7 +713,7 @@ export default function OrderForm({
                 setAmount(String(roundDown(displayedSharesHeld * (preset / 100), SIZE_DECIMALS)));
               }}
               disabled={side === "SELL" && !hasSharesToSell}
-              className={`text-[9px] px-2 py-0.5 border transition-colors ${
+              className={`text-[10px] px-2 py-0.5 border transition-colors ${
                 side === "BUY"
                   ? "border-[var(--border)] text-[var(--text-dim)] hover:border-[#22c55e]/30 hover:text-[var(--text-dim)]"
                   : activeSellPercent === preset
@@ -743,12 +743,12 @@ export default function OrderForm({
               }`}
             />
             {side === "BUY" && availableUsdc !== null && (
-              <span className={`text-[9px] shrink-0 ${exceedsBalance ? "text-[#ff4444]" : "text-[var(--text-dim)]"}`}>
+              <span className={`text-[10px] shrink-0 ${exceedsBalance ? "text-[#ff4444]" : "text-[var(--text-dim)]"}`}>
                 / ${availableUsdc.toFixed(2)}
               </span>
             )}
             {side === "SELL" && hasSharesToSell && (
-              <span className={`text-[9px] shrink-0 ${exceedsShares ? "text-[#ff4444]" : "text-[var(--text-dim)]"}`}>
+              <span className={`text-[10px] shrink-0 ${exceedsShares ? "text-[#ff4444]" : "text-[var(--text-dim)]"}`}>
                 / {displayedSharesHeld!.toFixed(2)}
               </span>
             )}
@@ -784,7 +784,7 @@ export default function OrderForm({
         </div>
         {/* Slippage warning (compact) */}
         {compactSlippageCents >= 1 && (
-          <div className={`text-[9px] flex items-center justify-between gap-1 ${
+          <div className={`text-[10px] flex items-center justify-between gap-1 ${
             compactSlippageCents >= 5 ? "text-[#ff4444]" : "text-[#f59e0b]"
           }`}>
             <span>{compactSlippageCents >= 5 ? `⚠ ${compactSlippageCents.toFixed(0)}¢ ${t("trade.slippage")} — market moving fast` : `⚠ ${compactSlippageCents.toFixed(0)}¢ ${t("trade.slippage")}`}</span>
@@ -903,14 +903,14 @@ export default function OrderForm({
 
       {/* ── Row 2: Price row ── */}
       <div>
-        <div className="text-[9px] text-[var(--text-dim)] uppercase tracking-[0.08em] mb-1">{t("trade.price")}</div>
+        <div className="text-[10px] text-[var(--text-dim)] uppercase tracking-[0.08em] mb-1">{t("trade.price")}</div>
         {!isMarketOrder ? (
           <div className="flex items-center gap-1">
             {(tickSize <= 0.001 ? [-10, -1, -0.1] : [-10, -1]).map((d) => (
               <button
                 key={d}
                 onClick={() => adjustPrice(d)}
-                className="text-[9px] px-2 py-1.5 border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors tabular-nums shrink-0"
+                className="text-[10px] px-2 py-1.5 border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors tabular-nums shrink-0"
               >
                 {d < -1 || Number.isInteger(d) ? `${d}¢` : `${d.toFixed(1)}¢`}
               </button>
@@ -931,7 +931,7 @@ export default function OrderForm({
               <button
                 key={d}
                 onClick={() => adjustPrice(d)}
-                className="text-[9px] px-2 py-1.5 border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors tabular-nums shrink-0"
+                className="text-[10px] px-2 py-1.5 border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors tabular-nums shrink-0"
               >
                 +{Number.isInteger(d) ? d : d.toFixed(1)}¢
               </button>
@@ -948,14 +948,14 @@ export default function OrderForm({
       {/* ── Row 3: Amount ── */}
       <div>
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[9px] text-[var(--text-dim)] uppercase tracking-[0.08em]">
+          <span className="text-[10px] text-[var(--text-dim)] uppercase tracking-[0.08em]">
             {side === "BUY" ? t("trade.amountUsdc") : t("common.shares")}
           </span>
           <div className="flex items-center gap-1.5">
             {/* Limit Only toggle */}
             <button
               onClick={() => setLimitOnly(v => !v)}
-              className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 border transition-colors ${
+              className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 border transition-colors ${
                 limitOnly
                   ? "border-[#f59e0b]/60 text-[#f59e0b] bg-[#f59e0b]/8"
                   : "border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text-dim)] hover:border-[var(--border-subtle)]"
@@ -971,7 +971,7 @@ export default function OrderForm({
             {side === "BUY" && availableUsdc !== null && availableUsdc > 0 && (
               <button
                 onClick={() => setAmount(availableUsdc.toFixed(2))}
-                className="text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text-dim)] transition-colors"
+                className="text-[10px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-dim)] hover:text-[var(--text-dim)] transition-colors"
               >
                 {t("trade.max")}
               </button>
@@ -979,7 +979,7 @@ export default function OrderForm({
             {side === "SELL" && displayedSharesHeld !== null && displayedSharesHeld > 0 && (
               <button
                 onClick={() => setAmount(displayedSharesHeld.toFixed(2))}
-                className="text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[#a78bfa] hover:text-[#c4b5fd] transition-colors"
+                className="text-[10px] px-1.5 py-0.5 border border-[var(--border)] text-[#a78bfa] hover:text-[#c4b5fd] transition-colors"
               >
                 {t("trade.max")}
               </button>
@@ -1008,7 +1008,7 @@ export default function OrderForm({
         <div className="grid grid-cols-4 gap-1 mt-1.5">
           <button
             onClick={() => setAmount("0")}
-            className={`text-[9px] py-1 border transition-colors tabular-nums ${
+            className={`text-[10px] py-1 border transition-colors tabular-nums ${
               amountNum === 0
                 ? side === "BUY"
                   ? "border-[#22c55e]/60 text-[#22c55e] bg-[#22c55e]/5"
@@ -1025,7 +1025,7 @@ export default function OrderForm({
               <button
                 key={v}
                 onClick={() => setAmount((prev) => String(Math.max(0, (parseFloat(prev) || 0) + v)))}
-                className={`text-[9px] py-1 border transition-colors tabular-nums ${
+                className={`text-[10px] py-1 border transition-colors tabular-nums ${
                   "border-[var(--border)] text-[#22c55e]/60 hover:border-[#22c55e]/40 hover:text-[#22c55e]"
                 }`}
               >
@@ -1040,7 +1040,7 @@ export default function OrderForm({
                   key={pct}
                   onClick={() => { if (shareAmt) setAmount(shareAmt.toFixed(2)); }}
                   disabled={!displayedSharesHeld}
-                  className={`text-[9px] py-1 border transition-colors disabled:opacity-30 ${
+                  className={`text-[10px] py-1 border transition-colors disabled:opacity-30 ${
                     shareAmt !== null && Math.abs(amountNum - shareAmt) < 0.01
                       ? "border-[#ff4444]/60 text-[#ff4444] bg-[#ff4444]/8"
                       : "border-[var(--border)] text-[var(--text-dim)] hover:border-[var(--border-subtle)] hover:text-[var(--text-dim)]"
@@ -1066,7 +1066,7 @@ export default function OrderForm({
           setQuoteRefreshKey(k => k + 1);
         };
         if (slippageCents >= 1) return (
-          <div className={`text-[9px] border px-2 py-1 flex items-center justify-between gap-2 ${
+          <div className={`text-[10px] border px-2 py-1 flex items-center justify-between gap-2 ${
             slippageCents >= 5
               ? "text-[#ff4444] bg-[rgba(255,68,68,0.08)] border-[#ff4444]/30"
               : "text-[#f59e0b] bg-[rgba(245,158,11,0.08)] border-[#f59e0b]/30"
@@ -1074,7 +1074,7 @@ export default function OrderForm({
             <span>{slippageCents >= 5 ? t("trade.priceMoved", { cents: slippageCents.toFixed(0) }) : t("trade.priceMovedShort", { cents: slippageCents.toFixed(0) })}</span>
             <button
               onClick={refreshQuote}
-              className={`text-[9px] border px-1.5 py-0.5 transition-colors shrink-0 ${
+              className={`text-[10px] border px-1.5 py-0.5 transition-colors shrink-0 ${
                 slippageCents >= 5
                   ? "border-[#ff4444]/50 hover:bg-[#ff4444]/15"
                   : "border-[#f59e0b]/40 hover:bg-[rgba(245,158,11,0.15)]"
@@ -1090,14 +1090,14 @@ export default function OrderForm({
       {/* ── Row 4: Position info + market order indicator ── */}
       <div className="flex items-center gap-2">
         {isMarketOrder && quotedMarketPrice && (
-          <span className="text-[9px] text-[var(--text-dim)] tabular-nums">
+          <span className="text-[10px] text-[var(--text-dim)] tabular-nums">
             {t("trade.estFill", { price: (quotedMarketPrice * 100).toFixed(1) })}
           </span>
         )}
         {side === "BUY" && displayedSharesHeld !== null && displayedSharesHeld > 0 && (
           <button
             onClick={() => { setSide("SELL"); setAmount(displayedSharesHeld!.toFixed(2)); }}
-            className="text-[9px] text-[#a78bfa] hover:text-[#c4b5fd] transition-colors tabular-nums ml-auto"
+            className="text-[10px] text-[#a78bfa] hover:text-[#c4b5fd] transition-colors tabular-nums ml-auto"
             title={t("trade.clickToSellAll")}
           >
             {displayedSharesHeld.toFixed(2)} {t("common.shares")}

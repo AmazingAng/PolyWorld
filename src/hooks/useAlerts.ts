@@ -321,12 +321,14 @@ export function useAlerts() {
         }
       }
 
-      // Update prevProbs for next cycle
+      // Update prevProbs for next cycle — rebuild from current markets to prevent unbounded growth
+      const nextProbs = new Map<string, number>();
       for (const market of allMarkets) {
         if (market.prob !== null) {
-          prevProbs.current.set(market.id, market.prob);
+          nextProbs.set(market.id, market.prob);
         }
       }
+      prevProbs.current = nextProbs;
 
       if (triggered.length > 0) {
         setData((prev) => {

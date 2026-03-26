@@ -416,7 +416,7 @@ function MarketsPanelInner({
                       )}
                       <MarketCard market={m} showChange selected onClick={() => cardAction(m)} {...watchProps(m)} {...locationProps} />
                       {m.indicators && (
-                        <div className="flex items-center gap-2 px-2.5 pb-1 -mt-0.5 text-[9px] font-mono text-[var(--text-faint)]">
+                        <div className="flex items-center gap-2 px-2.5 pb-1 -mt-0.5 text-[10px] font-mono text-[var(--text-faint)]">
                           {m.indicators.momentum !== null && (
                             <span title={`Momentum: ${(m.indicators.momentum * 100).toFixed(2)}%`}>
                               <span style={{ color: m.indicators.momentum > 0.01 ? "#22c55e" : m.indicators.momentum < -0.01 ? "#ff4444" : "var(--text-ghost)" }}>
@@ -493,7 +493,7 @@ function MarketsPanelInner({
           </div>
           {countryStats.topMarket && (
             <div className="mt-2 pt-2 border-t border-[var(--border-subtle)]">
-              <div className="text-[9px] text-[var(--text-faint)] uppercase tracking-wider mb-0.5">{t("marketsPanel.topMarket")}</div>
+              <div className="text-[10px] text-[var(--text-faint)] uppercase tracking-wider mb-0.5">{t("marketsPanel.topMarket")}</div>
               <div className="text-[10px] text-[var(--text-dim)] line-clamp-2 leading-snug">{localizeMarket(countryStats.topMarket, locale).title}</div>
             </div>
           )}

@@ -1140,7 +1140,7 @@ export default function Home() {
                       if (cached) sm.setLeaderboard(cached);
                       else fetchSmartMoney(p, true);
                     }}
-                    className="px-1.5 py-0 text-[9px] rounded transition-colors leading-[18px]"
+                    className="px-1.5 py-0 text-[10px] rounded transition-colors leading-[18px]"
                     style={{
                       background: leaderboardPeriod === p ? "rgba(34,197,94,0.15)" : "transparent",
                       color: leaderboardPeriod === p ? "#22c55e" : "var(--text-faint)",
@@ -1278,7 +1278,7 @@ export default function Home() {
                 />
                 <button
                   onClick={handleTraderGo}
-                  className="px-1 py-0 border border-[var(--border)] rounded-sm text-[9px] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors leading-[18px]"
+                  className="px-1 py-0 border border-[var(--border)] rounded-sm text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] hover:border-[var(--text-faint)] transition-colors leading-[18px]"
                 >
                   {t("wallet.go")}
                 </button>
@@ -1465,7 +1465,7 @@ export default function Home() {
               alertHistory.some((h) => !h.read) ? (
                 <button
                   onClick={markAllRead}
-                  className="text-[9px] text-[var(--text-faint)] hover:text-[var(--text-secondary)] transition-colors font-mono uppercase tracking-wider"
+                  className="text-[10px] text-[var(--text-faint)] hover:text-[var(--text-secondary)] transition-colors font-mono uppercase tracking-wider"
                 >
                   {t("alerts.markAllRead")}
                 </button>
@@ -1495,7 +1495,7 @@ export default function Home() {
                       <div className={`text-[11px] leading-snug ${entry.read ? "text-[var(--text-faint)]" : "text-[var(--text-secondary)]"}`}>
                         {entry.message}
                       </div>
-                      <div className="text-[9px] text-[var(--text-ghost)] mt-0.5">
+                      <div className="text-[10px] text-[var(--text-ghost)] mt-0.5">
                         {new Date(entry.timestamp).toLocaleTimeString()}
                       </div>
                     </div>

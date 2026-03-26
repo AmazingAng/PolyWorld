@@ -241,13 +241,13 @@ function SignalCard({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1 mb-0.5">
-            <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--text-faint)]">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-faint)]">
               {t(TYPE_LABEL_KEYS[signal.type])}
             </span>
-            <span className="text-[9px] font-bold" style={{ color: dirColor }}>
+            <span className="text-[10px] font-bold" style={{ color: dirColor }}>
               {dirArrow} {t(signal.direction === "bullish" ? "trade.bullish" : "trade.bearish")}
             </span>
-            <span className="text-[9px] text-[var(--text-ghost)] ml-auto shrink-0">
+            <span className="text-[10px] text-[var(--text-ghost)] ml-auto shrink-0">
               {timeAgo(signal.timestamp)}
             </span>
           </div>
@@ -257,7 +257,7 @@ function SignalCard({
           </div>
           {(signal.subMarketTitle || (signal.outcomeName && signal.outcomeName !== "Yes" && signal.outcomeName !== "No")) && (
             <div
-              className="text-[9px] font-bold mt-0.5 px-1 py-[1px] inline-block rounded-sm w-fit"
+              className="text-[10px] font-bold mt-0.5 px-1 py-[1px] inline-block rounded-sm w-fit"
               style={{
                 background: signal.direction === "bullish" ? "rgba(34,197,94,0.1)" : "rgba(255,68,68,0.1)",
                 color: signal.direction === "bullish" ? "#22c55e" : "#ff4444",
@@ -273,22 +273,22 @@ function SignalCard({
 
           <div className="flex items-center gap-2 mt-0.5">
             {signal.details.totalVolume && (
-              <span className="text-[9px] text-[var(--text-dim)] tabular-nums">
+              <span className="text-[10px] text-[var(--text-dim)] tabular-nums">
                 ${(signal.details.totalVolume / 1000).toFixed(1)}k vol
               </span>
             )}
             {signal.details.tradeCount && (
-              <span className="text-[9px] text-[var(--text-dim)] tabular-nums">
+              <span className="text-[10px] text-[var(--text-dim)] tabular-nums">
                 {signal.details.tradeCount} {t("signals.trades")}
               </span>
             )}
             {signal.wallets.length > 0 && (
-              <span className="text-[9px] text-[var(--text-dim)]">
+              <span className="text-[10px] text-[var(--text-dim)]">
                 {signal.wallets.length} {t("signals.walletCount")}
               </span>
             )}
             {signal.market.prob !== null && (
-              <span className="text-[9px] tabular-nums text-[var(--text-dim)]">
+              <span className="text-[10px] tabular-nums text-[var(--text-dim)]">
                 @{(signal.market.prob * 100).toFixed(0)}%
               </span>
             )}

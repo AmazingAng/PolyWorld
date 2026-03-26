@@ -197,7 +197,7 @@ export default function MarketPreview({ market, onTrade, singleSeries, hideChart
                       o.yesTokenId ? { tokenId: o.yesTokenId, price: o.prob, name: o.label } : undefined,
                       o.noTokenId ? { tokenId: o.noTokenId, price: 1 - o.prob, name: `${o.label} No` } : undefined,
                     ); }}
-                    className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 transition-colors hover:opacity-80"
+                    className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 transition-colors hover:opacity-80"
                     style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}
                     title={`${t("common.buy")} ${o.label}`}
                   >

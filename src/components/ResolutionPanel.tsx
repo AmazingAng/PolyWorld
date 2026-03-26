@@ -134,15 +134,15 @@ export default function ResolutionPanel({ onSelectMarket, categoryFilter, streng
                   >
                     {t(`signals.${alert.strength === "strong" ? "str" : alert.strength === "moderate" ? "mod" : "wea"}`)}
                   </span>
-                  <span className="text-[9px] font-bold text-[var(--text-faint)] uppercase tracking-wide">
+                  <span className="text-[10px] font-bold text-[var(--text-faint)] uppercase tracking-wide">
                     {alert.source}
                   </span>
                   {alert.prob !== null && (
-                    <span className="text-[9px] tabular-nums text-[var(--text-dim)]">
+                    <span className="text-[10px] tabular-nums text-[var(--text-dim)]">
                       @{(alert.prob * 100).toFixed(0)}%
                     </span>
                   )}
-                  <span className="text-[9px] text-[var(--text-ghost)] ml-auto shrink-0">
+                  <span className="text-[10px] text-[var(--text-ghost)] ml-auto shrink-0">
                     {timeAgo(new Date(alert.detectedAt).getTime())}
                   </span>
                 </div>

@@ -166,7 +166,7 @@ export default function Header({
                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
               {mounted && alertUnreadCount > 0 && (
-                <span className="absolute -top-1 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center text-[9px] font-bold text-white bg-[#ff4444] rounded-full px-0.5 leading-none">
+                <span className="absolute -top-1 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center text-[10px] font-bold text-white bg-[#ff4444] rounded-full px-0.5 leading-none">
                   {alertUnreadCount > 99 ? "99+" : alertUnreadCount}
                 </span>
               )}

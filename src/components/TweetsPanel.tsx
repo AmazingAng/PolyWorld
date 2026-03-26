@@ -100,7 +100,7 @@ function TweetPopover({
       {/* Relevance */}
       {selectedMarket && item.relevanceScore != null && (
         <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-[var(--border-subtle)]">
-          <span className="text-[9px] text-[var(--text-faint)] uppercase">{t("tweetsPanel.relevance")}</span>
+          <span className="text-[10px] text-[var(--text-faint)] uppercase">{t("tweetsPanel.relevance")}</span>
           <div className="flex-1 h-[3px] bg-[var(--border)] rounded-full overflow-hidden">
             <div
               className="h-full rounded-full"
@@ -110,7 +110,7 @@ function TweetPopover({
               }}
             />
           </div>
-          <span className="text-[9px] text-[var(--green)]">
+          <span className="text-[10px] text-[var(--green)]">
             {Math.round(item.relevanceScore * 100)}%
           </span>
         </div>
@@ -282,7 +282,7 @@ export default function TweetsPanel({ selectedMarket, handleFilter, onHandlesCha
                     }}
                   />
                 </div>
-                <span className="text-[9px] font-mono" style={{ color: "var(--green)" }}>
+                <span className="text-[10px] font-mono" style={{ color: "var(--green)" }}>
                   {Math.round(item.relevanceScore * 100)}%
                 </span>
               </div>

@@ -120,7 +120,7 @@ export default function CountryPanel({
       {/* AI Summary */}
       {aiSummary && (
         <div className="border border-[#f59e0b]/20 bg-[#f59e0b]/5 rounded-sm px-2.5 py-1.5 mb-2">
-          <span className="text-[9px] uppercase tracking-wider text-[#f59e0b]">{"\u2728"} ai summary</span>
+          <span className="text-[10px] uppercase tracking-wider text-[#f59e0b]">{"\u2728"} ai summary</span>
           <p className="text-[11px] text-[var(--text-dim)] leading-[1.5] mt-0.5">{aiSummary}</p>
         </div>
       )}
@@ -129,15 +129,15 @@ export default function CountryPanel({
       {countryMarkets.length > 0 && (
         <div className="grid grid-cols-3 gap-1.5 mb-2 text-[11px]">
           <div className="border border-[var(--border-subtle)] rounded-sm px-2 py-1.5">
-            <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">{t("country.totalVol")}</div>
+            <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">{t("country.totalVol")}</div>
             <div className="text-[var(--text-secondary)]">{formatVolume(totalVol)}</div>
           </div>
           <div className="border border-[var(--border-subtle)] rounded-sm px-2 py-1.5">
-            <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">{t("common.active")}</div>
+            <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">{t("common.active")}</div>
             <div className="text-[var(--text-secondary)]">{activeCount}</div>
           </div>
           <div className="border border-[var(--border-subtle)] rounded-sm px-2 py-1.5">
-            <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">{t("common.closed")}</div>
+            <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-faint)] mb-0.5">{t("common.closed")}</div>
             <div className="text-[var(--text-secondary)]">{closedCount}</div>
           </div>
         </div>

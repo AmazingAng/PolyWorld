@@ -157,7 +157,7 @@ function OpenOrdersTab({
                   <button
                     onClick={() => onCancel(order.id)}
                     disabled={cancellingOrderId === order.id}
-                    className="shrink-0 text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-ghost)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
+                    className="shrink-0 text-[10px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-ghost)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
                   >
                     {cancellingOrderId === order.id ? "…" : t("openOrders.cancel")}
                   </button>
@@ -560,7 +560,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                     {walletIconFor(c)}
                     <div className="text-left">
                       <div className="text-[12px] font-medium text-[var(--text)]">{c.name}</div>
-                      <div className="text-[9px] text-[var(--text-ghost)]">{t("wallet.detectedInBrowser")}</div>
+                      <div className="text-[10px] text-[var(--text-ghost)]">{t("wallet.detectedInBrowser")}</div>
                     </div>
                   </button>
                 ))}
@@ -776,7 +776,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
         >
           {/* Wallet name */}
           {walletName && (
-            <div className="px-3 py-1.5 text-[9px] text-[var(--text-ghost)] uppercase tracking-[0.1em] border-b border-[var(--border-subtle)]">
+            <div className="px-3 py-1.5 text-[10px] text-[var(--text-ghost)] uppercase tracking-[0.1em] border-b border-[var(--border-subtle)]">
               {walletName}
             </div>
           )}
@@ -785,7 +785,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
           <div className="px-3 py-2 space-y-1.5 border-b border-[var(--border-subtle)]">
             {hasSeparateProxy && (
               <div className="flex items-center justify-between">
-                <span className="text-[9px] text-[var(--text-ghost)] uppercase tracking-[0.06em] w-10 shrink-0">{t("wallet.safe")}</span>
+                <span className="text-[10px] text-[var(--text-ghost)] uppercase tracking-[0.06em] w-10 shrink-0">{t("wallet.safe")}</span>
                 <span className="text-[var(--text-dim)] tabular-nums flex-1 text-right">
                   {px!.slice(0, 6)}…{px!.slice(-4)}
                 </span>
@@ -793,7 +793,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
               </div>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-[9px] text-[var(--text-ghost)] uppercase tracking-[0.06em] w-10 shrink-0">
+              <span className="text-[10px] text-[var(--text-ghost)] uppercase tracking-[0.06em] w-10 shrink-0">
                 {hasSeparateProxy ? t("wallet.owner") : t("wallet.eoa")}
               </span>
               <span className="text-[var(--text-dim)] tabular-nums flex-1 text-right">
@@ -814,7 +814,7 @@ export default function WalletButton({ onRefresh, loading, lastSyncTime, onTrade
                 {proxyNotFound ? (
                   <div className="space-y-1.5">
                     <div className="text-[10px] text-[#f59e0b]">{t("wallet.noAccountFound")}</div>
-                    <div className="text-[9px] text-[var(--text-faint)] leading-snug">
+                    <div className="text-[10px] text-[var(--text-faint)] leading-snug">
                       {t("wallet.needAccountToTrade")}
                     </div>
                     <a

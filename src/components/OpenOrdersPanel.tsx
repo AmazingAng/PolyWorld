@@ -109,7 +109,7 @@ export default function OpenOrdersPanel({ markets, onSelectMarket }: OpenOrdersP
         <button
           onClick={handleCancelAll}
           disabled={cancellingAll}
-          className="text-[9px] px-1.5 py-0.5 border border-[#ff4444]/30 text-[#ff4444]/70 hover:text-[#ff4444] hover:border-[#ff4444]/50 transition-colors disabled:opacity-40"
+          className="text-[10px] px-1.5 py-0.5 border border-[#ff4444]/30 text-[#ff4444]/70 hover:text-[#ff4444] hover:border-[#ff4444]/50 transition-colors disabled:opacity-40"
         >
           {cancellingAll ? t("openOrders.cancellingAll") : t("openOrders.cancelAll")}
         </button>
@@ -158,7 +158,7 @@ export default function OpenOrdersPanel({ markets, onSelectMarket }: OpenOrdersP
                     <button
                       onClick={() => handleCancel(order.id)}
                       disabled={isCancelling}
-                      className="shrink-0 text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-ghost)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
+                      className="shrink-0 text-[10px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-ghost)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
                     >
                       {isCancelling ? "…" : t("common.cancel")}
                     </button>

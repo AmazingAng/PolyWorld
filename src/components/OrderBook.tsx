@@ -239,7 +239,7 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
             <button
               key={side}
               onClick={() => { setBookSide(side); needsScrollCenter.current = true; }}
-              className="px-2 py-0 text-[9px] rounded transition-colors leading-[18px]"
+              className="px-2 py-0 text-[10px] rounded transition-colors leading-[18px]"
               style={{
                 background: bookSide === side ? (side === "YES" ? "rgba(74,222,128,0.15)" : "rgba(248,113,113,0.15)") : "transparent",
                 color: bookSide === side ? (side === "YES" ? BID_COLOR : ASK_COLOR) : "var(--text-faint)",
@@ -256,7 +256,7 @@ export default function OrderBookPanel({ selectedMarket }: OrderBookPanelProps) 
       <MarketDepthChart bids={bids} asks={asks} />
 
       {/* Stats bar */}
-      <div className="flex items-center justify-between px-2 py-1 text-[9px] tabular-nums border-b border-[var(--border-subtle)] shrink-0" style={{ background: "rgba(255,255,255,0.02)" }}>
+      <div className="flex items-center justify-between px-2 py-1 text-[10px] tabular-nums border-b border-[var(--border-subtle)] shrink-0" style={{ background: "rgba(255,255,255,0.02)" }}>
         <span className="text-[var(--text-faint)]">
           spread <span className="text-[var(--text-secondary)]">{data.spread.toFixed(3)}</span>
           <span className="ml-0.5">({spreadPct.toFixed(1)}%)</span>
@@ -307,7 +307,7 @@ function OBRow({ level, side, maxCum }: { level: OrderBookLevel; side: "bid" | "
       <span className="w-[52px] text-right text-[var(--text-secondary)] relative z-[1]">
         {fmtK(level.size)}
       </span>
-      <span className="flex-1 text-right text-[var(--text-dim)] text-[9px] relative z-[1]">
+      <span className="flex-1 text-right text-[var(--text-dim)] text-[10px] relative z-[1]">
         {fmtK(level.cumSize)}
       </span>
     </div>

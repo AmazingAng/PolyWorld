@@ -136,7 +136,7 @@ function NewsPopover({
       {/* Relevance */}
       {selectedMarket && item.relevance_score != null && (
         <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-[var(--border-subtle)]">
-          <span className="text-[9px] text-[var(--text-faint)] uppercase">{t("news.relevance")}</span>
+          <span className="text-[10px] text-[var(--text-faint)] uppercase">{t("news.relevance")}</span>
           <div className="flex-1 h-[3px] bg-[var(--border)] rounded-full overflow-hidden">
             <div
               className="h-full rounded-full"
@@ -146,7 +146,7 @@ function NewsPopover({
               }}
             />
           </div>
-          <span className="text-[9px] text-[var(--green)]">
+          <span className="text-[10px] text-[var(--green)]">
             {Math.round(item.relevance_score * 100)}%
           </span>
         </div>
@@ -156,7 +156,7 @@ function NewsPopover({
       {item.categories.length > 0 && (
         <div className="flex gap-1 flex-wrap mt-2">
           {item.categories.map((cat, i) => (
-            <span key={`${cat}-${i}`} className="text-[9px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-faint)] rounded-sm">
+            <span key={`${cat}-${i}`} className="text-[10px] px-1.5 py-0.5 border border-[var(--border)] text-[var(--text-faint)] rounded-sm">
               {cat}
             </span>
           ))}
@@ -345,7 +345,7 @@ export default function NewsPanel({ selectedMarket, sourceFilter, onSourcesChang
                     }}
                   />
                 </div>
-                <span className="text-[9px] font-mono" style={{ color: "var(--green)" }}>
+                <span className="text-[10px] font-mono" style={{ color: "var(--green)" }}>
                   {Math.round(item.relevance_score * 100)}%
                 </span>
               </div>

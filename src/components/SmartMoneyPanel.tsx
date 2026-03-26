@@ -234,12 +234,12 @@ function FlowView({ flows, loading }: { flows: CategoryFlow[]; loading: boolean 
             </div>
 
             {/* Net volume */}
-            <span className="text-[9px] tabular-nums w-14 text-right shrink-0" style={{ color: trendColor }}>
+            <span className="text-[10px] tabular-nums w-14 text-right shrink-0" style={{ color: trendColor }}>
               {isBullish ? "+" : ""}{formatVolume(Math.abs(f.netVolume))}
             </span>
 
             {/* Smart ratio */}
-            <span className="text-[9px] text-[var(--text-faint)] tabular-nums w-8 text-right shrink-0" title={t("smartMoney.smartWalletRatio")}>
+            <span className="text-[10px] text-[var(--text-faint)] tabular-nums w-8 text-right shrink-0" title={t("smartMoney.smartWalletRatio")}>
               {(f.smartRatio * 100).toFixed(0)}%
             </span>
           </div>
@@ -326,7 +326,7 @@ function SignalsView({
             <span className="text-[10px] text-[var(--text-faint)] shrink-0">
               {t(SIGNAL_LABEL_KEYS[sig.type] || sig.type)}
             </span>
-            <span className="text-[9px] text-[var(--text-ghost)] ml-auto shrink-0 tabular-nums">
+            <span className="text-[10px] text-[var(--text-ghost)] ml-auto shrink-0 tabular-nums">
               {signalTimeAgo(sig.timestamp)}
             </span>
           </div>
@@ -345,18 +345,18 @@ function SignalsView({
             <span className={`text-[10px] font-bold ${sig.direction === "bullish" ? "text-[#22c55e]" : "text-[#ff4444]"}`}>
               {sig.direction === "bullish" ? "\u2191 BULLISH" : "\u2193 BEARISH"}
             </span>
-            <span className="text-[9px] text-[var(--text-faint)]">
+            <span className="text-[10px] text-[var(--text-faint)]">
               {sig.wallets.length !== 1 ? t("smartMoney.walletsCount", { count: sig.wallets.length }) : t("smartMoney.walletCount", { count: sig.wallets.length })}
             </span>
             {sig.details.totalVolume && (
-              <span className="text-[9px] text-[var(--text-dim)] tabular-nums">
+              <span className="text-[10px] text-[var(--text-dim)] tabular-nums">
                 ${formatVolume(sig.details.totalVolume)}
               </span>
             )}
             {sig.wallets.length > 0 && (
               <button
                 onClick={() => onSelectWallet?.(sig.wallets[0].address)}
-                className="text-[9px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors ml-auto"
+                className="text-[10px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors ml-auto"
                 title={sig.wallets[0].address}
               >
                 {sig.wallets[0].username || `${sig.wallets[0].address.slice(0, 6)}...${sig.wallets[0].address.slice(-4)}`}

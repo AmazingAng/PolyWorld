@@ -247,7 +247,7 @@ function MarketCardInner({
           </span>
           {market.smartMoney && market.smartMoney.netFlow !== "neutral" && (
             <span
-              className="text-[9px] font-bold px-0.5 leading-none shrink-0"
+              className="text-[10px] font-bold px-0.5 leading-none shrink-0"
               style={market.smartMoney.netFlow === "bullish"
                 ? { color: "#22c55e", background: "rgba(34,197,94,0.12)" }
                 : { color: "#ff4444", background: "rgba(255,68,68,0.12)" }

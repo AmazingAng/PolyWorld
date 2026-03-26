@@ -442,7 +442,7 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
   background: none;
   color: var(--text-faint);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10px;
   cursor: pointer;
   transition: color 0.15s;
   -webkit-tap-highlight-color: transparent;
@@ -1171,7 +1171,7 @@ body.panel-drag-active iframe {
     grid-template-columns: 1fr;
   }
   .settings-tab {
-    font-size: 9px;
+    font-size: 10px;
     padding: 8px 6px;
   }
 }
@@ -1584,7 +1584,7 @@ body.panel-drag-active iframe {
   height: 16px;
   padding: 0 4px;
   margin-left: 6px;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: bold;
   border-radius: 8px;
   background: var(--border);

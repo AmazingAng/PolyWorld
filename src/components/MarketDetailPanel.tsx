@@ -263,7 +263,7 @@ function MarketDetailPanelInner({
   // --- Multi-binary outcomes: rows with inline trade strips ---
   const mbCount = parsedOutcomes.length;
   const mbLabelSize = mbCount <= 4 ? "text-[12px]" : mbCount <= 8 ? "text-[11px]" : "text-[10px]";
-  const mbBtnSize = mbCount <= 4 ? "text-[11px]" : "text-[9px]";
+  const mbBtnSize = mbCount <= 4 ? "text-[11px]" : "text-[10px]";
   const mbRowPy = mbCount <= 4 ? "py-[9px]" : "py-[7px]";
   const multiBinaryContent = multiBinary && (
     <div>
@@ -309,7 +309,7 @@ function MarketDetailPanelInner({
                 <span className={`${mbLabelSize} flex-1 min-w-0 truncate ${isWinner ? "text-[#22c55e] font-bold" : "text-[var(--text-secondary)]"}`}>
                   {abbr}
                 </span>
-                <span className={`text-[9px] tabular-nums shrink-0 ${mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
+                <span className={`text-[10px] tabular-nums shrink-0 ${mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : "text-[var(--text-faint)]"}`}>
                   {mChg.text}
                 </span>
               </div>
@@ -438,12 +438,12 @@ function MarketDetailPanelInner({
           {/* No-token fallback: external trade link */}
           {prices.length > 0 && !market.closed && cardAllIds.length === 0 && (
             <div className="mt-1 pt-1 border-t border-[var(--border-subtle)] flex justify-end">
-              <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?r=0xaa`} target="_blank" rel="noopener noreferrer" className="text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors">
+              <a href={`https://polymarket.com/event/${encodeURIComponent(market.slug)}?r=0xaa`} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors">
                 {t("detail.tradeArrow")}
               </a>
             </div>
           )}
-          <div className="flex items-center gap-2 mt-1 pt-1 border-t border-[var(--border-subtle)] text-[9px] text-[var(--text-faint)]">
+          <div className="flex items-center gap-2 mt-1 pt-1 border-t border-[var(--border-subtle)] text-[10px] text-[var(--text-faint)]">
             {m.volume24hr && <span>24h {formatVolume(parseFloat(String(m.volume24hr)))}</span>}
             {m.liquidity && <span>liq {formatVolume(parseFloat(String(m.liquidity)))}</span>}
             {mChg.text !== "\u2014" && <span className={mChg.cls === "up" ? "text-[#22c55e]" : mChg.cls === "down" ? "text-[#ff4444]" : ""}>{mChg.text}</span>}

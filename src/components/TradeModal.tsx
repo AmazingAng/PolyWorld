@@ -171,9 +171,9 @@ function MiniOrderBook({ tokenId, currentPrice, compact }: { tokenId: string; cu
 
       {/* Spread / mid */}
       <div className="flex items-center justify-between px-2 py-1 border-y border-[var(--border-subtle)] shrink-0">
-        <span className="text-[9px] text-[var(--text-dim)]">{t("trade.mid")}</span>
+        <span className="text-[10px] text-[var(--text-dim)]">{t("trade.mid")}</span>
         <span className="text-[10px] font-bold text-[var(--text)] tabular-nums">{(currentPrice * 100).toFixed(1)}¢</span>
-        {spread && <span className="text-[9px] text-[var(--text-dim)]">{t("trade.spread")} {spread}¢</span>}
+        {spread && <span className="text-[10px] text-[var(--text-dim)]">{t("trade.spread")} {spread}¢</span>}
       </div>
 
       {/* Bids */}
@@ -363,7 +363,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                 >
                   <span>Yes {(state.yesToken!.price * 100).toFixed(1)}¢</span>
                   {yesSharesNum !== null && yesSharesNum > 0 && (
-                    <span className={`text-[9px] font-bold tabular-nums ${isYesActive ? "opacity-70" : "opacity-50"}`}>
+                    <span className={`text-[10px] font-bold tabular-nums ${isYesActive ? "opacity-70" : "opacity-50"}`}>
                       {yesSharesNum.toFixed(2)} {t("common.shares")}
                     </span>
                   )}
@@ -378,7 +378,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                 >
                   <span>No {(state.noToken!.price * 100).toFixed(1)}¢</span>
                   {noSharesNum !== null && noSharesNum > 0 && (
-                    <span className={`text-[9px] font-bold tabular-nums ${!isYesActive ? "opacity-70" : "opacity-50"}`}>
+                    <span className={`text-[10px] font-bold tabular-nums ${!isYesActive ? "opacity-70" : "opacity-50"}`}>
                       {noSharesNum.toFixed(2)} {t("common.shares")}
                     </span>
                   )}
@@ -410,7 +410,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                 (sum, w) => w.side === "BUY" ? sum + w.size : sum - w.size, 0
               );
               return (
-                <div className="text-[9px] mt-1 tabular-nums" style={{
+                <div className="text-[10px] mt-1 tabular-nums" style={{
                   color: sm.netFlow === "bullish" ? "#22c55e" : "#ff4444"
                 }}>
                   {sm.netFlow === "bullish" ? "↑" : "↓"}
@@ -490,7 +490,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
 
               {activeOpenOrders.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]">
-                  <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-dim)] mb-1.5">{t("trade.openOrdersCount", { count: activeOpenOrders.length })}</div>
+                  <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-dim)] mb-1.5">{t("trade.openOrdersCount", { count: activeOpenOrders.length })}</div>
                   <div className="space-y-1">
                     {activeOpenOrders.map((o) => {
                       const price = parseFloat(o.price) || 0;
@@ -498,7 +498,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                       const matched = parseFloat(o.size_matched) || 0;
                       const isBuy = o.side === "BUY";
                       return (
-                        <div key={o.id} className="flex items-center justify-between gap-1.5 text-[9px] tabular-nums">
+                        <div key={o.id} className="flex items-center justify-between gap-1.5 text-[10px] tabular-nums">
                           <div className="flex items-center gap-1.5">
                             <span className={isBuy ? "text-[#22c55e]" : "text-[#ff4444]"}>{o.side}</span>
                             <span className="text-[var(--text-dim)]">{(price * 100).toFixed(1)}¢</span>
@@ -508,7 +508,7 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
                           <button
                             onClick={() => handleCancelOrder(o.id)}
                             disabled={cancellingOrderId === o.id}
-                            className="text-[9px] px-1 py-0 border border-[var(--border)] text-[var(--text-dim)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
+                            className="text-[10px] px-1 py-0 border border-[var(--border)] text-[var(--text-dim)] hover:text-[#ff4444] hover:border-[#ff4444]/40 transition-colors disabled:opacity-40"
                           >
                             {cancellingOrderId === o.id ? "…" : t("common.cancel")}
                           </button>
@@ -521,10 +521,10 @@ function TradeModalContent({ state, onClose }: TradeModalProps) {
 
               {displayedRecentOrders.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]">
-                  <div className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-dim)] mb-1.5">{t("trade.recentOrders")}</div>
+                  <div className="text-[10px] uppercase tracking-[0.1em] text-[var(--text-dim)] mb-1.5">{t("trade.recentOrders")}</div>
                   <div className="space-y-1">
                     {displayedRecentOrders.map((o) => (
-                      <div key={o.id} className="text-[9px] text-[var(--text-dim)] tabular-nums flex items-center gap-1.5">
+                      <div key={o.id} className="text-[10px] text-[var(--text-dim)] tabular-nums flex items-center gap-1.5">
                         <span className={o.side === "BUY" ? "text-[#22c55e]" : "text-[#ff4444]"}>{o.side}</span>
                         <span className="text-[var(--text-dim)]">{o.outcome}</span>
                         <span className="text-[var(--text-dim)]">${o.amount.toFixed(0)} @{(o.price * 100).toFixed(0)}¢</span>

@@ -1980,7 +1980,7 @@ function WorldMapInner({
               const topMarket = active.reduce((best, m) => (m.volume24h || 0) > (best.volume24h || 0) ? m : best);
               return (
                 <div className="mt-2 pt-2 border-t border-[var(--border-subtle)]">
-                  <div className="text-[9px] text-[var(--text-faint)] uppercase tracking-wider mb-0.5">{t("common.topMarket")}</div>
+                  <div className="text-[10px] text-[var(--text-faint)] uppercase tracking-wider mb-0.5">{t("common.topMarket")}</div>
                   <div className="text-[10px] text-[var(--text-dim)] line-clamp-2 leading-snug">
                     {localizeMarket(topMarket, locale).title}
                   </div>
@@ -2031,7 +2031,7 @@ function WorldMapInner({
               }}
             >
               {/* Layer badge */}
-              <div className="text-[9px] uppercase tracking-widest mb-1.5" style={{ color: hoverOverlay.color }}>
+              <div className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: hoverOverlay.color }}>
                 {hoverOverlay.layerId.replace(/-/g, " ")}
               </div>
               {/* Title */}
@@ -2043,7 +2043,7 @@ function WorldMapInner({
                 <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 mt-1 pt-1.5 border-t border-[#222]">
                   {hoverOverlay.rows.map(({ label, value }) => (
                     <React.Fragment key={label}>
-                      <span className="text-[9px] text-[#555] uppercase tracking-wider">{label}</span>
+                      <span className="text-[10px] text-[#555] uppercase tracking-wider">{label}</span>
                       <span className="text-[10px] text-[#999] tabular-nums truncate">{value}</span>
                     </React.Fragment>
                   ))}

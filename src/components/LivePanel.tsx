@@ -97,7 +97,7 @@ export function LiveChannelDropdown({
               <button
                 key={tabKey}
                 onClick={() => setTab(tabKey)}
-                className={`flex-1 text-[9px] uppercase tracking-wide px-2 py-1.5 font-mono transition-colors ${
+                className={`flex-1 text-[10px] uppercase tracking-wide px-2 py-1.5 font-mono transition-colors ${
                   tab === tabKey
                     ? "text-[var(--text-secondary)] bg-[var(--surface)]"
                     : "text-[var(--text-faint)] hover:text-[var(--text-secondary)]"
@@ -140,7 +140,7 @@ export function LiveChannelDropdown({
                       <span className="w-1 h-1 rounded-full bg-[#22c55e] animate-pulse shrink-0" />
                     )}
                   </div>
-                  <div className="text-[9px] text-[var(--text-faint)]">
+                  <div className="text-[10px] text-[var(--text-faint)]">
                     {stream.region}
                   </div>
                 </button>

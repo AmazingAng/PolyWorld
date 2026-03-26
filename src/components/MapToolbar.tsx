@@ -241,7 +241,7 @@ export default function MapToolbar({
             </svg>
             {t("toolbar.layers")}
             {activeLayerCount > 0 && (
-              <span className="text-[9px] font-bold text-[#a78bfa] bg-[#a78bfa]/20 rounded-full px-1 leading-none py-0.5">
+              <span className="text-[10px] font-bold text-[#a78bfa] bg-[#a78bfa]/20 rounded-full px-1 leading-none py-0.5">
                 {activeLayerCount}
               </span>
             )}

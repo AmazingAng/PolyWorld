@@ -162,14 +162,14 @@ export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPan
             </span>
             <button
               onClick={() => load(savedWallet)}
-              className="text-[9px] text-[var(--text-faint)] hover:text-[var(--text)] transition-colors px-1"
+              className="text-[10px] text-[var(--text-faint)] hover:text-[var(--text)] transition-colors px-1"
               title={t("common.refresh")}
             >
               ↺
             </button>
             <button
               onClick={handleClear}
-              className="text-[9px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors"
+              className="text-[10px] text-[var(--text-ghost)] hover:text-[var(--text)] transition-colors"
               title={t("portfolio.clearWallet")}
             >
               ×
@@ -187,7 +187,7 @@ export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPan
             {connectedAddress && connectedAddress.toLowerCase() !== inputValue.toLowerCase() && (
               <button
                 onClick={() => setInputValue(connectedAddress)}
-                className="px-1.5 py-0 border border-[var(--border)] rounded-sm text-[9px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors leading-[18px] shrink-0"
+                className="px-1.5 py-0 border border-[var(--border)] rounded-sm text-[10px] text-[var(--text-ghost)] hover:text-[var(--text-dim)] transition-colors leading-[18px] shrink-0"
                 title="Use connected wallet"
               >
                 {t("wallet.mine")}
@@ -195,7 +195,7 @@ export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPan
             )}
             <button
               onClick={handleSubmit}
-              className="px-1.5 py-0 border border-[var(--border)] rounded-sm text-[9px] text-[var(--text-dim)] hover:text-[var(--text)] transition-colors leading-[18px] shrink-0"
+              className="px-1.5 py-0 border border-[var(--border)] rounded-sm text-[10px] text-[var(--text-dim)] hover:text-[var(--text)] transition-colors leading-[18px] shrink-0"
             >
               {t("wallet.go")}
             </button>
@@ -267,7 +267,7 @@ export default function PortfolioPanel({ markets, onSelectMarket }: PortfolioPan
               <>
                 <button
                   onClick={() => setShowClosed((v) => !v)}
-                  className="w-full px-2 py-1 text-[9px] text-[var(--text-faint)] uppercase tracking-wider bg-[var(--bg-panel)] hover:text-[var(--text-dim)] transition-colors text-left border-t border-[var(--border)]"
+                  className="w-full px-2 py-1 text-[10px] text-[var(--text-faint)] uppercase tracking-wider bg-[var(--bg-panel)] hover:text-[var(--text-dim)] transition-colors text-left border-t border-[var(--border)]"
                 >
                   {showClosed ? "▼" : "▶"} {t("traderPanel.closedCount", { count: closedPositions.length })}
                 </button>
@@ -345,7 +345,7 @@ function PositionRow({
       {/* Row 2: outcome / value / pnl / expiry */}
       <div className="flex items-center gap-1.5 tabular-nums">
         <span
-          className="text-[9px] px-1 rounded-sm shrink-0"
+          className="text-[10px] px-1 rounded-sm shrink-0"
           style={{
             color: p.outcome?.toLowerCase() === "yes" ? "#22c55e" : p.outcome?.toLowerCase() === "no" ? "#ff4444" : "var(--text-dim)",
             background: p.outcome?.toLowerCase() === "yes" ? "rgba(34,197,94,0.1)" : p.outcome?.toLowerCase() === "no" ? "rgba(255,68,68,0.1)" : "rgba(128,128,128,0.08)",
@@ -360,14 +360,14 @@ function PositionRow({
         >
           {p.cashPnl >= 0 ? "+" : ""}{formatVolume(p.cashPnl)}
           {p.percentPnl !== 0 && (
-            <span className="text-[9px] ml-0.5" style={{ opacity: 0.7 }}>
+            <span className="text-[10px] ml-0.5" style={{ opacity: 0.7 }}>
               ({p.percentPnl >= 0 ? "+" : ""}{p.percentPnl.toFixed(0)}%)
             </span>
           )}
         </span>
         {expLabel && !dimmed && (
           <span
-            className="text-[9px] ml-auto shrink-0"
+            className="text-[10px] ml-auto shrink-0"
             style={{ color: expColor || "var(--text-ghost)" }}
             title={`Expires ${expiry}`}
           >

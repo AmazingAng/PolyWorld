@@ -147,7 +147,7 @@ function TraderPanelContent({
               <div>
                 {openPositions.length > 0 && (
                   <>
-                    <div className="px-2 py-1 text-[9px] text-[var(--text-muted)] uppercase tracking-wider bg-[var(--bg-panel)]">
+                    <div className="px-2 py-1 text-[10px] text-[var(--text-muted)] uppercase tracking-wider bg-[var(--bg-panel)]">
                       {t("traderPanel.openCount", { count: openPositions.length })}
                     </div>
                     {openPositions.map((p, i) => (
@@ -157,7 +157,7 @@ function TraderPanelContent({
                 )}
                 {closedPositions.length > 0 && (
                   <>
-                    <div className="px-2 py-1 text-[9px] text-[var(--text-muted)] uppercase tracking-wider bg-[var(--bg-panel)]">
+                    <div className="px-2 py-1 text-[10px] text-[var(--text-muted)] uppercase tracking-wider bg-[var(--bg-panel)]">
                       {t("traderPanel.closedCount", { count: closedPositions.length })}
                     </div>
                     {closedPositions.map((p, i) => (
@@ -219,7 +219,7 @@ function ActivityRow({ activity: a }: { activity: TraderActivity }) {
     <div className="smart-money-row px-2 py-1 flex items-center gap-1.5 tabular-nums">
       <span className="text-[var(--text-ghost)] w-[24px] shrink-0 text-right">{timeAgo(a.timestamp)}</span>
       <span
-        className="text-[9px] px-1 rounded-sm shrink-0"
+        className="text-[10px] px-1 rounded-sm shrink-0"
         style={{ color: badgeColor, border: `1px solid ${badgeColor}40` }}
       >
         {a.type}

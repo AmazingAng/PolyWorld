@@ -56,7 +56,7 @@ export default function FilterDropdown({ groups, label }: FilterDropdownProps) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((p) => !p)}
-        className="flex items-center gap-0.5 px-1 py-0 text-[9px] rounded transition-colors leading-[16px]"
+        className="flex items-center gap-0.5 px-1 py-0 text-[10px] rounded transition-colors leading-[16px]"
         style={{
           background: hasFilter ? "rgba(34,197,94,0.15)" : "transparent",
           color: hasFilter ? "#22c55e" : "var(--text-faint)",
@@ -64,7 +64,7 @@ export default function FilterDropdown({ groups, label }: FilterDropdownProps) {
         }}
         title={t("common.filter")}
       >
-        {label && <span className="text-[9px]">{label}</span>}
+        {label && <span className="text-[10px]">{label}</span>}
         <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
           {label
             ? <path d="M4 6l4 4 4-4" />
