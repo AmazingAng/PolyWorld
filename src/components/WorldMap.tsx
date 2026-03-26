@@ -439,7 +439,7 @@ function WorldMapInner({
 
       const animatePulse = () => {
         if (prefersReducedMotion || document.hidden) {
-          pulseRef.current = requestAnimationFrame(animatePulse);
+          // Stop RAF loop when hidden — visibilitychange listener restarts it
           return;
         }
         phase = (phase + 0.04) % (2 * Math.PI);
@@ -638,6 +638,16 @@ function WorldMapInner({
         pulseRef.current = requestAnimationFrame(animatePulse);
       };
       pulseRef.current = requestAnimationFrame(animatePulse);
+
+      // Restart RAF loop when tab becomes visible again
+      const onVisChange = () => {
+        if (!document.hidden) {
+          cancelAnimationFrame(pulseRef.current);
+          pulseRef.current = requestAnimationFrame(animatePulse);
+        }
+      };
+      document.addEventListener("visibilitychange", onVisChange);
+      map.once("remove", () => document.removeEventListener("visibilitychange", onVisChange));
     });
 
     return () => {
@@ -1692,6 +1702,11 @@ function WorldMapInner({
           closedAnimsRef.current.set(id, { startTime: now, ...pos });
         }
       }
+      // Cap closed animations map
+      if (closedAnimsRef.current.size > 100) {
+        const it = closedAnimsRef.current.keys();
+        while (closedAnimsRef.current.size > 100) closedAnimsRef.current.delete(it.next().value!);
+      }
       prevMarketIdsRef.current = currentIds;
     } else if (tierChanged) {
       // Reset tracking on tier change
@@ -1802,6 +1817,11 @@ function WorldMapInner({
         lat: coords[0],
       });
     }
+    // Cap new market animations map
+    if (newMarketAnimRef.current.size > 100) {
+      const it = newMarketAnimRef.current.keys();
+      while (newMarketAnimRef.current.size > 100) newMarketAnimRef.current.delete(it.next().value!);
+    }
   }, [newMarkets]);
 
   // Feature 4: Track whale trade flash animations
@@ -1826,6 +1846,8 @@ function WorldMapInner({
         isSmart: trade.isSmartWallet,
       });
     }
+    // Cap animation array to prevent unbounded memory growth
+    if (tradeFlashesRef.current.length > 100) tradeFlashesRef.current.splice(0, tradeFlashesRef.current.length - 100);
     // Prune dedup set to prevent unbounded memory growth
     if (seenTradeKeysRef.current.size > 500) {
       const keep = new Set<string>();
@@ -1874,6 +1896,8 @@ function WorldMapInner({
                     color: meta.color,
                   });
                 });
+                // Cap burst array
+                if (overlayBurstRef.current.length > 200) overlayBurstRef.current.splice(0, overlayBurstRef.current.length - 200);
               }
             }
           }
