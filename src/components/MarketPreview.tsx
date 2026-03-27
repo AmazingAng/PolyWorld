@@ -126,10 +126,9 @@ export default function MarketPreview({ market, onTrade, singleSeries, hideChart
   return (
     <div className="font-mono">
       {/* Header */}
-      <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] mb-1.5">
+      <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] mb-1.5 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis">
         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
-        {market.category.toLowerCase()}
-        {market.location && <span className="text-[var(--text-faint)]">{"\u00B7"} {market.location.toLowerCase()}</span>}
+        <span className="truncate">{market.category.toLowerCase()}{market.location ? ` \u00B7 ${market.location.toLowerCase()}` : ""}</span>
       </div>
       <div className="text-[13px] text-[var(--text)] leading-[1.4] mb-3">{displayMarket.title}</div>
 

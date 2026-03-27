@@ -347,8 +347,15 @@ body.panel-drag-active .bottom-panels-grid-empty::after {
     --mobile-tab-total: calc(var(--mobile-tab-h) + var(--mobile-tab-offset));
   }
 
-  /* Header 压缩为 40px */
-  header { height: 40px !important; }
+  /* Header: fixed on mobile to survive Chrome toolbar animation */
+  header {
+    height: 40px !important;
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+  }
 
   .panels-grid {
     display: flex !important;

@@ -63,6 +63,12 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased">
+        {/* Detect Chrome Android bottom toolbar before React hydrates */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var v=window.visualViewport;if(v){var b=window.innerHeight-v.height-v.offsetTop;if(b>0)document.documentElement.style.setProperty("--browser-bottom-bar",b+"px")}}catch(e){}`,
+          }}
+        />
         <ChunkLoadRecovery />
         <Providers>
           {children}
