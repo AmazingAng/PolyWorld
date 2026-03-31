@@ -28,7 +28,7 @@ Real-time [Polymarket](https://polymarket.com) prediction market visualization d
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - npm
 
 ### Setup
@@ -41,9 +41,12 @@ cd PolyWorld
 # Install dependencies
 npm install
 
+# Generate Fumadocs collections
+npm run docs:gen
+
 # Configure environment variables
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your API keys / optional data source credentials
 
 # Start dev server
 npm run dev
@@ -59,8 +62,28 @@ Open [http://localhost:3000](http://localhost:3000).
 | `AI_API_KEY` | Yes | Anthropic API key (for summaries, news matching, sentiment) |
 | `AI_FALLBACK_BASE_URL` | No | Fallback API base URL |
 | `AI_FALLBACK_API_KEY` | No | Fallback API key (used if primary fails) |
+| `DATA_DIR` | No | Directory for runtime data and SQLite files |
+| `DB_PATH` | No | SQLite database path |
+| `POLYGON_RPC_URLS` | No | Comma-separated server-side Polygon RPC endpoints |
+| `NEXT_PUBLIC_POLYGON_RPC_URL` | No | Browser-side Polygon RPC endpoint for wagmi |
+| `UCDP_TOKEN` | No | Enables UCDP-backed conflict and military overlays |
+| `TICKETMASTER_KEY` | No | Enables live sports overlay |
+| `CLOUDFLARE_TOKEN` | No | Enables internet outages overlay |
+| `ACLED_EMAIL` | No | ACLED OAuth email for protests/unrest overlay |
+| `ACLED_PASSWORD` | No | ACLED OAuth password for protests/unrest overlay |
 
-The app works without AI keys — summaries and sentiment will be disabled, but all market data, charts, and trading features remain functional.
+The app works without most optional keys. Missing keys only disable the related AI or overlay features.
+
+### Local Verification
+
+After dependency install, regenerate docs collections before type-checking or building:
+
+```bash
+npm run docs:gen
+npm run lint
+npm run typecheck
+npm test
+```
 
 ## Project Structure
 
@@ -77,10 +100,14 @@ src/
 ## Scripts
 
 ```bash
+npm run docs:gen # Generate Fumadocs collections
 npm run dev      # Development server
 npm run build    # Production build
 npm run start    # Production server
 npm run lint     # ESLint
+npm run typecheck # TypeScript check
+npm test         # Vitest unit tests
+npm run test:e2e # Playwright end-to-end tests
 ```
 
 ## Acknowledgements

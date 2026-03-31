@@ -12,21 +12,6 @@ interface NewsPanelProps {
   onSourcesChange?: (sources: string[]) => void;
 }
 
-const SOURCE_ABBREVS: Record<string, string> = {
-  Reuters: "R",
-  "BBC World": "BBC",
-  "Al Jazeera": "AJ",
-  Bloomberg: "BL",
-  "AP News": "AP",
-  NPR: "NPR",
-  "France 24": "F24",
-  "DW News": "DW",
-  CNBC: "CNBC",
-  "The Guardian": "GU",
-  "NHK World": "NHK",
-  CNA: "CNA",
-};
-
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60_000);

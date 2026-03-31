@@ -79,6 +79,8 @@ export default function MapToolbar({
   activeLayers,
   onToggleLayer,
 }: MapToolbarProps) {
+  void onToggleFullscreen;
+  void isFullscreen;
   const { t } = useI18n();
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [layersOpen, setLayersOpen] = useState(false);
